@@ -5,3 +5,17 @@
 *.keystore
 *.jks
 local.properties
+.gradle/
+build/
+.kotlin/
+.idea/
+*.iml
+captures/
+.cxx/
+*.apk
+*.aab
+*.hprof
+*.har
+*.blend[0-9]*
+*.blend@
+supabase/functions/**/.env
