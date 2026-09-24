@@ -2,11 +2,13 @@ package app.prepsuite.android.navigation
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -16,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -145,7 +148,10 @@ private fun HomeScreen(
     onStart: () -> Unit, onSetup: () -> Unit, onSettings: () -> Unit, onLibrary: () -> Unit,
     onProfile: () -> Unit, onQuestion: (String) -> Unit, tabState: SaveableStateHolder,
 ) {
+    val warm by animateFloatAsState(if (tab == HomeTab.Practice) 1f else 0f, tween(Motion.FADE), label = "homeBase")
     AmbientBackground(Modifier.fillMaxSize()) {
+        // Practice sits on the warm base lit by the gold presence, edge to edge under the status bar.
+        Box(Modifier.matchParentSize().drawBehind { drawRect(HomePalette.bg, alpha = warm) })
         Column(Modifier.align(Alignment.TopCenter).widthIn(max = 760.dp).fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)).imePadding()) {
             Box(Modifier.weight(1f)) {
@@ -169,26 +175,27 @@ private fun HomeScreen(
 
 @Composable
 private fun BottomTabs(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
-    val c = Prep.colors
-    Row(
-        Modifier.padding(horizontal = Space.l).padding(top = Space.s).navigationBarsPadding()
-            .glassSurface(RoundedCornerShape(24.dp)).padding(6.dp).fillMaxWidth().height(IntrinsicSize.Min),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        HomeTab.entries.forEach { tab ->
-            val on = tab == selected
-            val icon = when (tab) { HomeTab.Practice -> PrepIcons.Home; HomeTab.Quiet -> PrepIcons.Write; HomeTab.History -> PrepIcons.Clock }
-            Column(
-                Modifier.weight(1f).fillMaxHeight().heightIn(min = 60.dp).clip(RoundedCornerShape(18.dp))
-                    .background(if (on) c.accentTint else androidx.compose.ui.graphics.Color.Transparent)
-                    .selectable(selected = on, role = Role.Tab, onClick = { onSelect(tab) }).padding(horizontal = 4.dp, vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-            ) {
-                PrepIcon(icon, null, if (on) c.accent else c.text3, size = 20.dp)
-                Spacer(Modifier.height(4.dp))
-                Text(tab.label, style = Prep.type.meta.copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium), color = if (on) c.text else c.text3,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    // Solid and typographic: a hairline, icons and labels, with gold marking the current tab.
+    val c = HomePalette
+    Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
+        Hairline(color = c.line)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = Space.s, vertical = Space.xs).selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(Space.xs),
+        ) {
+            HomeTab.entries.forEach { tab ->
+                val on = tab == selected
+                val icon = when (tab) { HomeTab.Practice -> PrepIcons.Home; HomeTab.Quiet -> PrepIcons.Write; HomeTab.History -> PrepIcons.Clock }
+                Column(
+                    Modifier.weight(1f).heightIn(min = 56.dp).clip(RoundedCornerShape(Radius.control))
+                        .selectable(selected = on, role = Role.Tab, onClick = { onSelect(tab) }).padding(vertical = Space.s),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+                ) {
+                    PrepIcon(icon, null, if (on) c.accent else c.text3, size = 22.dp)
+                    Spacer(Modifier.height(Space.xs))
+                    Text(tab.label, style = Prep.type.meta.copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium), color = if (on) c.text else c.text3,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                }
             }
         }
     }

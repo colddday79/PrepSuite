@@ -85,6 +85,24 @@ val DarkPalette = PrepColors(
     cardHighlight = Color(0x0DFFFFFF),
 )
 
+// Home only: a warm near-black room lit by the gold presence, with gold as the one accent.
+// Text pairs measured on bg: text 17:1, text2 9.5:1, text3 6.2:1, accent 10:1.
+val HomePalette = DarkPalette.copy(
+    bg = Color(0xFF0E0C0A),
+    surface1 = Color(0xFF171410),
+    surface2 = Color(0xFF211D18),
+    line = Color(0xFF2A251F),
+    lineStrong = Color(0xFF3D362D),
+    text = Color(0xFFF5EFE6),
+    text2 = Color(0xFFBDB3A5),
+    text3 = Color(0xFF9A8F81),
+    accent = Color(0xFFE6B35E),
+    accentTint = Color(0xFF2B2114),
+    glassBorder = Color(0x1FFFFFFF),
+    glassBg = Color(0x801C1814),
+    cardHighlight = Color(0x2EFFF4E0),
+)
+
 @OptIn(ExperimentalTextApi::class)
 private fun mona(weight: Int, width: Float = 100f) = Font(
     resId = R.font.mona_sans,
