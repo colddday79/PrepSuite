@@ -1,0 +1,26 @@
+name: prepsuite_speech
+description: >-
+  Offline speech for PrepSuite: streaming speech-to-text with word timings,
+  delivery metrics, and the Norman (Piper) interviewer voice via sherpa-onnx.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  audioplayers: ^6.8.1
+  path_provider: ^2.1.6
+  record: ^7.1.1
+  sherpa_onnx: ^1.13.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+# Model files are NOT declared here: they live (gitignored) under
+# lib/assets/models/ and the app opts in by declaring them. See README.md.

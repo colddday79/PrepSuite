@@ -1,0 +1,40 @@
+name: prepsuite_speech_example
+description: On-device test app for prepsuite_speech.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  path_provider: ^2.1.6
+  prepsuite_speech:
+    path: ../
+  record: ^7.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  # Model files from prepsuite_speech (lib/assets/models, created by
+  # tools/voice/fetch_models.sh). Every app using the package declares these.
+  assets:
+    - packages/prepsuite_speech/assets/models/manifest.json
+    - packages/prepsuite_speech/assets/models/asr/encoder.onnx
+    - packages/prepsuite_speech/assets/models/asr/decoder.onnx
+    - packages/prepsuite_speech/assets/models/asr/joiner.onnx
+    - packages/prepsuite_speech/assets/models/asr/tokens.txt
+    - packages/prepsuite_speech/assets/models/tts/en_US-norman-medium.onnx
+    - packages/prepsuite_speech/assets/models/tts/tokens.txt
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phontab
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phonindex
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phondata
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phondata-manifest
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/intonations
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/en_dict
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/lang/gmw/en
