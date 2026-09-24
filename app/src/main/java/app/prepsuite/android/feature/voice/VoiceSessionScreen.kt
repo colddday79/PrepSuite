@@ -15,6 +15,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -53,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -71,6 +75,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.prepsuite.android.PrepSuiteApp
+import app.prepsuite.android.R
 import app.prepsuite.android.data.Pending
 import app.prepsuite.android.data.PracticeMode
 import app.prepsuite.android.data.Question
@@ -279,6 +284,7 @@ fun VoiceSessionScreen(
     onFeedback: () -> Unit,
     onNext: () -> Unit,
     onTypeInstead: () -> Unit,
+    onReview: (String?, Long) -> Unit = { _, _ -> onFeedback() },
 ) {
     val app = prepApp()
     val c = Prep.colors
@@ -375,17 +381,28 @@ fun VoiceSessionScreen(
     }
 
     Box(Modifier.fillMaxSize().background(c.voiceCanvas)) {
+        // Near-black stage with a soft amber light behind the hologram and a darker rim, so the gold reads clearly.
         Canvas(Modifier.fillMaxSize()) {
+            val stage = Offset(size.width / 2f, size.height * 0.34f)
             drawRect(
                 Brush.radialGradient(
-                    colors = listOf(c.voiceField, c.voiceCanvas),
-                    center = Offset(size.width / 2f, size.height * 0.34f),
-                    radius = size.width * 0.95f,
+                    colors = listOf(Color(0xFF2A1606).copy(alpha = 0.55f + 0.25f * level), Color(0xFF120A04).copy(alpha = 0.35f), Color.Transparent),
+                    center = stage,
+                    radius = size.width * 0.75f,
+                ),
+            )
+            drawRect(
+                Brush.radialGradient(
+                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f)),
+                    center = stage,
+                    radius = size.maxDimension * 0.85f,
                 ),
             )
         }
-        DustField(time = { time }, color = c.voiceCool, modifier = Modifier.fillMaxSize())
-        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        DustField(time = { time }, color = c.voiceWarm.copy(alpha = 0.6f), modifier = Modifier.fillMaxSize())
+        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        val stageHeight = (maxHeight * 0.43f).coerceIn(140.dp, 360.dp)
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             VoiceTopBar(
                 index = index,
                 total = questionIds.size,
@@ -396,12 +413,12 @@ fun VoiceSessionScreen(
                 },
                 onClose = onClose,
             )
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().height(stageHeight), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier
                         .fillMaxHeight(0.96f)
                         .aspectRatio(1f, matchHeightConstraintsFirst = true)
-                        .sizeIn(maxWidth = 330.dp, maxHeight = 330.dp)
+                        .sizeIn(maxWidth = 380.dp, maxHeight = 380.dp)
                         .graphicsLayer {
                             scaleX = orbScale
                             scaleY = orbScale
@@ -409,8 +426,8 @@ fun VoiceSessionScreen(
                         }
                         .clearAndSetSemantics { },
                 ) {
-                    PresenceOrb(time = { time }, level = { level }, energy = { energy }, warmth = { warmth }, modifier = Modifier.fillMaxSize())
-                    TickRing(
+                    PresenceVideo(video = R.raw.presence_loop, level = { level }, modifier = Modifier.fillMaxSize())
+                    if (phase == VoicePhase.Listening || phase == VoicePhase.Thinking) TickRing(
                         phase = phase,
                         time = { time },
                         progress = { if (phase == VoicePhase.Listening || phase == VoicePhase.Thinking) session.elapsedMs / CAP_MS.toFloat() else 0f },
@@ -460,11 +477,12 @@ fun VoiceSessionScreen(
                 micDenied = micDenied,
                 isLast = index >= questionIds.lastIndex,
                 onRecordTap = { onRecordTap() },
-                onFeedback = onFeedback,
+                onFeedback = { onReview(session.recording?.file?.absolutePath, session.recording?.durationMs ?: 0L) },
                 onNext = onNext,
                 onClose = onClose,
                 onTypeInstead = onTypeInstead,
             )
+        }
         }
     }
 }
@@ -526,7 +544,7 @@ private fun BottomCluster(
             Spacer(Modifier.height(Space.l))
         }
         if (phase == VoicePhase.Review) {
-            PrimaryButton("See feedback", onFeedback)
+            PrimaryButton("Review answer", onFeedback, enabled = session.recording != null)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 QuietButton("Record again", { session.recordAgain() }, icon = PrepIcons.Replay)
                 if (isLast) QuietButton("Finish", onClose, icon = PrepIcons.Check) else QuietButton("Next question", onNext, icon = PrepIcons.Chevron)
@@ -539,7 +557,7 @@ private fun BottomCluster(
                 VoicePhase.Speaking -> if (quiet) "Read the question" else "Listen to the question"
                 VoicePhase.YourTurn -> "Your turn — tap Record when you're ready"
                 VoicePhase.Listening -> "Recording"
-                VoicePhase.Thinking -> "Checking the recording…"
+                VoicePhase.Thinking -> "Saving your recording…"
                 VoicePhase.Review -> ""
             },
             style = Prep.type.body,

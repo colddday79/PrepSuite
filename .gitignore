@@ -19,3 +19,4 @@ captures/
 *.blend[0-9]*
 *.blend@
 supabase/functions/**/.env
+tools/blender/out/
