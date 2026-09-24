@@ -11,6 +11,7 @@ import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -54,27 +55,34 @@ data class PrepColors(
     val voiceFaint: Color,
     val voiceCool: Color,
     val voiceWarm: Color,
+    val glassBorder: Color = Color(0x26FFFFFF),
+    val glassBg: Color = Color(0xD9161B23),
+    val cardHighlight: Color = Color(0x0DFFFFFF),
 )
 
+// Obsidian surfaces, cool daylight accents and warm highlights for the voice presence.
 val DarkPalette = PrepColors(
-    bg = Color(0xFF0E0F0F),
-    surface1 = Color(0xFF161817),
-    surface2 = Color(0xFF1E201F),
-    line = Color(0xFF2A2D2B),
-    lineStrong = Color(0xFF6B706C),
-    text = Color(0xFFECEAE5),
-    text2 = Color(0xFFA8ACA8),
-    text3 = Color(0xFF8A8F8B),
-    accent = Color(0xFF74C7B8),
-    accentTint = Color(0xFF253431),
-    danger = Color(0xFFF2998C),
-    pending = Color(0xFFE3BA6A),
-    recording = Color(0xFFFF7A66),
-    voiceCanvas = Color(0xFF07090A),
-    voiceField = Color(0xFF0C1517),
-    voiceFaint = Color(0xFF4B575E),
-    voiceCool = Color(0xFFA9E3E8),
-    voiceWarm = Color(0xFFFFB870),
+    bg = Color(0xFF0A0B0E),
+    surface1 = Color(0xFF13151B),
+    surface2 = Color(0xFF1B1E27),
+    line = Color(0xFF222634),
+    lineStrong = Color(0xFF384054),
+    text = Color(0xFFF8FAFC),
+    text2 = Color(0xFFB1BBC9),
+    text3 = Color(0xFF8D9BAE),
+    accent = Color(0xFF83D5FA),
+    accentTint = Color(0xFF0C2B3F),
+    danger = Color(0xFFF87171),
+    pending = Color(0xFFE9C578),
+    recording = Color(0xFFFB7185),
+    voiceCanvas = Color(0xFF07080B),
+    voiceField = Color(0xFF0D1117),
+    voiceFaint = Color(0xFF384556),
+    voiceCool = Color(0xFF7DD3FC),
+    voiceWarm = Color(0xFFE9C578),
+    glassBorder = Color(0x26FFFFFF),
+    glassBg = Color(0xD9161B23),
+    cardHighlight = Color(0x0DFFFFFF),
 )
 
 @OptIn(ExperimentalTextApi::class)
@@ -84,19 +92,8 @@ private fun mona(weight: Int, width: Float = 100f) = Font(
     variationSettings = FontVariation.Settings(FontVariation.weight(weight), FontVariation.width(width)),
 )
 
-@OptIn(ExperimentalTextApi::class)
-private fun newsreader(weight: Int, opticalSize: Float) = Font(
-    resId = R.font.newsreader,
-    weight = FontWeight(weight),
-    variationSettings = FontVariation.Settings(
-        FontVariation.weight(weight),
-        FontVariation.Setting("opsz", opticalSize),
-    ),
-)
-
-private val MonaSans = FontFamily(mona(300), mona(400), mona(500), mona(600))
-private val MonaSansNarrow = FontFamily(mona(300, 88f), mona(400, 88f))
-private val Newsreader = FontFamily(newsreader(300, 36f), newsreader(400, 18f))
+private val MonaSans = FontFamily(mona(300), mona(400), mona(500), mona(600), mona(700))
+private val MonaSansNarrow = FontFamily(mona(300, 88f), mona(400, 88f), mona(500, 88f))
 
 @Immutable
 data class PrepType(
@@ -113,18 +110,84 @@ data class PrepType(
     val wordmark: TextStyle,
 )
 
+// Clean, high-legibility typographic hierarchy powered by Mona Sans
 val PrepTypography = PrepType(
-    question = TextStyle(fontFamily = Newsreader, fontWeight = FontWeight(300), fontSize = 30.sp, lineHeight = 38.sp, letterSpacing = (-0.01).em),
-    questionM = TextStyle(fontFamily = Newsreader, fontWeight = FontWeight(300), fontSize = 22.sp, lineHeight = 30.sp),
-    quote = TextStyle(fontFamily = Newsreader, fontWeight = FontWeight(400), fontSize = 19.sp, lineHeight = 27.sp),
-    titleL = TextStyle(fontFamily = MonaSans, fontWeight = FontWeight(600), fontSize = 24.sp, lineHeight = 30.sp, letterSpacing = (-0.01).em),
-    titleM = TextStyle(fontFamily = MonaSans, fontWeight = FontWeight(500), fontSize = 18.sp, lineHeight = 24.sp),
-    bodyL = TextStyle(fontFamily = MonaSans, fontWeight = FontWeight(400), fontSize = 17.sp, lineHeight = 26.sp),
-    body = TextStyle(fontFamily = MonaSans, fontWeight = FontWeight(400), fontSize = 15.sp, lineHeight = 22.sp, letterSpacing = 0.005.em),
-    label = TextStyle(fontFamily = MonaSans, fontWeight = FontWeight(600), fontSize = 15.sp, lineHeight = 20.sp, letterSpacing = 0.01.em),
-    meta = TextStyle(fontFamily = MonaSans, fontWeight = FontWeight(400), fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.01.em),
-    timer = TextStyle(fontFamily = MonaSansNarrow, fontWeight = FontWeight(300), fontSize = 22.sp, lineHeight = 26.sp, fontFeatureSettings = "tnum"),
-    wordmark = TextStyle(fontFamily = MonaSans, fontWeight = FontWeight(600), fontSize = 17.sp, lineHeight = 22.sp, letterSpacing = (-0.01).em),
+    question = TextStyle(
+        fontFamily = MonaSans,
+        fontWeight = FontWeight(500),
+        fontSize = 25.sp,
+        lineHeight = 34.sp,
+        letterSpacing = (-0.02).em,
+    ),
+    questionM = TextStyle(
+        fontFamily = MonaSans,
+        fontWeight = FontWeight(500),
+        fontSize = 20.sp,
+        lineHeight = 28.sp,
+        letterSpacing = (-0.01).em,
+    ),
+    quote = TextStyle(
+        fontFamily = MonaSans,
+        fontWeight = FontWeight(400),
+        fontSize = 16.sp,
+        lineHeight = 25.sp,
+        letterSpacing = 0.005.em,
+    ),
+    titleL = TextStyle(
+        fontFamily = MonaSans,
+        fontWeight = FontWeight(700),
+        fontSize = 28.sp,
+        lineHeight = 35.sp,
+        letterSpacing = (-0.02).em,
+    ),
+    titleM = TextStyle(
+        fontFamily = MonaSans,
+        fontWeight = FontWeight(600),
+        fontSize = 17.sp,
+        lineHeight = 23.sp,
+        letterSpacing = (-0.01).em,
+    ),
+    bodyL = TextStyle(
+        fontFamily = MonaSans,
+        fontWeight = FontWeight(400),
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+    ),
+    body = TextStyle(
+        fontFamily = MonaSans,
+        fontWeight = FontWeight(400),
+        fontSize = 15.sp,
+        lineHeight = 23.sp,
+        letterSpacing = 0.005.em,
+    ),
+    label = TextStyle(
+        fontFamily = MonaSans,
+        fontWeight = FontWeight(600),
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.01.em,
+    ),
+    meta = TextStyle(
+        fontFamily = MonaSans,
+        fontWeight = FontWeight(500),
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        letterSpacing = 0.01.em,
+    ),
+    timer = TextStyle(
+        fontFamily = MonaSansNarrow,
+        fontWeight = FontWeight(400),
+        fontSize = 22.sp,
+        lineHeight = 26.sp,
+        fontFeatureSettings = "tnum",
+    ),
+    wordmark = TextStyle(
+        fontFamily = MonaSans,
+        fontWeight = FontWeight(700),
+        fontSize = 18.sp,
+        lineHeight = 23.sp,
+        letterSpacing = (-0.02).em,
+    ),
 )
 
 object Space {
@@ -137,14 +200,15 @@ object Space {
     val xxl = 24.dp
     val x3 = 32.dp
     val x4 = 40.dp
-    val x5 = 56.dp
+    val x5 = 48.dp
     val gutter = 20.dp
 }
 
 object Radius {
-    val chip = 6.dp
-    val control = 12.dp
-    val sheet = 20.dp
+    val chip = 12.dp
+    val control = 16.dp
+    val card = 24.dp
+    val sheet = 28.dp
 }
 
 object Motion {
@@ -199,7 +263,25 @@ fun PrepTheme(content: @Composable () -> Unit) {
         surfaceContainerHigh = c.surface2,
         surfaceContainerHighest = c.surface2,
     )
-    MaterialTheme(colorScheme = scheme) {
+    val type = PrepTypography
+    MaterialTheme(
+        colorScheme = scheme,
+        typography = Typography(
+            displayLarge = type.question,
+            headlineLarge = type.titleL,
+            headlineMedium = type.titleL,
+            headlineSmall = type.questionM,
+            titleLarge = type.titleM,
+            titleMedium = type.titleM,
+            titleSmall = type.label,
+            bodyLarge = type.bodyL,
+            bodyMedium = type.body,
+            bodySmall = type.meta,
+            labelLarge = type.label,
+            labelMedium = type.meta,
+            labelSmall = type.meta,
+        ),
+    ) {
         CompositionLocalProvider(
             LocalPrepColors provides c,
             LocalPrepType provides PrepTypography,
@@ -237,7 +319,7 @@ private class PrepIndicationNode(private val source: InteractionSource) : Modifi
 
     override fun ContentDrawScope.draw() {
         drawContent()
-        val alpha = 0.14f * pressed.value + 0.10f * focused.value
+        val alpha = 0.12f * pressed.value + 0.08f * focused.value
         if (alpha > 0f) drawRect(Color(0xFF808080), alpha = alpha)
     }
 }

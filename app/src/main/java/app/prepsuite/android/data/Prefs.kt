@@ -23,6 +23,7 @@ class Prefs(private val context: Context) {
     val onboarded: Flow<Boolean> = context.prepStore.data.map { it[onboardedKey] ?: false }
     val quietMode: Flow<Boolean> = context.prepStore.data.map { it[quietKey] ?: false }
     val role: Flow<RolePack> = context.prepStore.data.map { p -> RolePack.entries.firstOrNull { it.name == p[roleKey] } ?: RolePack.General }
+    val experienceNotes: Flow<String?> = context.prepStore.data.map { it[notesKey] }
     val sessionLength: Flow<Int> = context.prepStore.data.map { it[lengthKey] ?: 1 }
 
     suspend fun completeOnboarding(role: RolePack, notes: String) {
@@ -31,6 +32,10 @@ class Prefs(private val context: Context) {
             it[notesKey] = notes
             it[onboardedKey] = true
         }
+    }
+
+    suspend fun setExperienceNotes(value: String) {
+        context.prepStore.edit { it[notesKey] = value }
     }
 
     suspend fun setOnboarded(value: Boolean) {

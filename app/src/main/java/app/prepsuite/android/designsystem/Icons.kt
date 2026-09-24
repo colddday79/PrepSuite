@@ -35,6 +35,13 @@ object PrepIcons {
     val Trash = icon("Trash", "M5 7h14 M10 4.5h4 M7 7l0.8 12.5h8.4l0.8 -12.5")
     val Lock = icon("Lock", "M7.5 11v-3a4.5 4.5 0 0 1 9 0v3 M5.5 11h13v9h-13z")
     val Shield = icon("Shield", "M12 3.5l7 3v5c0 4.5 -3 8 -7 9c-4 -1 -7 -4.5 -7 -9v-5z")
+    val Home = icon("Home", "M3.5 10.5l8.5 -7l8.5 7 M5.5 9v11h4.5v-6h4v6h4.5v-11")
+    val Layers = icon("Layers", "M3 8l9 -5l9 5l-9 5z M3 12l9 5l9 -5 M3 16l9 5l9 -5")
+    val ArrowUpRight = icon("ArrowUpRight", "M6 18l12 -12 M6 6h12v12")
+    val User = icon("User", "M12 3.5a4 4 0 1 1 0 8a4 4 0 1 1 0 -8z M4.5 20v-1a7.5 5.5 0 0 1 15 0v1")
+    val Mail = icon("Mail", "M3.5 5.5h17v13h-17z M3.5 6l8.5 7l8.5 -7")
+    val Compass = icon("Compass", "M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0 -18z M15.5 8.5l-2 5l-5 2l2 -5z")
+    val Target = icon("Target", "M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0 -18z M12 7a5 5 0 1 1 0 10a5 5 0 1 1 0 -10z M12 11v2")
 }
 
 private fun icon(name: String, pathData: String): ImageVector =

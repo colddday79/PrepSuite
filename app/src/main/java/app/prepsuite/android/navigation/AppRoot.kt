@@ -1,60 +1,29 @@
 package app.prepsuite.android.navigation
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.isImeVisible
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.prepsuite.android.data.QuestionBank
-import app.prepsuite.android.data.RolePack
-import app.prepsuite.android.designsystem.Hairline
-import app.prepsuite.android.designsystem.Motion
-import app.prepsuite.android.designsystem.Prep
-import app.prepsuite.android.designsystem.PrepIcon
-import app.prepsuite.android.designsystem.PrepIcons
+import app.prepsuite.android.data.*
+import app.prepsuite.android.designsystem.*
 import app.prepsuite.android.feature.feedback.FeedbackScreen
+import app.prepsuite.android.feature.feedback.ExampleComparisonScreen
 import app.prepsuite.android.feature.history.HistoryScreen
 import app.prepsuite.android.feature.onboarding.OnboardingScreen
 import app.prepsuite.android.feature.practice.PracticeHomeScreen
@@ -62,22 +31,29 @@ import app.prepsuite.android.feature.practice.SessionSetupScreen
 import app.prepsuite.android.feature.quiet.QuietPracticeScreen
 import app.prepsuite.android.feature.settings.SettingsScreen
 import app.prepsuite.android.feature.voice.VoiceSessionScreen
+import app.prepsuite.android.feature.pages.*
 import app.prepsuite.android.prepApp
 import kotlinx.coroutines.launch
 
 sealed interface Route {
     data object Home : Route
     data object Setup : Route
-    data class Voice(val questionIds: List<String>, val index: Int) : Route
-    data class Feedback(val questionId: String) : Route
+    data object Library : Route
+    data class Voice(val questionIds: List<String>, val index: Int, val original: AnswerSnapshot? = null) : Route
+    data class Review(val answer: AnswerSnapshot, val original: AnswerSnapshot? = null) : Route
+    data class Reflection(val answer: AnswerSnapshot) : Route
+    data class Retry(val answer: AnswerSnapshot) : Route
+    data class Compare(val original: AnswerSnapshot, val retry: AnswerSnapshot) : Route
+    data object FeedbackExample : Route
+    data object ComparisonExample : Route
     data object Settings : Route
+    data object Account : Route
+    data object Profile : Route
+    data object SignIn : Route
+    data object Privacy : Route
 }
 
-enum class HomeTab(val label: String) {
-    Practice("Practice"),
-    Quiet("Quiet practice"),
-    History("History"),
-}
+enum class HomeTab(val label: String) { Practice("Practice"), Quiet("Quiet practice"), History("History") }
 
 @Composable
 fun AppRoot() {
@@ -85,7 +61,7 @@ fun AppRoot() {
     val scope = rememberCoroutineScope()
     val onboarded by produceState<Boolean?>(initialValue = null) { app.prefs.onboarded.collect { value = it } }
     Box(Modifier.fillMaxSize().background(Prep.colors.bg)) {
-        Crossfade(targetState = onboarded, animationSpec = tween(Motion.ENTER), label = "root") { state ->
+        Crossfade(onboarded, animationSpec = tween(Motion.ENTER), label = "root") { state ->
             when (state) {
                 null -> Unit
                 false -> OnboardingScreen(onDone = { role, notes -> scope.launch { app.prefs.completeOnboarding(role, notes) } })
@@ -100,91 +76,64 @@ private fun MainNav() {
     val app = prepApp()
     val scope = rememberCoroutineScope()
     val backStack = remember { mutableStateListOf<Route>(Route.Home) }
+    val tabState = rememberSaveableStateHolder()
     var forward by remember { mutableStateOf(true) }
     var tab by rememberSaveable { mutableStateOf(HomeTab.Practice) }
     val role by app.prefs.role.collectAsStateWithLifecycle(initialValue = RolePack.General)
     val length by app.prefs.sessionLength.collectAsStateWithLifecycle(initialValue = 1)
     val quiet by app.prefs.quietMode.collectAsStateWithLifecycle(initialValue = false)
-
-    fun push(route: Route) {
-        forward = true
-        backStack.add(route)
-    }
-
-    fun pop() {
-        if (backStack.size > 1) {
-            forward = false
-            backStack.removeAt(backStack.lastIndex)
-        }
-    }
-
-    fun replaceTop(route: Route) {
-        forward = true
-        backStack[backStack.lastIndex] = route
-    }
-
-    fun startSession() {
-        val ids = QuestionBank.session(role, length, System.currentTimeMillis()).map { it.id }
-        push(Route.Voice(ids, 0))
-    }
-
-    BackHandler(enabled = backStack.size > 1) { pop() }
-
+    fun push(route: Route) { forward = true; backStack.add(route) }
+    fun pop() { if (backStack.size > 1) { forward = false; backStack.removeAt(backStack.lastIndex) } }
+    fun replaceTop(route: Route) { forward = true; backStack[backStack.lastIndex] = route }
+    fun startQuestion(id: String) { push(Route.Voice(listOf(id), 0)) }
+    fun finish() { forward = false; backStack.clear(); backStack.add(Route.Home); tab = HomeTab.History }
+    fun startSession() { push(Route.Voice(QuestionBank.session(role, length, System.currentTimeMillis()).map { it.id }, 0)) }
+    val example = QuestionBank.byId("gen.problem.01")
+    BackHandler(backStack.size > 1) { pop() }
     AnimatedContent(
         targetState = backStack.last(),
         transitionSpec = {
-            if (targetState is Route.Voice || initialState is Route.Voice) {
-                fadeIn(tween(400, easing = Motion.decelerate)) togetherWith fadeOut(tween(250, easing = Motion.accelerate))
-            } else {
-                val dir = if (forward) 1 else -1
-                (fadeIn(tween(Motion.ENTER, easing = Motion.decelerate)) +
-                    slideInHorizontally(tween(Motion.ENTER, easing = Motion.decelerate)) { dir * it / 10 }) togetherWith
-                    (fadeOut(tween(Motion.EXIT, easing = Motion.accelerate)) +
-                        slideOutHorizontally(tween(Motion.EXIT, easing = Motion.accelerate)) { -dir * it / 14 })
-            }
-        },
-        label = "nav",
+            val dir = if (forward) 1 else -1
+            (fadeIn(tween(Motion.ENTER)) + slideInHorizontally(tween(Motion.ENTER)) { dir * it / 16 }) togetherWith
+                fadeOut(tween(Motion.EXIT))
+        }, label = "nav",
     ) { route ->
         when (route) {
             Route.Home -> HomeScreen(
-                tab = tab,
-                onTab = { tab = it },
-                role = role,
-                length = length,
-                quiet = quiet,
-                onStart = { startSession() },
-                onSetup = { push(Route.Setup) },
-                onSettings = { push(Route.Settings) },
+                tab, { tab = it }, role, length, quiet,
+                onStart = { startSession() }, onSetup = { push(Route.Setup) },
+                onSettings = { push(Route.Settings) }, onLibrary = { push(Route.Library) },
+                onProfile = { push(Route.Account) }, onQuestion = { startQuestion(it) }, tabState = tabState,
             )
-            Route.Setup -> SessionSetupScreen(
-                role = role,
-                length = length,
+            Route.Setup -> SessionSetupScreen(role, length,
                 onRole = { scope.launch { app.prefs.setRole(it) } },
                 onLength = { scope.launch { app.prefs.setSessionLength(it) } },
-                onBack = { pop() },
-                onStart = {
-                    pop()
-                    startSession()
-                },
+                onBack = { pop() }, onStart = { pop(); startSession() },
             )
+            Route.Library -> LibraryScreen({ pop() }, { startQuestion(it) })
             is Route.Voice -> VoiceSessionScreen(
-                questionIds = route.questionIds,
-                index = route.index,
-                role = role,
-                onClose = { pop() },
-                onFeedback = { push(Route.Feedback(route.questionIds[route.index])) },
+                questionIds = route.questionIds, index = route.index, role = role,
+                onClose = { pop() }, onFeedback = { push(Route.FeedbackExample) },
                 onNext = { replaceTop(route.copy(index = route.index + 1)) },
-                onTypeInstead = {
-                    tab = HomeTab.Quiet
-                    pop()
+                onTypeInstead = { tab = HomeTab.Quiet; backStack.clear(); backStack.add(Route.Home) },
+                onReview = { path, duration ->
+                    push(Route.Review(AnswerSnapshot(route.questionIds[route.index], path, duration), route.original))
                 },
             )
-            is Route.Feedback -> FeedbackScreen(
-                question = QuestionBank.byId(route.questionId),
-                onBack = { pop() },
-                onRetry = { pop() },
-            )
-            Route.Settings -> SettingsScreen(onBack = { pop() })
+            is Route.Review -> AnswerReviewScreen(route.answer, { pop() }) { answer ->
+                if (route.original == null) push(Route.Reflection(answer))
+                else push(Route.Compare(route.original, answer))
+            }
+            is Route.Reflection -> ReflectionScreen(route.answer, { pop() }, { push(Route.Retry(route.answer)) }, { push(Route.FeedbackExample) }, { finish() })
+            is Route.Retry -> RetryPlanScreen(route.answer, { pop() }, { push(Route.Voice(listOf(route.answer.questionId), 0, route.answer)) })
+            is Route.Compare -> ComparisonScreen(route.original, route.retry, { pop() }, { push(Route.Retry(route.original)) }, { finish() })
+            Route.FeedbackExample -> FeedbackScreen(example, { pop() }, { startQuestion(example.id) }, { push(Route.ComparisonExample) })
+            Route.ComparisonExample -> ExampleComparisonScreen({ pop() }, { startQuestion(example.id) })
+            Route.Settings -> SettingsScreen({ pop() }, { push(Route.Account) }, { push(Route.Profile) }, { push(Route.Privacy) }, { push(Route.FeedbackExample) })
+            Route.Account -> AccountScreen({ pop() }, { push(Route.SignIn) }, { push(Route.Profile) })
+            Route.Profile -> ProfileScreen { pop() }
+            Route.SignIn -> SignInScreen { pop() }
+            Route.Privacy -> PrivacyScreen { pop() }
         }
     }
 }
@@ -192,74 +141,54 @@ private fun MainNav() {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HomeScreen(
-    tab: HomeTab,
-    onTab: (HomeTab) -> Unit,
-    role: RolePack,
-    length: Int,
-    quiet: Boolean,
-    onStart: () -> Unit,
-    onSetup: () -> Unit,
-    onSettings: () -> Unit,
+    tab: HomeTab, onTab: (HomeTab) -> Unit, role: RolePack, length: Int, quiet: Boolean,
+    onStart: () -> Unit, onSetup: () -> Unit, onSettings: () -> Unit, onLibrary: () -> Unit,
+    onProfile: () -> Unit, onQuestion: (String) -> Unit, tabState: SaveableStateHolder,
 ) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Prep.colors.bg)
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .imePadding(),
-    ) {
-        Box(Modifier.weight(1f)) {
-            Crossfade(targetState = tab, animationSpec = tween(Motion.FADE), label = "tab") { t ->
-                when (t) {
-                    HomeTab.Practice -> PracticeHomeScreen(
-                        role = role,
-                        length = length,
-                        quiet = quiet,
-                        onStart = onStart,
-                        onSetup = onSetup,
-                        onSettings = onSettings,
-                        onWrite = { onTab(HomeTab.Quiet) },
-                    )
-                    HomeTab.Quiet -> QuietPracticeScreen()
-                    HomeTab.History -> HistoryScreen(onStart = { onTab(HomeTab.Practice) })
+    AmbientBackground(Modifier.fillMaxSize()) {
+        Column(Modifier.align(Alignment.TopCenter).widthIn(max = 760.dp).fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)).imePadding()) {
+            Box(Modifier.weight(1f)) {
+                Crossfade(tab, animationSpec = tween(Motion.FADE), label = "tab") { t ->
+                    tabState.SaveableStateProvider(t.name) {
+                        when (t) {
+                            HomeTab.Practice -> PracticeHomeScreen(role, length, quiet, onStart, onSetup, onSettings,
+                                onWrite = { onTab(HomeTab.Quiet) }, onBrowseQuestions = onLibrary, onProfile = onProfile)
+                            HomeTab.Quiet -> QuietPracticeScreen(onVoice = onQuestion)
+                            HomeTab.History -> HistoryScreen(onStart = { onTab(HomeTab.Practice) }, onOpenSession = { item ->
+                                onQuestion(QuestionBank.all.firstOrNull { it.text == item.questionText }?.id ?: QuestionBank.starter(item.role).id)
+                            })
+                        }
+                    }
                 }
             }
+            if (!WindowInsets.isImeVisible) BottomTabs(tab, onTab)
         }
-        if (!WindowInsets.isImeVisible) BottomTabs(tab, onTab)
     }
 }
 
 @Composable
 private fun BottomTabs(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
     val c = Prep.colors
-    Column(Modifier.fillMaxWidth().background(c.bg)) {
-        Hairline()
-        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp)) {
-            HomeTab.entries.forEach { t ->
-                val on = t == selected
-                val icon = when (t) {
-                    HomeTab.Practice -> PrepIcons.Mic
-                    HomeTab.Quiet -> PrepIcons.Write
-                    HomeTab.History -> PrepIcons.Clock
-                }
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .selectable(selected = on, role = Role.Tab, onClick = { onSelect(t) }),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    PrepIcon(icon, null, if (on) c.text else c.text3, size = 22.dp)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        t.label,
-                        style = Prep.type.meta.copy(fontWeight = FontWeight(if (on) 600 else 400)),
-                        color = if (on) c.text else c.text3,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Box(Modifier.size(width = 18.dp, height = 2.dp).background(if (on) c.text else Color.Transparent))
-                }
+    Row(
+        Modifier.padding(horizontal = Space.l).padding(top = Space.s).navigationBarsPadding()
+            .glassSurface(RoundedCornerShape(24.dp)).padding(6.dp).fillMaxWidth().height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        HomeTab.entries.forEach { tab ->
+            val on = tab == selected
+            val icon = when (tab) { HomeTab.Practice -> PrepIcons.Home; HomeTab.Quiet -> PrepIcons.Write; HomeTab.History -> PrepIcons.Clock }
+            Column(
+                Modifier.weight(1f).fillMaxHeight().heightIn(min = 60.dp).clip(RoundedCornerShape(18.dp))
+                    .background(if (on) c.accentTint else androidx.compose.ui.graphics.Color.Transparent)
+                    .selectable(selected = on, role = Role.Tab, onClick = { onSelect(tab) }).padding(horizontal = 4.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+            ) {
+                PrepIcon(icon, null, if (on) c.accent else c.text3, size = 20.dp)
+                Spacer(Modifier.height(4.dp))
+                Text(tab.label, style = Prep.type.meta.copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium), color = if (on) c.text else c.text3,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
         }
     }
