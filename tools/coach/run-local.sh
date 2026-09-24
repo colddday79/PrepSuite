@@ -3,8 +3,9 @@
 #   Android emulator:        http://10.0.2.2:8787
 #   iOS simulator:           http://localhost:8787
 #   Phone on the same Wi-Fi: http://<this Mac's LAN IP>:8787
-# Mock mode unless ANTHROPIC_API_KEY is set (in supabase/functions/.env or the
-# environment). COACH_MOCK=1 forces mock mode even with a key.
+# Set OLLAMA_MODEL (for example, gemma4:31b-cloud) to use the Ollama app, or
+# ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN for Anthropic. COACH_MOCK=1 enables
+# deterministic demo responses explicitly.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

@@ -1,4 +1,4 @@
-// PrepSuite coach: the one HTTP service between the app and Claude.
+// PrepSuite coach: the one HTTP service between the app and its AI provider.
 //
 // Runs unchanged locally (`deno run`, see tools/coach/run-local.sh) and as a
 // Supabase Edge Function. Audio never reaches this service: the app sends the
@@ -7,11 +7,13 @@
 //   POST /coach   {"action": "questions" | "feedback" | "wrapup", ...}
 //   GET  /health  {"ok": true, "mock": <bool>}
 //
-// Mock mode (deterministic, no Claude calls) when no Anthropic credential is
-// set or COACH_MOCK=1.
+// COACH_MOCK=1 explicitly enables deterministic demo responses. Missing
+// credentials never silently substitute those responses for live AI.
 
 import Anthropic from "npm:@anthropic-ai/sdk@0.128.0";
 import { mockFeedback, mockQuestions, mockWrapup } from "./mock.ts";
+import { deliverySummary } from "./delivery.ts";
+import { createOllamaProvider } from "./ollama.ts";
 import {
   type Delivery,
   FEEDBACK_SCHEMA,
@@ -40,18 +42,9 @@ export const LIMITS = {
   bodyBytes: 200_000,
 } as const;
 
-// Server-side refusal fallbacks: if a safety classifier declines, the API
-// re-runs the same request on Anthropic's recommended fallback model (chosen
-// by refusal category) inside the same call.
-const FALLBACK_BETA = "server-side-fallback-2026-07-01";
-// The header the SDK's own beta structured-output helper (beta.messages.parse)
-// sends. We call beta.messages.create directly so stop_reason is checked
-// before the JSON is parsed.
-const STRUCTURED_OUTPUTS_BETA = "structured-outputs-2025-12-15";
+export type Route = "questions" | "feedback" | "wrapup";
 
-type Route = "questions" | "feedback" | "wrapup";
-
-interface RouteSpec {
+export interface RouteSpec {
   system: string;
   schema: Record<string, unknown>;
   effort: "low" | "medium" | "high";
@@ -60,20 +53,26 @@ interface RouteSpec {
 
 const ROUTES: Record<Route, RouteSpec> = {
   // low: a short, well-specified list right after the 10 s recording; the user is watching a spinner.
-  questions: { system: QUESTIONS_SYSTEM, schema: QUESTIONS_SCHEMA, effort: "low", maxTokens: 16000 },
+  questions: { system: QUESTIONS_SYSTEM, schema: QUESTIONS_SCHEMA, effort: "low", maxTokens: 3072 },
   // medium: the core judgement (one biggest problem, exact quote, number-grounded delivery) needs some thinking, but it runs after every answer.
-  feedback: { system: FEEDBACK_SYSTEM, schema: FEEDBACK_SCHEMA, effort: "medium", maxTokens: 16000 },
+  feedback: { system: FEEDBACK_SYSTEM, schema: FEEDBACK_SCHEMA, effort: "medium", maxTokens: 2048 },
   // medium: synthesis across up to 10 answers under a no-invented-facts rule; runs once per session.
-  wrapup: { system: WRAPUP_SYSTEM, schema: WRAPUP_SCHEMA, effort: "medium", maxTokens: 16000 },
+  wrapup: { system: WRAPUP_SYSTEM, schema: WRAPUP_SCHEMA, effort: "medium", maxTokens: 3072 },
 };
 
 /** The slice of the Anthropic client this service uses (tests pass a fake). */
 export interface ClaudeClient {
-  beta: {
-    messages: {
-      create(params: Anthropic.Beta.MessageCreateParamsNonStreaming): PromiseLike<Anthropic.Beta.BetaMessage>;
-    };
+  messages: {
+    create(params: Anthropic.MessageCreateParamsNonStreaming): PromiseLike<Anthropic.Message>;
   };
+}
+
+export interface CoachProvider {
+  name: string;
+  model: string;
+  /** The provider can send transcripts and metrics outside this computer. */
+  cloud: boolean;
+  generate(route: Route, spec: RouteSpec, prompt: string, log: Logger): Promise<unknown>;
 }
 
 export type Logger = (entry: Record<string, unknown>) => void;
@@ -127,6 +126,9 @@ function num(d: Record<string, unknown>, key: string, min: number, max: number):
   const v = d[key];
   if (typeof v !== "number" || !Number.isFinite(v)) bad(`"delivery.${key}" must be a number.`);
   if (v < min || v > max) bad(`"delivery.${key}" must be between ${min} and ${max}.`);
+  if (["words", "pauses_over_1s", "filler_count"].includes(key) && !Number.isInteger(v)) {
+    bad(`"delivery.${key}" must be a whole number.`);
+  }
   return v;
 }
 
@@ -153,7 +155,7 @@ function parseDelivery(v: unknown): Delivery | null {
   if (entries.length > 30) bad(`"delivery.fillers" has too many entries (max 30).`);
   for (const [word, count] of entries) {
     if (word.length > 30) bad(`"delivery.fillers" keys must be at most 30 characters.`);
-    if (typeof count !== "number" || !Number.isFinite(count) || count < 0 || count > 10000) {
+    if (typeof count !== "number" || !Number.isInteger(count) || count < 0 || count > 10000) {
       bad(`"delivery.fillers.${word}" must be a count.`);
     }
   }
@@ -268,18 +270,15 @@ function wrapupPrompt(i: WrapupInput): string {
 // Claude call
 // ---------------------------------------------------------------------------
 
-async function callClaude(client: ClaudeClient, route: Route, userContent: string, log: Logger): Promise<unknown> {
+async function callClaude(client: ClaudeClient, route: Route, userContent: string, log: Logger, model = MODEL): Promise<unknown> {
   const spec = ROUTES[route];
   const started = Date.now();
-  const message = await client.beta.messages.create({
-    model: MODEL,
+  const message = await client.messages.create({
+    model,
     max_tokens: spec.maxTokens,
-    thinking: { type: "adaptive" },
-    output_config: { effort: spec.effort, format: { type: "json_schema", schema: spec.schema } },
+    output_config: { format: { type: "json_schema", schema: spec.schema } },
     system: [{ type: "text", text: spec.system, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: userContent }],
-    betas: [FALLBACK_BETA, STRUCTURED_OUTPUTS_BETA],
-    fallbacks: "default",
   });
 
   log({
@@ -287,15 +286,12 @@ async function callClaude(client: ClaudeClient, route: Route, userContent: strin
     route,
     ms: Date.now() - started,
     served_by: message.model,
-    fallback: (message.usage.iterations ?? []).some((it) => it.type === "fallback_message"),
     stop: message.stop_reason,
     input_tokens: message.usage.input_tokens,
     output_tokens: message.usage.output_tokens,
     cache_read_tokens: message.usage.cache_read_input_tokens ?? 0,
   });
 
-  // Check stop_reason before reading content. A refusal here means the whole
-  // fallback chain declined.
   if (message.stop_reason === "refusal") {
     throw new CoachError(502, "upstream", "The AI could not respond to this one. Try again with a different answer.");
   }
@@ -303,10 +299,8 @@ async function callClaude(client: ClaudeClient, route: Route, userContent: strin
     throw new CoachError(502, "upstream", "The AI reply was cut off. Try again.");
   }
 
-  // The served answer follows the last fallback marker (if a fallback happened).
-  const start = message.content.findLastIndex((b) => b.type === "fallback") + 1;
+  if (message.stop_reason !== "end_turn") badShape();
   const json = message.content
-    .slice(start)
     .map((b) => (b.type === "text" ? b.text : ""))
     .join("");
   try {
@@ -314,6 +308,13 @@ async function callClaude(client: ClaudeClient, route: Route, userContent: strin
   } catch {
     badShape();
   }
+}
+
+export function createClaudeProvider(client: ClaudeClient, model = MODEL): CoachProvider {
+  return {
+    name: "anthropic", model, cloud: true,
+    generate: (route, _spec, prompt, log) => callClaude(client, route, prompt, log, model),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -349,7 +350,20 @@ export function verifiedQuote(quote: string, transcript: string): string {
   const parts = q.split(/\.\.\.|…/).map(matchKey).filter(Boolean);
   if (!parts.length) return "";
   const haystack = ` ${matchKey(transcript)} `;
-  return parts.every((p) => haystack.includes(` ${p} `)) ? q : "";
+  let after = 0;
+  for (const part of parts) {
+    const found = haystack.indexOf(` ${part} `, after);
+    if (found < 0) return "";
+    after = found + part.length + 1;
+  }
+  return q;
+}
+
+function outputText(v: unknown, max: number, allowEmpty = false): string {
+  if (typeof v !== "string" || v.length > max) badShape();
+  const result = clean(v);
+  if (!allowEmpty && !result) badShape();
+  return result;
 }
 
 function normalizeQuestions(raw: unknown, input: QuestionsInput): QuestionsResult {
@@ -361,43 +375,59 @@ function normalizeQuestions(raw: unknown, input: QuestionsInput): QuestionsResul
     seen.add(t.toLowerCase());
     items.push({ text: t, focus });
   };
-  for (const q of raw.questions) if (isRecord(q)) add(clean(q.text), clean(q.focus, 8));
-  if (!items.length) badShape();
-  // The app expects exactly `count`; top up from the job-aware defaults in the rare case the model returns fewer.
-  for (const q of mockQuestions(input.job, LIMITS.count.max).questions) {
-    if (items.length >= input.count) break;
-    add(q.text, q.focus);
+  if (raw.questions.length !== input.count) badShape();
+  for (const q of raw.questions) {
+    if (!isRecord(q)) badShape();
+    add(outputText(q.text, LIMITS.question), clean(outputText(q.focus, 120), 8));
   }
+  if (items.length !== input.count) badShape();
   return {
-    job_title: clean(raw.job_title, 10) || mockQuestions(input.job, 1).job_title,
-    questions: items.slice(0, input.count).map((q, i) => ({ id: `q${i + 1}`, ...q })),
+    job_title: clean(outputText(raw.job_title, 160), 12),
+    questions: items.map((q, i) => ({ id: `q${i + 1}`, ...q })),
   };
 }
 
 function normalizeFeedback(raw: unknown, input: FeedbackInput): FeedbackResult {
   if (!isRecord(raw)) badShape();
+  const evidence = outputText(raw.evidence, 400, true);
+  const verifiedEvidence = verifiedQuote(evidence, input.transcript);
+  if (evidence && !verifiedEvidence) badShape();
   const out: FeedbackResult = {
-    headline: clean(raw.headline, 12),
-    problem: clean(raw.problem),
-    evidence: typeof raw.evidence === "string" ? verifiedQuote(raw.evidence, input.transcript) : "",
-    fix: clean(raw.fix),
-    delivery: clean(raw.delivery),
-    strength: clean(raw.strength),
+    headline: clean(outputText(raw.headline, 200), 12),
+    problem: outputText(raw.problem, LIMITS.feedbackText),
+    evidence: verifiedEvidence,
+    fix: outputText(raw.fix, LIMITS.feedbackText),
+    // Acoustic feedback is reproducible from measurements. A model cannot
+    // invent hearing a typed answer or infer emotions from pitch or volume.
+    delivery: deliverySummary(input.delivery),
+    strength: outputText(raw.strength, 500),
   };
   if (!out.headline || !out.problem || !out.fix) badShape();
   return out;
 }
 
-function list(v: unknown, max: number): string[] {
-  return Array.isArray(v) ? v.map((s) => clean(s)).filter(Boolean).slice(0, max) : [];
+function list(v: unknown, min: number, max: number): string[] {
+  if (!Array.isArray(v) || v.length < min || v.length > max) badShape();
+  return v.map((s) => outputText(s, 500));
 }
 
-function normalizeWrapup(raw: unknown): WrapupResult {
+function normalizeWrapup(raw: unknown, input: WrapupInput): WrapupResult {
   if (!isRecord(raw)) badShape();
+  if (!Array.isArray(raw.stories_to_use) || raw.stories_to_use.length > 3) badShape();
+  const stories = raw.stories_to_use.map((story) => {
+    if (!isRecord(story) || !Number.isInteger(story.answer_index)) badShape();
+    const index = story.answer_index as number;
+    if (index < 1 || index > input.answers.length) badShape();
+    const quote = outputText(story.evidence, 500);
+    const verified = verifiedQuote(quote, input.answers[index - 1].transcript);
+    if (!verified) badShape();
+    // Display their own words instead of unverified AI embellishment.
+    return `Question ${index}: "${verified}"`;
+  });
   const out: WrapupResult = {
-    tips: list(raw.tips, 5),
-    last_minute_notes: list(raw.last_minute_notes, 6),
-    stories_to_use: list(raw.stories_to_use, 3),
+    tips: list(raw.tips, 3, 5),
+    last_minute_notes: list(raw.last_minute_notes, 3, 6),
+    stories_to_use: stories,
   };
   if (!out.tips.length || !out.last_minute_notes.length) badShape();
   return out;
@@ -435,7 +465,8 @@ function toCoachError(err: unknown, log: Logger): CoachError {
     status: e.status,
     upstream_status: err instanceof Anthropic.APIError ? err.status ?? null : null,
     request_id: err instanceof Anthropic.APIError ? err.requestID ?? null : null,
-    detail: err instanceof Error ? err.message : String(err),
+    // Never log provider error bodies, prompts, transcripts or credentials.
+    error_type: err instanceof Error ? err.name : "unknown",
   });
   return e;
 }
@@ -465,8 +496,32 @@ function routePath(pathname: string): string {
 
 async function readJson(req: Request): Promise<Record<string, unknown>> {
   if (Number(req.headers.get("content-length") ?? 0) > LIMITS.bodyBytes) bad("Request body is too large.");
-  const raw = await req.text();
-  if (raw.length > LIMITS.bodyBytes) bad("Request body is too large.");
+  const reader = req.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  if (reader) {
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > LIMITS.bodyBytes) {
+          await reader.cancel();
+          bad("Request body is too large.");
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const raw = new TextDecoder().decode(bytes);
   let body: unknown = undefined;
   try {
     body = JSON.parse(raw);
@@ -479,25 +534,25 @@ async function readJson(req: Request): Promise<Record<string, unknown>> {
 
 async function dispatch(
   body: Record<string, unknown>,
-  client: ClaudeClient | null,
+  provider: CoachProvider | null,
   log: Logger,
 ): Promise<QuestionsResult | FeedbackResult | WrapupResult> {
   switch (body.action) {
     case "questions": {
       const input = parseQuestions(body);
-      if (!client) return mockQuestions(input.job, input.count);
-      return normalizeQuestions(await callClaude(client, "questions", questionsPrompt(input), log), input);
+      if (!provider) return mockQuestions(input.job, input.count);
+      return normalizeQuestions(await provider.generate("questions", ROUTES.questions, questionsPrompt(input), log), input);
     }
     case "feedback": {
       const input = parseFeedback(body);
-      // Nothing was said at all: no need to ask the model to point that out.
-      if (!client || wordCount(input.transcript) === 0) return mockFeedback(input);
-      return normalizeFeedback(await callClaude(client, "feedback", feedbackPrompt(input), log), input);
+      if (wordCount(input.transcript) === 0) bad("There is no answer to review. Record or type an answer first.");
+      if (!provider) return mockFeedback(input);
+      return normalizeFeedback(await provider.generate("feedback", ROUTES.feedback, feedbackPrompt(input), log), input);
     }
     case "wrapup": {
       const input = parseWrapup(body);
-      if (!client) return mockWrapup(input);
-      return normalizeWrapup(await callClaude(client, "wrapup", wrapupPrompt(input), log));
+      if (!provider) return mockWrapup(input);
+      return normalizeWrapup(await provider.generate("wrapup", ROUTES.wrapup, wrapupPrompt(input), log), input);
     }
     default:
       return bad(`"action" must be "questions", "feedback" or "wrapup".`);
@@ -505,15 +560,17 @@ async function dispatch(
 }
 
 export interface HandlerOptions {
-  /** Claude client, or null for mock mode. */
-  client: ClaudeClient | null;
+  client?: ClaudeClient | null;
+  provider?: CoachProvider | null;
+  /** Demo/test responses must be explicitly enabled, including in tests. */
+  mock?: boolean;
   log?: Logger;
 }
 
 export function createHandler(opts: HandlerOptions): (req: Request) => Promise<Response> {
-  const { client } = opts;
+  const mock = opts.mock === true;
+  const provider = mock ? null : opts.provider ?? (opts.client ? createClaudeProvider(opts.client) : null);
   const log: Logger = opts.log ?? ((entry) => console.log(JSON.stringify({ t: new Date().toISOString(), ...entry })));
-  const mock = client === null;
 
   return async (req: Request): Promise<Response> => {
     const started = Date.now();
@@ -525,12 +582,21 @@ export function createHandler(opts: HandlerOptions): (req: Request) => Promise<R
         res = new Response(null, { status: 204, headers: CORS });
       } else if (path === "/health" || path === "/coach/health") {
         if (req.method !== "GET") throw new CoachError(405, "bad_request", "Use GET for health checks.");
-        res = json(200, { ok: true, mock });
+        const configured = mock || provider !== null;
+        res = json(configured ? 200 : 503, {
+          ok: configured, mock,
+          provider: mock ? "demo" : provider?.name ?? "unconfigured",
+          model: provider?.model ?? null,
+          cloud: provider?.cloud ?? false,
+        });
       } else if (path === "/" || path === "/coach") {
         if (req.method !== "POST") throw new CoachError(405, "bad_request", "Use POST with a JSON body.");
         const body = await readJson(req);
         action = typeof body.action === "string" ? body.action.slice(0, 20) : "-";
-        res = json(200, { ...(await dispatch(body, client, log)), mock });
+        if (!mock && !provider) {
+          throw new CoachError(503, "not_configured", "The AI coach is not configured. Start the coach server with Ollama or an Anthropic API key.");
+        }
+        res = json(200, { ...(await dispatch(body, provider, log)), mock });
       } else {
         throw new CoachError(404, "bad_request", `Nothing at ${path}. Use POST /coach or GET /health.`);
       }
@@ -550,10 +616,22 @@ export function createHandler(opts: HandlerOptions): (req: Request) => Promise<R
 function main(): void {
   const forceMock = Deno.env.get("COACH_MOCK") === "1";
   const hasCredential = Boolean(Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("ANTHROPIC_AUTH_TOKEN"));
+  const ollamaModel = Deno.env.get("OLLAMA_MODEL")?.trim();
+  const ollamaUrl = Deno.env.get("OLLAMA_URL")?.trim() || undefined;
+  const ollamaCloud = Deno.env.get("OLLAMA_CLOUD") === "1";
   // One retry and a 60 s per-attempt timeout: the user is waiting on a phone.
   const client = !forceMock && hasCredential ? new Anthropic({ timeout: 60_000, maxRetries: 1 }) : null;
-  const handler = createHandler({ client });
-  const mode = client ? `live, ${MODEL}` : "mock";
+  const provider = !forceMock && ollamaModel
+    ? createOllamaProvider({ model: ollamaModel, baseUrl: ollamaUrl, cloud: ollamaCloud || undefined })
+    : client
+    ? createClaudeProvider(client)
+    : null;
+  const handler = createHandler({ provider, mock: forceMock });
+  const mode = forceMock
+    ? "mock"
+    : provider
+    ? `${provider.name}, ${provider.model}`
+    : "unconfigured";
 
   if ("EdgeRuntime" in globalThis) {
     console.log(`coach ready (${mode})`);

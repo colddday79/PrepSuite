@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches PrepColors.bg so launch and window backgrounds never flash white. -->
+    <color name="prep_bg">#FF0E0C0A</color>
+</resources>

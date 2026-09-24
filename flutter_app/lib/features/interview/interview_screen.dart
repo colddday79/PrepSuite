@@ -1,0 +1,540 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../../app/services.dart';
+import '../../app/session.dart';
+import '../../coach/coach_api.dart';
+import '../../coach/contracts.dart';
+import '../../coach/speech_adapter.dart';
+import '../../design/components.dart';
+import '../../design/hologram.dart';
+import '../../design/icons.dart';
+import '../../design/tokens.dart';
+import '../common/coach_widgets.dart';
+import '../wrapup/wrapup_screen.dart';
+import 'feedback_view.dart';
+
+const _maxAnswer = Duration(minutes: 2);
+
+enum _Phase { speaking, ready, preparing, recording, transcribing, review, unheard, typing, micOff, checking, error, feedback }
+
+/// Step two: one question at a time. The interviewer asks, the person answers out loud (up to
+/// two minutes), and the coach comes back with short, blunt feedback on what went wrong.
+class InterviewScreen extends StatefulWidget {
+  const InterviewScreen({super.key, required this.session});
+
+  final PracticeSession session;
+
+  @override
+  State<InterviewScreen> createState() => _InterviewScreenState();
+}
+
+class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingObserver {
+  late AppServices _services;
+  final _question = RevealController();
+  final _level = LevelMix();
+  final _progress = ValueNotifier<double>(0);
+  final _elapsed = ValueNotifier<int>(0);
+  final _typed = TextEditingController();
+  final _scroll = ScrollController();
+  StreamSubscription<String>? _partialSub;
+  Timer? _ticker;
+
+  int _index = 0;
+  _Phase _phase = _Phase.speaking;
+  String _partial = '';
+  String _transcript = '';
+  DeliveryMetrics? _metrics;
+  bool _wasTyped = false;
+  bool _micBlocked = false;
+  bool _micFailed = false;
+  AnswerFeedback? _feedback;
+  CoachException? _error;
+  int _operation = 0;
+  bool _closing = false;
+  bool _leaving = false;
+  String? _speechError;
+
+  PracticeSession get _session => widget.session;
+  CoachQuestion get _current => _session.questions[_index];
+  bool get _isLast => _index >= _session.questions.length - 1;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _level.listenTo(_services.voice.level);
+      _level.listenTo(_services.speech.level);
+      _partialSub = _services.speech.partialText.listen((text) {
+        if (mounted && _phase == _Phase.recording) setState(() => _partial = text);
+      });
+      _ask();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _services = AppScope.of(context);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _operation++;
+    _ticker?.cancel();
+    _partialSub?.cancel();
+    _services.voice.stop();
+    _services.speech.cancel();
+    _question.dispose();
+    _level.dispose();
+    _progress.dispose();
+    _elapsed.dispose();
+    _typed.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _toTop() {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
+  Future<void> _ask() async {
+    final operation = ++_operation;
+    final text = _current.text;
+    _question.start(text);
+    _feedback = null;
+    _error = null;
+    _partial = '';
+    _toTop();
+    if (_session.preferTyping) {
+      _question.showAll();
+      setState(() => _phase = _Phase.typing);
+      return;
+    }
+    setState(() => _phase = _Phase.speaking);
+    try {
+      await _services.voice.speak(text);
+    } catch (_) {
+      // The question is on screen even if the voice fails.
+    }
+    if (!mounted || operation != _operation) return;
+    _question.showAll();
+    _level.rest();
+    if (_phase == _Phase.speaking) setState(() => _phase = _Phase.ready);
+  }
+
+  Future<void> _record() async {
+    if (_phase == _Phase.recording) return _stop();
+    if (_phase == _Phase.preparing || _phase == _Phase.transcribing || _phase == _Phase.checking) return;
+    final operation = ++_operation;
+    setState(() {
+      _phase = _Phase.preparing;
+      _speechError = null;
+    });
+    _question.showAll();
+    try {
+      await _services.voice.stop();
+      if (!mounted || operation != _operation) return;
+      final access = await _services.mic.request();
+      if (!mounted || operation != _operation) return;
+      if (access != MicAccess.granted) {
+        setState(() {
+          _micBlocked = access == MicAccess.blocked;
+          _micFailed = false;
+          _phase = _Phase.micOff;
+        });
+        return;
+      }
+      final started = await _services.speech.start(maxDuration: _maxAnswer);
+      if (!mounted || operation != _operation) {
+        if (started) await _services.speech.cancel();
+        return;
+      }
+      if (!started) throw StateError('Speech capture could not start');
+    } catch (_) {
+      if (!mounted || operation != _operation) return;
+      setState(() {
+        _micBlocked = false;
+        _micFailed = true;
+        _speechError = speechErrorMessage(_services.speech);
+        _phase = _Phase.micOff;
+      });
+      return;
+    }
+    _elapsed.value = 0;
+    _progress.value = 0;
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      _elapsed.value += 100;
+      _progress.value = _elapsed.value / _maxAnswer.inMilliseconds;
+      if (_elapsed.value >= _maxAnswer.inMilliseconds) _stop();
+    });
+    setState(() {
+      _partial = '';
+      _phase = _Phase.recording;
+    });
+  }
+
+  Future<void> _stop() async {
+    if (_phase != _Phase.recording) return;
+    _ticker?.cancel();
+    setState(() => _phase = _Phase.transcribing);
+    CaptureResult? result;
+    try {
+      result = await _services.speech.stop();
+    } catch (_) {
+      result = null;
+    }
+    if (!mounted) return;
+    _level.rest();
+    final heard = result?.transcript.text.trim() ?? '';
+    if (heard.isEmpty) {
+      setState(() => _phase = _Phase.unheard);
+      return;
+    }
+    _transcript = heard;
+    _metrics = result!.metrics;
+    _wasTyped = false;
+    _typed.text = heard;
+    setState(() => _phase = _Phase.review);
+  }
+
+  Future<void> _confirmTranscript() async {
+    final edited = _typed.text.trim();
+    if (edited.isEmpty) return;
+    if (edited != _transcript) {
+      // Pace and filler counts were computed against the original transcript.
+      // A correction is useful content, but isn't a newly measured recording.
+      _metrics = null;
+      _wasTyped = true;
+    }
+    _transcript = edited;
+    FocusScope.of(context).unfocus();
+    await _check();
+  }
+
+  void _typeInstead() {
+    _operation++;
+    _services.voice.stop();
+    _question.showAll();
+    setState(() => _phase = _Phase.typing);
+  }
+
+  Future<void> _sendTyped() async {
+    final text = _typed.text.trim();
+    if (text.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    _transcript = text;
+    _metrics = null;
+    _wasTyped = true;
+    await _check();
+  }
+
+  Future<void> _check() async {
+    if (_phase == _Phase.checking) return;
+    setState(() {
+      _error = null;
+      _phase = _Phase.checking;
+    });
+    try {
+      final feedback = await _services.coach.feedback(
+        job: _session.job,
+        question: _current.text,
+        transcript: _transcript,
+        delivery: _metrics,
+      );
+      if (!mounted) return;
+      _session.answers[_index] = AnswerRecord(transcript: _transcript, metrics: _metrics, feedback: feedback, typed: _wasTyped);
+      setState(() {
+        _feedback = feedback;
+        _phase = _Phase.feedback;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _toTop());
+    } on CoachException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _phase = _Phase.error;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = CoachException(CoachErrorKind.badResponse, message: '$e');
+        _phase = _Phase.error;
+      });
+    }
+  }
+
+  void _tryAgain() {
+    _typed.clear();
+    _toTop();
+    setState(() {
+      _feedback = null;
+      _phase = _session.preferTyping ? _Phase.typing : _Phase.ready;
+    });
+  }
+
+  Future<void> _next() async {
+    if (_leaving) return;
+    if (_isLast) {
+      _leaving = true;
+      await _services.sessions.finished(_session);
+      if (!mounted) return;
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => WrapupScreen(session: _session)),
+      );
+      return;
+    }
+    _typed.clear();
+    setState(() => _index++);
+    await _ask();
+  }
+
+  Future<void> _close() async {
+    if (_closing) return;
+    _closing = true;
+    final busy = _session.answers.isNotEmpty || _phase == _Phase.recording || _phase == _Phase.checking;
+    if (busy) {
+      final end = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: PrepColors.surface2,
+          title: Text('End this practice?', style: PrepType.titleM),
+          content: Text('Your answers and feedback from this practice will be lost.', style: PrepType.body),
+          actions: [
+            QuietButton('Keep going', onPressed: () => Navigator.of(context).pop(false)),
+            QuietButton('End practice', color: PrepColors.danger, onPressed: () => Navigator.of(context).pop(true)),
+          ],
+        ),
+      );
+      if (end != true || !mounted) {
+        _closing = false;
+        return;
+      }
+    }
+    _operation++;
+    _ticker?.cancel();
+    await _services.voice.stop();
+    await _services.speech.cancel();
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.paused && state != AppLifecycleState.detached) return;
+    _services.voice.stop();
+    if (_phase == _Phase.recording) {
+      unawaited(_stop());
+    } else if (_phase == _Phase.preparing || _phase == _Phase.speaking) {
+      _operation++;
+      _services.speech.cancel();
+      _question.showAll();
+      setState(() => _phase = _Phase.ready);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = _session.questions.length;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _close();
+      },
+      child: CoachScaffold(
+        status: 'Question ${_index + 1} of $total · ${_session.jobTitle}',
+        presenceSize: _phase == _Phase.feedback ? 112 : 152,
+        level: _level,
+        onClose: _close,
+        body: SingleChildScrollView(
+          controller: _scroll,
+          padding: const EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, Space.x3),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _phase == _Phase.feedback ? _feedbackContent() : _answerContent(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _feedbackContent() {
+    return [
+      FeedbackView(question: _current.text, feedback: _feedback!, typed: _wasTyped),
+      const SizedBox(height: Space.x3),
+      PrimaryButton(_isLast ? 'See your notes' : 'Next question', onPressed: _next),
+      const SizedBox(height: Space.s),
+      Center(child: QuietButton('Try this one again', icon: PrepIcons.replay, onPressed: _tryAgain)),
+    ];
+  }
+
+  List<Widget> _answerContent() {
+    final focus = _current.focus.trim();
+    return [
+      if (_session.set.mock) ...[
+        Text('Sample questions', style: PrepType.meta),
+        const SizedBox(height: Space.s),
+      ],
+      RevealText(controller: _question, style: PrepType.question),
+      if (focus.isNotEmpty) ...[
+        const SizedBox(height: Space.s),
+        // Space is kept while the question is read out, so nothing below moves when it appears.
+        Visibility.maintain(
+          visible: _phase != _Phase.speaking,
+          child: Text('What they want to hear: $focus', style: PrepType.meta.copyWith(color: PrepColors.text3)),
+        ),
+      ],
+      const SizedBox(height: Space.xxl),
+      ..._phaseContent(),
+    ];
+  }
+
+  List<Widget> _phaseContent() {
+    switch (_phase) {
+      // Ready and recording share one layout, so the record button never moves under a finger.
+      case _Phase.speaking:
+      case _Phase.ready:
+      case _Phase.recording:
+        final recording = _phase == _Phase.recording;
+        return [
+          Center(child: RecordButton(recording: recording, progress: _progress, onPressed: recording ? _stop : _record)),
+          const SizedBox(height: Space.m),
+          SizedBox(
+            height: 26,
+            child: Center(
+              child: recording
+                  ? ValueListenableBuilder<int>(
+                      valueListenable: _elapsed,
+                      builder: (context, ms, _) => Text.rich(
+                        TextSpan(children: [
+                          TextSpan(text: clock(ms), style: PrepType.timer),
+                          TextSpan(text: '  of 2:00. Tap to stop.', style: PrepType.meta),
+                        ]),
+                      ),
+                    )
+                  : Text('Tap to answer. Up to 2 minutes.', style: PrepType.meta),
+            ),
+          ),
+          const SizedBox(height: Space.m),
+          if (recording)
+            Text(
+              _partial.isEmpty ? 'Listening' : _tail(_partial),
+              style: PrepType.bodyL.copyWith(color: _partial.isEmpty ? PrepColors.text3 : PrepColors.text2),
+            )
+          else
+            Wrap(
+              alignment: WrapAlignment.center,
+              children: [
+                QuietButton('Hear it again', icon: PrepIcons.replay, onPressed: _phase == _Phase.ready ? _ask : null),
+                QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead),
+              ],
+            ),
+        ];
+      case _Phase.transcribing:
+        return const [LoadingLine('Turning your answer into text')];
+      case _Phase.preparing:
+        return const [LoadingLine('Preparing microphone')];
+      case _Phase.review:
+        return [
+          Text('Check your transcript before the coach reviews it.', style: PrepType.body),
+          const SizedBox(height: Space.m),
+          PrepTextField(
+            fieldKey: const ValueKey('answer-review-field'),
+            controller: _typed,
+            hint: 'Your recorded answer',
+            minLines: 4,
+            maxLines: 10,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: Space.s),
+          Text(
+            _typed.text.trim() == _transcript
+                ? 'Feedback covers your answer and measured voice delivery.'
+                : 'You edited the text. Feedback will cover the words only; record again for voice delivery feedback.',
+            style: PrepType.meta,
+          ),
+          const SizedBox(height: Space.xxl),
+          PrimaryButton('Get feedback', onPressed: _typed.text.trim().isEmpty ? null : _confirmTranscript),
+          const SizedBox(height: Space.s),
+          Center(child: QuietButton('Record again', icon: PrepIcons.replay, onPressed: _record)),
+        ];
+      case _Phase.unheard:
+        return [
+          const ProblemNote(
+            title: "We couldn't hear your answer.",
+            body: 'Check that nothing is covering the microphone and speak up a little. Or type your answer instead.',
+          ),
+          const SizedBox(height: Space.xxl),
+          Center(child: RecordButton(recording: false, progress: _progress, onPressed: _record)),
+          const SizedBox(height: Space.s),
+          Center(child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead)),
+        ];
+      case _Phase.typing:
+        return [
+          PrepTextField(
+            fieldKey: const ValueKey('answer-field'),
+            controller: _typed,
+            hint: 'Type your answer the way you would say it.',
+            minLines: 4,
+            maxLines: 10,
+            autofocus: true,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: Space.xxl),
+          PrimaryButton('Send answer', onPressed: _typed.text.trim().isEmpty ? null : _sendTyped),
+          const SizedBox(height: Space.s),
+          Center(child: QuietButton('Answer out loud instead', icon: PrepIcons.mic, onPressed: _record)),
+        ];
+      case _Phase.micOff:
+        return [
+          ProblemNote(
+            title: _micFailed ? "The microphone didn't start." : 'The microphone is off.',
+            body: _micFailed
+                ? _speechError ?? 'Another app may be using it. Try again, or type your answer instead.'
+                : _micBlocked
+                    ? 'Allow the microphone for PrepSuite in Settings, or type your answer instead.'
+                    : 'PrepSuite needs the microphone to hear you. You can allow it when you try again, or type instead.',
+          ),
+          const SizedBox(height: Space.xxl),
+          PrimaryButton('Type instead', onPressed: _typeInstead),
+          const SizedBox(height: Space.s),
+          Center(
+            child: QuietButton(
+              _micBlocked ? 'Open settings' : 'Try again',
+              onPressed: _micBlocked ? _services.mic.openSettings : _record,
+            ),
+          ),
+        ];
+      case _Phase.checking:
+        return [
+          Text(
+            '“${_tail(_transcript, 220)}”',
+            style: PrepType.quote.copyWith(color: PrepColors.text2),
+          ),
+          const SizedBox(height: Space.xxl),
+          const LoadingLine('Checking your answer'),
+        ];
+      case _Phase.error:
+        return [
+          ProblemNote(title: "Couldn't check your answer.", body: _error?.userMessage ?? 'Something went wrong. Try again.'),
+          const SizedBox(height: Space.xxl),
+          PrimaryButton('Try again', onPressed: _check),
+          const SizedBox(height: Space.s),
+          Center(child: QuietButton('Answer again', icon: PrepIcons.replay, onPressed: _tryAgain)),
+        ];
+      case _Phase.feedback:
+        return const [];
+    }
+  }
+
+  static String _tail(String text, [int max = 260]) {
+    if (text.length <= max) return text;
+    final cut = text.substring(text.length - max);
+    final space = cut.indexOf(' ');
+    return '…${space > 0 ? cut.substring(space + 1) : cut}';
+  }
+}

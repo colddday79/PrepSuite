@@ -1,9 +1,9 @@
 # PrepSuite coach
 
-The AI brain of PrepSuite: one small Deno HTTP service in `supabase/functions/coach/` that calls Claude
-(`claude-opus-5`). Audio never leaves the phone; the app sends the on-device transcript plus delivery numbers
-(pace, pauses, fillers, loudness, pitch) and gets short JSON back. The same `index.ts` runs locally and as a
-Supabase Edge Function.
+The AI brain of PrepSuite: one small Deno HTTP service in `supabase/functions/coach/` that calls Anthropic or
+Ollama. Audio never leaves the phone; the app sends the on-device transcript plus delivery numbers (pace,
+pauses, fillers, loudness, pitch) and gets short JSON back. The same `index.ts` runs locally and as a Supabase
+Edge Function.
 
 ## Run locally
 
@@ -19,17 +19,24 @@ It listens on `0.0.0.0:8787`. Point the app at:
 - iOS simulator: `http://localhost:8787`
 - Phone on the same Wi-Fi: `http://<Mac LAN IP>:8787` (`ipconfig getifaddr en0`)
 
-With no Anthropic key the service runs in **mock mode**: free, deterministic, job-aware answers with
-`"mock": true`. `COACH_MOCK=1` forces mock mode even when a key is set.
+Set `OLLAMA_MODEL` to use an Ollama model (including an Ollama cloud model), or set an Anthropic key. The
+service returns `503 not_configured` when neither provider is configured. `COACH_MOCK=1` explicitly enables
+free, deterministic, job-aware demo responses.
 
-## Add the Anthropic key
+For example, with Ollama running on this computer:
+
+```sh
+OLLAMA_MODEL=gemma4:31b-cloud tools/coach/run-local.sh
+```
+
+## Add an Anthropic key
 
 1. Create an API key at console.anthropic.com (Settings > API keys) and make sure the account has credit.
 2. Put it in `supabase/functions/.env` (gitignored):
    ```sh
    echo 'ANTHROPIC_API_KEY=sk-ant-...' > supabase/functions/.env
    ```
-3. Restart the server. `curl -s localhost:8787/health` should now say `"mock":false`.
+3. Restart the server. `curl -s localhost:8787/health` should report `provider:"anthropic"` and `mock:false`.
 
 ## Deploy to Supabase (later)
 
@@ -69,5 +76,5 @@ deno test supabase/functions/coach/   # fake Claude client: no network, no key
   `delivery` are optional. Unknown fields are ignored.
 - `evidence` is always an exact quote from the transcript or `""` (the server drops quotes it cannot find).
 - Live calls take a few seconds (feedback longest). Give the HTTP client a 120 s timeout and show progress.
-- Claude settings: adaptive thinking, structured JSON outputs, effort `low` for questions and `medium` for
-  feedback and wrap-up, and server-side refusal fallbacks (`fallbacks: "default"`).
+- Provider settings: structured JSON outputs, short response limits, and strict server-side validation of
+  quotes, lists, and delivery measurements. The health response identifies the active provider and model.

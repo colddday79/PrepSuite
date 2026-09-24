@@ -1,0 +1,49 @@
+name: prepsuite
+description: "PrepSuite: speak the job you want, answer real questions, get honest feedback."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.6.0
+  path_drawing: ^1.0.1
+  permission_handler: ^12.0.1
+  prepsuite_speech:
+    path: ../packages/prepsuite_speech
+  shared_preferences: ^2.5.5
+  video_player: ^2.14.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/video/presence_loop.mp4
+    - assets/fonts/OFL.txt
+    - packages/prepsuite_speech/assets/models/manifest.json
+    - packages/prepsuite_speech/assets/models/asr/encoder.onnx
+    - packages/prepsuite_speech/assets/models/asr/decoder.onnx
+    - packages/prepsuite_speech/assets/models/asr/joiner.onnx
+    - packages/prepsuite_speech/assets/models/asr/tokens.txt
+    - packages/prepsuite_speech/assets/models/tts/en_US-norman-medium.onnx
+    - packages/prepsuite_speech/assets/models/tts/tokens.txt
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phontab
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phonindex
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phondata
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phondata-manifest
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/intonations
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/en_dict
+    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/lang/gmw/en
+  fonts:
+    - family: MonaSans
+      fonts:
+        # Variable font (weight and width axes). SIL Open Font License 1.1,
+        # see assets/fonts/OFL.txt.
+        - asset: assets/fonts/MonaSans.ttf
