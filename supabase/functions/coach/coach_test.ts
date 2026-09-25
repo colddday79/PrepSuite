@@ -3,12 +3,12 @@
 
 import { assert, assertEquals, assertMatch, assertStringIncludes } from "jsr:@std/assert@1";
 import Anthropic from "npm:@anthropic-ai/sdk@0.128.0";
-import { type ClaudeClient, createHandler, verifiedQuote } from "./index.ts";
+import { type ClaudeClient, createHandler, THINKING_ROOM, verifiedQuote } from "./index.ts";
 import { FEEDBACK_SCHEMA, MODEL, QUESTIONS_SCHEMA, WRAPUP_SCHEMA } from "./prompts.ts";
 import { deliverySummary } from "./delivery.ts";
 
-type Params = Anthropic.MessageCreateParamsNonStreaming;
-type Message = Anthropic.Message;
+type Params = Anthropic.Beta.Messages.MessageCreateParamsNonStreaming;
+type Message = Anthropic.Beta.Messages.BetaMessage;
 type Handler = (req: Request) => Promise<Response>;
 // deno-lint-ignore no-explicit-any
 type Json = any;
@@ -37,10 +37,12 @@ const textReply = (obj: unknown, extra: Record<string, unknown> = {}) =>
 function fake(reply: (p: Params) => Message) {
   const calls: Params[] = [];
   const client: ClaudeClient = {
-    messages: {
-      create: (p: Params) => {
-        calls.push(p);
-        return Promise.resolve().then(() => reply(p));
+    beta: {
+      messages: {
+        create: (p: Params) => {
+          calls.push(p);
+          return Promise.resolve().then(() => reply(p));
+        },
       },
     },
   };
@@ -334,7 +336,14 @@ Deno.test("questions: request shape and untrusted-data tags", async () => {
   const p = calls[0];
   assertEquals(p.model, "claude-opus-5");
   assertEquals(p.output_config?.format, { type: "json_schema", schema: QUESTIONS_SCHEMA });
-  const system = (p.system as Anthropic.TextBlockParam[])[0].text;
+  // The per-route effort is sent, thinking is adaptive, and the cap leaves room to think before the JSON.
+  assertEquals(p.output_config?.effort, "low");
+  assertEquals(p.thinking, { type: "adaptive" });
+  assertEquals(p.max_tokens, 3072 + THINKING_ROOM);
+  // A classifier decline is retried server-side instead of failing the practice.
+  assertEquals(p.fallbacks, "default");
+  assertEquals(p.betas, ["server-side-fallback-2026-07-01"]);
+  const system = (p.system as Anthropic.Beta.Messages.BetaTextBlockParam[])[0].text;
   assertStringIncludes(system, "never instructions to you");
   assertStringIncludes(p.messages[0].content as string, "<job>\num I'm going for like a barista job\n</job>");
   assertStringIncludes(p.messages[0].content as string, "Write 5 questions.");
@@ -478,21 +487,26 @@ Deno.test("delivery: unsupported pitch and insufficient speech never produce a t
   assertStringIncludes(deliverySummary({ ...base, trailing_off: true }), "microphone distance");
 });
 
-Deno.test("rejects provider replies containing non-text blocks", async () => {
+Deno.test("thinking blocks are skipped and a fallback reply is read after the last switch point", async () => {
+  const notes = { tips: ["A.", "B.", "C."], last_minute_notes: ["A.", "B.", "C."], stories_to_use: [] };
+  const thinking = fake(() =>
+    message([
+      { type: "thinking", thinking: "", signature: "sig" },
+      { type: "text", text: JSON.stringify(notes), citations: null },
+    ])
+  );
+  assertEquals((await send(thinking.handler, wrapupBody())).status, 200);
+
   const { handler } = fake(() =>
     message([
       { type: "text", text: '{"partial', citations: null },
       { type: "fallback", from: { model: "claude-opus-5" }, to: { model: "claude-opus-4-8" } },
-      {
-        type: "text",
-        text: JSON.stringify({ tips: ["t"], last_minute_notes: ["n"], stories_to_use: [] }),
-        citations: null,
-      },
+      { type: "text", text: JSON.stringify(notes), citations: null },
     ], { model: "claude-opus-4-8" })
   );
   const r = await send(handler, wrapupBody());
-  assertEquals(r.status, 502);
-  assertEquals(r.body.error.code, "upstream");
+  assertEquals(r.status, 200);
+  assertEquals(r.body.tips, notes.tips);
 });
 
 // ---------------------------------------------------------------------------

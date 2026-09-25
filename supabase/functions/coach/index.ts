@@ -48,8 +48,15 @@ export interface RouteSpec {
   system: string;
   schema: Record<string, unknown>;
   effort: "low" | "medium" | "high";
+  /** Cap on the visible JSON reply. Claude gets THINKING_ROOM on top of it. */
   maxTokens: number;
 }
+
+/** Adaptive thinking counts against max_tokens, so Claude's cap leaves room to think before replying. */
+export const THINKING_ROOM = 12_000;
+
+/** On a safety-classifier decline, the API re-runs the request on the model recommended for that category. */
+const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 const ROUTES: Record<Route, RouteSpec> = {
   // low: a short, well-specified list right after the 10 s recording; the user is watching a spinner.
@@ -62,8 +69,10 @@ const ROUTES: Record<Route, RouteSpec> = {
 
 /** The slice of the Anthropic client this service uses (tests pass a fake). */
 export interface ClaudeClient {
-  messages: {
-    create(params: Anthropic.MessageCreateParamsNonStreaming): PromiseLike<Anthropic.Message>;
+  beta: {
+    messages: {
+      create(params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming): PromiseLike<Anthropic.Beta.Messages.BetaMessage>;
+    };
   };
 }
 
@@ -273,12 +282,15 @@ function wrapupPrompt(i: WrapupInput): string {
 async function callClaude(client: ClaudeClient, route: Route, userContent: string, log: Logger, model = MODEL): Promise<unknown> {
   const spec = ROUTES[route];
   const started = Date.now();
-  const message = await client.messages.create({
+  const message = await client.beta.messages.create({
     model,
-    max_tokens: spec.maxTokens,
-    output_config: { format: { type: "json_schema", schema: spec.schema } },
+    max_tokens: spec.maxTokens + THINKING_ROOM,
+    thinking: { type: "adaptive" },
+    output_config: { effort: spec.effort, format: { type: "json_schema", schema: spec.schema } },
     system: [{ type: "text", text: spec.system, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: userContent }],
+    betas: [FALLBACK_BETA],
+    fallbacks: "default",
   });
 
   log({
@@ -300,7 +312,10 @@ async function callClaude(client: ClaudeClient, route: Route, userContent: strin
   }
 
   if (message.stop_reason !== "end_turn") badShape();
+  // Thinking blocks carry no reply text. After a fallback, the reply is what follows the last switch point.
+  const lastSwitch = message.content.findLastIndex((b) => b.type === "fallback");
   const json = message.content
+    .slice(lastSwitch + 1)
     .map((b) => (b.type === "text" ? b.text : ""))
     .join("");
   try {

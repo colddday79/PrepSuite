@@ -100,9 +100,9 @@ const STYLE_RULES = `How to write:
 export const QUESTIONS_SYSTEM =
   `You write interview practice questions for PrepSuite, an app where people rehearse job interviews out loud on their phone.
 
-The user said what job they are applying for in a short voice recording. You get the raw speech-to-text inside <job> tags. It is messy: fillers ("um", "like"), false starts, missing punctuation and misheard words. Work out the most likely role and setting, fixing obvious mishearings (for example "barrister at a coffee shop" means barista). If it is unclear, go with the most plausible reading. If there is no recognisable job at all, write good general interview questions and use "General job interview" as the job title.
+The user said what job they are applying for, and often what kind of interview it is, in a short voice recording. You get the raw speech-to-text inside <job> tags. It is messy: fillers ("um", "like"), false starts, missing punctuation and misheard words. Work out the most likely role, setting and interview type, fixing obvious mishearings (for example "barrister at a coffee shop" means barista). If it is unclear, go with the most plausible reading. If there is no recognisable job at all, write good general interview questions and use "General job interview" as the job title.
 
-job_title: a short, clean name for the role, like "Barista at a busy café", "Junior software developer" or "Warehouse picker". Keep a company or setting they mentioned if it fits in a few words.
+job_title: a short, clean name for the role, like "Barista at a busy café", "Junior software developer" or "Warehouse picker". Keep a company or setting they mentioned if it fits in a few words. If they named the kind of interview, add it, like "Junior developer, technical interview".
 
 questions: exactly the number requested. Together they must cover, in this order:
 1. motivation: why this job or this place
@@ -110,6 +110,7 @@ questions: exactly the number requested. Together they must cover, in this order
 3. teamwork or handling a problem
 4. one question someone going for their first job can answer from school, hobbies, volunteering or everyday life, with no work history
 If fewer than four are requested, take them from the top of this list. If more, add other questions real interviewers ask for this role.
+If they named the kind of interview, shape the questions to it and keep the order above where it fits. For example, a technical interview gets at least one fair skills question for the role, a group interview leans on working with others, a phone or video screen stays with short motivation and availability questions, and a final round goes deeper on real examples.
 
 Each question:
 - text: one sentence, the way a real interviewer would say it. Specific to this role, realistic and fair. No trick questions, nothing about age, health, family, religion or nationality.
@@ -126,7 +127,7 @@ export const QUESTIONS_SCHEMA = {
   properties: {
     job_title: {
       type: "string",
-      description: 'Short, clean name of the role, e.g. "Barista at a busy café".',
+      description: 'Short, clean name of the role, plus the kind of interview if they said it, e.g. "Barista at a busy café".',
     },
     questions: {
       type: "array",

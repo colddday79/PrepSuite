@@ -100,3 +100,8 @@ deno test --node-modules-dir=none supabase/functions/coach/  # injected provider
 - Live calls take a few seconds (feedback longest). Give the HTTP client a 120 s timeout and show progress.
 - Provider settings: structured JSON outputs, short response limits, and strict server-side validation of
   quotes, lists, and delivery measurements. The health response identifies the active provider and model.
+- Claude runs with adaptive thinking at a per-route effort (`low` for questions, `medium` for feedback and
+  notes). Thinking counts against `max_tokens`, so each call gets 12,000 tokens of room on top of the reply.
+  If a safety classifier declines a request, `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`)
+  re-runs it on the model Anthropic recommends, and the log's `served_by` shows which model answered.
+- The job can include the kind of interview ("barista, group interview"); questions and `job_title` follow it.
