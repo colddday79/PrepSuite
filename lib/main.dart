@@ -60,7 +60,7 @@ AppServices createServices() {
   final endpoint = CoachConfig.endpoint();
   final CoachApi coach = _fakeCoach
       ? FakeCoachApi()
-      : HttpCoachApi(endpoint: endpoint, timeout: _coachTimeout);
+      : HttpCoachApi(endpoint: endpoint, timeout: _coachTimeout, token: CoachConfig.token);
   final coachLabel = _fakeCoach
       ? 'Built-in sample coach (COACH_FAKE)'
       : endpoint.toString();

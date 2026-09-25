@@ -1,5 +1,5 @@
 // Real-provider smoke test using only invented interview answers.
-// Run: deno run --allow-net tools/coach/smoke.ts http://127.0.0.1:8787
+// Run: COACH_TOKEN=<token from supabase/functions/.env> deno run --allow-net --allow-env tools/coach/smoke.ts http://127.0.0.1:8787
 // It deliberately fails for demo mode; no personal recordings are read.
 
 const base = new URL(Deno.args[0] ?? "http://127.0.0.1:8787");
@@ -24,7 +24,7 @@ async function request(path: string, body?: Record<string, unknown>): Promise<Re
   const started = performance.now();
   const response = await fetch(new URL(path, base), {
     method: body ? "POST" : "GET",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-coach-token": Deno.env.get("COACH_TOKEN") ?? "" },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(90_000),
   });

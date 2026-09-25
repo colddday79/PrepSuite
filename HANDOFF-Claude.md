@@ -322,3 +322,22 @@ early and send screenshots.
 - The wrap-up screen's glass panel now starts below its small presence as well (no overlap anywhere).
 - The Anthropic key is still needed for real feedback (see `tools/coach/README.md`). No live Claude call
   was made this session.
+
+**Security pass (same session, owner asked for "all the security"):** see `SECURITY.md` for the full list
+and the owner checklist (GitHub, Anthropic, Supabase and Play settings only the owner can change).
+- The coach needs its access token (`x-coach-token`). `tools/coach/run-local.sh` creates one in
+  `supabase/functions/.env` and prints the `flutter run --dart-define=COACH_TOKEN=...` lines. Without the
+  token, the app gets 401 "turned away". The coach refuses a network listen without a token, and an Edge
+  deploy won't start without the `COACH_TOKEN` secret.
+- Rate limits (20/min and 300/day per client, 2,000/day total) and a lockout after 10 wrong tokens.
+  JSON only (415 otherwise), `no-store`/`nosniff`/CSP headers, no CORS unless `COACH_CORS_ORIGIN` is set.
+  The code is in `supabase/functions/coach/security.ts` and the tests in `security_test.ts`.
+- App: sends the token; release builds refuse non-https coach URLs (`CoachConfig.allowed`). Android:
+  `allowBackup=false`, `data_extraction_rules.xml` (no cloud backup or device transfer),
+  `network_security_config.xml` (https only, system CAs; debug overrides it for LAN http).
+  `tools/release/build-android.sh` builds with obfuscation.
+- Repo: `SECURITY.md`, Dependabot (pub + actions), CI actions pinned to commits, `persist-credentials:
+  false`, and a new `coach` CI job (deno check, lint and test). The Supabase `config.toml` auth defaults
+  are stronger (12-character passwords, email confirmation).
+- Couldn't do from the cloud: build the Android app (dl.google.com is blocked, so there's no Android SDK)
+  or change the account settings in the checklist.

@@ -14,6 +14,8 @@ type Handler = (req: Request) => Promise<Response>;
 type Json = any;
 
 const quiet = () => {};
+// These tests send many requests from one address; security_test.ts covers the limits themselves.
+const roomy = { perMinute: 10_000, perDay: 10_000, globalPerDay: 10_000 };
 
 function message(content: unknown[], extra: Record<string, unknown> = {}): Message {
   return {
@@ -46,14 +48,17 @@ function fake(reply: (p: Params) => Message) {
       },
     },
   };
-  return { handler: createHandler({ client, log: quiet }), calls };
+  return { handler: createHandler({ client, log: quiet, limits: roomy }), calls };
 }
 
-const mockHandler = createHandler({ mock: true, log: quiet });
+const mockHandler = createHandler({ mock: true, log: quiet, limits: roomy });
 
 async function send(handler: Handler, body: unknown, path = "/coach", method = "POST") {
   const init: RequestInit = { method };
-  if (method === "POST") init.body = typeof body === "string" ? body : JSON.stringify(body);
+  if (method === "POST") {
+    init.body = typeof body === "string" ? body : JSON.stringify(body);
+    init.headers = { "content-type": "application/json" };
+  }
   const res = await handler(new Request(`http://localhost${path}`, init));
   return { status: res.status, body: res.status === 204 ? null : (await res.json()) as Json };
 }

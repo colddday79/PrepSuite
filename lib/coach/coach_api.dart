@@ -9,8 +9,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show HandshakeException, IOException, SocketException;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:http/http.dart' as http;
 
+import 'coach_config.dart';
 import 'contracts.dart';
 
 // ---------------------------------------------------------------------------
@@ -173,6 +175,11 @@ class CoachException implements Exception {
   const CoachException(this.kind, {this.code = '', this.message = ''});
 
   String get userMessage => switch (kind) {
+    CoachErrorKind.server when code == 'unauthorized' => kDebugMode
+        ? "The coach turned this app away: its access token doesn't match. Run the app with the COACH_TOKEN that tools/coach/run-local.sh prints."
+        : "This version of the app can't use the coach. Update the app, then try again.",
+    CoachErrorKind.server when code == 'insecure_url' =>
+      "This version of the app can't use the coach. Update the app, then try again.",
     CoachErrorKind.offline => "Can't reach the coach. Check your connection and that the coach server is running, then try again.",
     CoachErrorKind.timeout =>
       'The coach is taking too long to answer. Try again in a moment.',
@@ -240,8 +247,20 @@ class HttpCoachApi implements CoachApi {
     required this.endpoint,
     http.Client? client,
     this.timeout = const Duration(seconds: 120),
+    this.token = '',
   }) : _client = client ?? http.Client(),
        _ownsClient = client == null;
+
+  /// Sent as x-coach-token when set. The coach answers only apps that know it.
+  final String token;
+
+  Map<String, String> _headers(Map<String, String> base) => {...base, if (token.isNotEmpty) 'x-coach-token': token};
+
+  void _checkEndpoint() {
+    if (!CoachConfig.allowed(endpoint)) {
+      throw const CoachException(CoachErrorKind.server, code: 'insecure_url', message: 'Release builds only talk to an https coach.');
+    }
+  }
 
   /// Upper bound for each health request.
   static const Duration healthTimeout = Duration(seconds: 5);
@@ -345,8 +364,9 @@ class HttpCoachApi implements CoachApi {
 
   Future<CoachHealth?> _healthAt(Uri uri, Duration wait) async {
     try {
+      _checkEndpoint();
       final res = await _client
-          .get(uri, headers: const {'Accept': 'application/json'})
+          .get(uri, headers: _headers(const {'Accept': 'application/json'}))
           .timeout(wait);
       if (res.statusCode < 200 || res.statusCode >= 300) return null;
       final body = jsonDecode(utf8.decode(res.bodyBytes));
@@ -359,15 +379,16 @@ class HttpCoachApi implements CoachApi {
   }
 
   Future<Map<String, dynamic>> _post(Map<String, Object?> payload) async {
+    _checkEndpoint();
     final http.Response res;
     try {
       res = await _client
           .post(
             endpoint,
-            headers: const {
+            headers: _headers(const {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
-            },
+            }),
             // Bytes, so the header stays exactly application/json (UTF-8).
             body: utf8.encode(jsonEncode(payload)),
           )

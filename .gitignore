@@ -59,3 +59,6 @@ app.*.map.json
 /android/app/release
 # Widget Preview related
 .widget_preview/
+
+# Android release signing (see SECURITY.md)
+android/key.properties
