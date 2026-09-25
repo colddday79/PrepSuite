@@ -4,17 +4,22 @@
 // Supabase Edge Function. Audio never reaches this service: the app sends the
 // on-device transcript plus delivery numbers and gets short JSON back.
 //
-//   POST /coach   {"action": "questions" | "feedback" | "wrapup", ...}
+//   POST /coach   {"action": "questions" | "feedback" | "wrapup" | "ask", ...}
 //   GET  /health  {"ok": true, "mock": <bool>}
 //
 // COACH_MOCK=1 explicitly enables deterministic demo responses. Missing
 // credentials never silently substitute those responses for live AI.
 
 import Anthropic from "npm:@anthropic-ai/sdk@0.128.0";
-import { mockFeedback, mockQuestions, mockWrapup } from "./mock.ts";
+import { mockAsk, mockFeedback, mockQuestions, mockWrapup } from "./mock.ts";
 import { deliverySummary } from "./delivery.ts";
 import { createOllamaProvider } from "./ollama.ts";
 import {
+  ASK_SCHEMA,
+  ASK_SYSTEM,
+  type AskFeedback,
+  type AskInput,
+  type AskResult,
   type Delivery,
   FEEDBACK_SCHEMA,
   FEEDBACK_SYSTEM,
@@ -38,11 +43,13 @@ export const LIMITS = {
   transcript: 6000,
   answers: 10,
   count: { min: 1, max: 8, default: 5 },
-  feedbackText: 1000, // headline / problem / delivery echoed back in wrap-up answers
+  feedbackText: 1000, // headline / problem / delivery (or fix) echoed back in wrap-up and ask
+  userQuestion: 500,
+  askReplyWords: 110, // hard cap on the spoken ask reply; the prompt asks for at most 80
   bodyBytes: 200_000,
 } as const;
 
-export type Route = "questions" | "feedback" | "wrapup";
+export type Route = "questions" | "feedback" | "wrapup" | "ask";
 
 export interface RouteSpec {
   system: string;
@@ -58,6 +65,9 @@ const ROUTES: Record<Route, RouteSpec> = {
   feedback: { system: FEEDBACK_SYSTEM, schema: FEEDBACK_SCHEMA, effort: "medium", maxTokens: 2048 },
   // medium: synthesis across up to 10 answers under a no-invented-facts rule; runs once per session.
   wrapup: { system: WRAPUP_SYSTEM, schema: WRAPUP_SCHEMA, effort: "medium", maxTokens: 3072 },
+  // low: a few spoken sentences mid-practice while the person waits. The reply is about 150
+  // tokens; Ollama spends this as num_predict with thinking off, so 1024 is ample headroom.
+  ask: { system: ASK_SYSTEM, schema: ASK_SCHEMA, effort: "low", maxTokens: 1024 },
 };
 
 /** The slice of the Anthropic client this service uses (tests pass a fake). */
@@ -216,6 +226,26 @@ function parseWrapup(body: Record<string, unknown>): WrapupInput {
   };
 }
 
+function parseAsk(body: Record<string, unknown>): AskInput {
+  const userQuestion = text(body, "user_question", LIMITS.userQuestion);
+  let feedback: AskFeedback | null = null;
+  if (body.feedback !== undefined && body.feedback !== null) {
+    const fb = body.feedback;
+    if (!isRecord(fb)) bad(`"feedback" must be an object with "headline", "problem" and "fix".`);
+    const optional = (key: string) =>
+      text(fb, key, LIMITS.feedbackText, { required: false, allowEmpty: true, label: `feedback.${key}` });
+    feedback = { headline: optional("headline"), problem: optional("problem"), fix: optional("fix") };
+    if (!feedback.headline && !feedback.problem && !feedback.fix) feedback = null;
+  }
+  return {
+    job: text(body, "job", LIMITS.job, { required: false, allowEmpty: true }),
+    user_question: userQuestion,
+    question: text(body, "question", LIMITS.question, { required: false, allowEmpty: true }),
+    answer: text(body, "answer", LIMITS.transcript, { required: false, allowEmpty: true }),
+    feedback,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Prompts: user text is untrusted data inside delimited tags
 // ---------------------------------------------------------------------------
@@ -264,6 +294,23 @@ function wrapupPrompt(i: WrapupInput): string {
     ].join("\n")
   );
   return `<job>\n${data(i.job) || "(not given)"}\n</job>\n\n<answers>\n${answers.join("\n\n")}\n</answers>`;
+}
+
+function askPrompt(i: AskInput): string {
+  const fb = i.feedback;
+  const feedback = fb
+    ? `headline: ${data(fb.headline) || "(none)"}\nproblem: ${data(fb.problem) || "(none)"}\nfix: ${
+      data(fb.fix) || "(none)"
+    }`
+    : "(none)";
+  // Context first; the question to answer comes last.
+  return [
+    `<job>\n${data(i.job) || "(not given)"}\n</job>`,
+    `<interview_question>\n${data(i.question) || "(none)"}\n</interview_question>`,
+    `<their_answer>\n${data(i.answer) || "(none)"}\n</their_answer>`,
+    `<feedback_given>\n${feedback}\n</feedback_given>`,
+    `<user_question>\n${data(i.user_question)}\n</user_question>`,
+  ].join("\n\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -433,6 +480,31 @@ function normalizeWrapup(raw: unknown, input: WrapupInput): WrapupResult {
   return out;
 }
 
+/** Drops markdown a text-to-speech voice would read out, and ends list lines as sentences. */
+function forSpeech(s: string): string {
+  return s
+    .replace(/^[ \t]*(?:#{1,6}|[-*•]|\d{1,2}[.)])[ \t]+/gm, "")
+    .replace(/\*\*|__|[*`]/g, "")
+    .replace(/([\p{L}\p{N}"'”’)])[ \t\r]*\n+/gu, "$1.\n");
+}
+
+/** At most `max` words, cut back to the last full sentence when that keeps most of it. */
+function capWords(t: string, max: number): string {
+  const words = t.split(" ");
+  if (words.length <= max) return t;
+  const cut = words.slice(0, max).join(" ");
+  const sentences = /^.*[.!?](?=\s|$)/.exec(cut)?.[0];
+  if (sentences && sentences.split(" ").length >= max / 2) return sentences;
+  return `${cut.replace(/[,;:.!?]+$/, "")}.`;
+}
+
+function normalizeAsk(raw: unknown): AskResult {
+  if (!isRecord(raw) || typeof raw.answer !== "string" || raw.answer.length > 3000) badShape();
+  const answer = capWords(clean(forSpeech(raw.answer)), LIMITS.askReplyWords);
+  if (!/[\p{L}\p{N}]/u.test(answer)) badShape();
+  return { answer };
+}
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -536,7 +608,7 @@ async function dispatch(
   body: Record<string, unknown>,
   provider: CoachProvider | null,
   log: Logger,
-): Promise<QuestionsResult | FeedbackResult | WrapupResult> {
+): Promise<QuestionsResult | FeedbackResult | WrapupResult | AskResult> {
   switch (body.action) {
     case "questions": {
       const input = parseQuestions(body);
@@ -554,8 +626,13 @@ async function dispatch(
       if (!provider) return mockWrapup(input);
       return normalizeWrapup(await provider.generate("wrapup", ROUTES.wrapup, wrapupPrompt(input), log), input);
     }
+    case "ask": {
+      const input = parseAsk(body);
+      if (!provider) return mockAsk(input);
+      return normalizeAsk(await provider.generate("ask", ROUTES.ask, askPrompt(input), log));
+    }
     default:
-      return bad(`"action" must be "questions", "feedback" or "wrapup".`);
+      return bad(`"action" must be "questions", "feedback", "wrapup" or "ask".`);
   }
 }
 
