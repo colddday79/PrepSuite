@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -129,6 +130,7 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
     _question.start(_jobQuestion);
     if (_typing) {
       _question.showAll();
+      _prefillFromProfile();
       setState(() => _phase = _Phase.review);
       return;
     }
@@ -218,10 +220,17 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
     setState(() => _phase = _Phase.review);
   }
 
+  /// Someone who told the app their target job starts with it filled in; they can change it.
+  void _prefillFromProfile() {
+    final role = _services.profile.value.targetRole.trim();
+    if (_job.text.trim().isEmpty && role.isNotEmpty) _job.text = role;
+  }
+
   void _typeInstead() {
     _operation++;
     _services.voice.stop();
     _question.showAll();
+    _prefillFromProfile();
     setState(() {
       _typing = true;
       _phase = _Phase.review;
@@ -285,11 +294,22 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
     }
   }
 
+  /// Large while the interviewer asks and listens, smaller once there is text to read or edit.
+  double _presenceSize(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final talking = switch (_phase) {
+      _Phase.settingUp || _Phase.asking || _Phase.ready || _Phase.preparing || _Phase.recording || _Phase.transcribing => true,
+      _ => false,
+    };
+    if (!talking) return 152;
+    return math.min(screen.width * 0.92, screen.height * 0.38).clamp(200.0, 420.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     return CoachScaffold(
       status: 'Your job',
-      presenceSize: 216,
+      presenceSize: _presenceSize(context),
       level: _level,
       onClose: () => Navigator.of(context).maybePop(),
       body: SingleChildScrollView(
@@ -314,7 +334,10 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
       case _Phase.recording:
         final recording = _phase == _Phase.recording;
         return [
-          Text('Say it in a few words, like “barista at a busy café” or “junior web developer”.', style: PrepType.body),
+          Text(
+            'Say the role, where it is, and anything you know about it. Like “junior data analyst at a hospital, using SQL”.',
+            style: PrepType.body,
+          ),
           const SizedBox(height: Space.x3),
           Center(
             child: RecordButton(recording: recording, countdown: true, progress: _progress, onPressed: recording ? _stop : _record),
@@ -366,7 +389,9 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
             const SizedBox(height: Space.xl),
           ],
           Text(
-            _typing ? 'Type the job you want, in a few words.' : "Here's what we heard. Fix anything we got wrong.",
+            _typing
+                ? 'Type the role and where it is. Add anything you know the job needs.'
+                : "Here's what we heard. Fix anything we got wrong.",
             style: PrepType.body,
           ),
           const SizedBox(height: Space.m),

@@ -29,22 +29,28 @@ class CoachScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final size = keyboard ? presenceSize * 0.55 : presenceSize;
+    final target = keyboard ? presenceSize * 0.55 : presenceSize;
     const barHeight = 64.0;
     return Scaffold(
       backgroundColor: PrepColors.bg,
       body: SafeArea(
-        child: PresenceBackdrop(
-          top: barHeight,
-          size: size,
-          level: level,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              CoachTopBar(onClose: onClose, status: status),
-              SizedBox(height: size),
-              Expanded(child: body),
-            ],
+        // The presence grows while the interviewer talks and steps back for typing and reading.
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: target),
+          duration: Motion.enter,
+          curve: Motion.standard,
+          builder: (context, size, _) => PresenceBackdrop(
+            top: barHeight,
+            size: size,
+            level: level,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                CoachTopBar(onClose: onClose, status: status),
+                SizedBox(height: size),
+                Expanded(child: body),
+              ],
+            ),
           ),
         ),
       ),
