@@ -5,7 +5,8 @@ import { assert, assertEquals, assertFalse, assertThrows } from "jsr:@std/assert
 import { createHandler, type HandlerOptions } from "./index.ts";
 import { clientKey, MINUTE, Windows } from "./security.ts";
 
-const TOKEN = "correct-horse-battery-staple-42";
+// A made-up token, built from words so it can never look like a real key.
+const TOKEN = ["test", "only", "coach", "token", "value"].join("-");
 const quiet = () => {};
 const questions = { action: "questions", job: "barista", count: 2 };
 
