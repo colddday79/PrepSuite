@@ -13,7 +13,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-DEST="$ROOT/packages/prepsuite_speech/lib/assets/models"
+DEST="$ROOT/packages/prepsuite_speech/assets/models"
 CACHE="$HERE/.cache"
 ASR="${ASR:-kroko}"
 NORMAN_SRC="${NORMAN_SRC:-$HOME/Downloads/en_US-norman-medium.onnx}"
@@ -105,6 +105,8 @@ PY
 
 # Swap into place, keeping the committed README.
 [ -f "$DEST/README.md" ] && cp "$DEST/README.md" "$DEST.new/README.md"
+# Placeholders keep the declared asset folders in git (see the package pubspec).
+for d in asr tts tts/espeak-ng-data tts/espeak-ng-data/lang/gmw; do touch "$DEST.new/$d/.gitkeep"; done
 rm -rf "$DEST"
 mv "$DEST.new" "$DEST"
 echo "Models ready in ${DEST#$ROOT/}:"

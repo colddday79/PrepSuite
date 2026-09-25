@@ -46,7 +46,8 @@ class SpeechModelsMissing implements Exception {
 class SpeechModels {
   SpeechModels._();
 
-  /// Asset key prefix (files live in this package under lib/assets/models).
+  /// Asset key prefix (files live in this package under assets/models/, which
+  /// its pubspec declares, so apps bundle them automatically).
   static const String assetRoot = 'packages/prepsuite_speech/assets/models';
 
   static SpeechModelPaths? _paths;
@@ -88,8 +89,8 @@ class SpeechModels {
       manifestText = await bundle.loadString('$assetRoot/manifest.json', cache: false);
     } catch (_) {
       throw const SpeechModelsMissing(
-        'Model assets not found. Run tools/voice/fetch_models.sh and declare the '
-        'assets listed in packages/prepsuite_speech/README.md in the app pubspec.',
+        'Model assets not found in this build. Run tools/voice/fetch_models.sh, '
+        'then rebuild the app.',
       );
     }
     final manifest = jsonDecode(manifestText) as Map<String, dynamic>;

@@ -22,5 +22,16 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
 
-# Model files are NOT declared here: they live (gitignored) under
-# lib/assets/models/ and the app opts in by declaring them. See README.md.
+flutter:
+  # The offline models (about 135 MB, gitignored) are created by
+  # tools/voice/fetch_models.sh. Folders, not files, are declared so fresh
+  # clones and CI build without them: each folder is kept in git by a
+  # placeholder, and SpeechModels.ensureReady() throws SpeechModelsMissing at
+  # run time when manifest.json is absent. Apps get these assets automatically
+  # under packages/prepsuite_speech/assets/models/.
+  assets:
+    - assets/models/
+    - assets/models/asr/
+    - assets/models/tts/
+    - assets/models/tts/espeak-ng-data/
+    - assets/models/tts/espeak-ng-data/lang/gmw/

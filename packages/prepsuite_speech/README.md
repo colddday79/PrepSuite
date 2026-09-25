@@ -14,28 +14,9 @@ Offline speech for PrepSuite (Android + iPhone). Everything runs on the phone; n
    tools/voice/fetch_models.sh        # ASR=librispeech for the Apache-2.0 fallback model
    ```
 
-   The script downloads the ASR model and `espeak-ng-data` from the official k2-fsa/sherpa-onnx releases, checking SHA-256. It converts Norman from `~/Downloads/en_US-norman-medium.onnx(.json)` using sherpa-onnx's documented Piper recipe, which needs `onnx` in `tools/voice/.venv`. It then writes everything to `lib/assets/models/`.
+   The script downloads the ASR model and `espeak-ng-data` from the official k2-fsa/sherpa-onnx releases, checking SHA-256. It converts Norman from `~/Downloads/en_US-norman-medium.onnx(.json)` using sherpa-onnx's documented Piper recipe, which needs `onnx` in `tools/voice/.venv`. It then writes everything to `assets/models/`.
 
-2. Declare the assets in the **app's** `pubspec.yaml`. The files live in this package's `lib/`, so the app includes them under `packages/prepsuite_speech/...`:
-
-   ```yaml
-   flutter:
-     assets:
-       - packages/prepsuite_speech/assets/models/manifest.json
-       - packages/prepsuite_speech/assets/models/asr/encoder.onnx
-       - packages/prepsuite_speech/assets/models/asr/decoder.onnx
-       - packages/prepsuite_speech/assets/models/asr/joiner.onnx
-       - packages/prepsuite_speech/assets/models/asr/tokens.txt
-       - packages/prepsuite_speech/assets/models/tts/en_US-norman-medium.onnx
-       - packages/prepsuite_speech/assets/models/tts/tokens.txt
-       - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phontab
-       - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phonindex
-       - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phondata
-       - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phondata-manifest
-       - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/intonations
-       - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/en_dict
-       - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/lang/gmw/en
-   ```
+2. Nothing to declare in the app. This package's `pubspec.yaml` declares the model **folders** (`assets/models/`, `asr/`, `tts/`, `tts/espeak-ng-data/`, `tts/espeak-ng-data/lang/gmw/`), so every app that depends on it bundles them under `packages/prepsuite_speech/assets/models/`. The folders stay in git with `.gitkeep` placeholders, so a fresh clone or CI builds without the models; `SpeechModels.ensureReady()` then throws `SpeechModelsMissing` and the app should offer typing instead.
 
 3. Permissions:
    - Android: add `<uses-permission android:name="android.permission.RECORD_AUDIO"/>`. The minimum SDK is 24, which is Flutter's default.
@@ -65,6 +46,7 @@ final result = await capture.stop();       // CaptureResult? (null on failure)
 - **Recording while Norman speaks.** Call `voice.stop()` before `capture.start()`, or the microphone will record Norman. When recording stops on its own at `maxDuration`, `OfflineSpeechCapture.onMaxDuration` fires and `stop()` returns the result.
 - **Recordings** are stored in app-private support storage at `prepsuite_speech/recordings/answer_<ms>.wav`: 16 kHz mono PCM16, taken from one microphone stream that feeds both the recogniser and the file. Pass `recordingsDir:` to choose another folder. Deleting files is the app's job.
 - **Errors.** `speak()` throws if the voice cannot load; show the text instead. `SpeechModels.ensureReady()` throws `SpeechModelsMissing` when the assets are not bundled.
+- **Emulators and tests.** The emulator microphone is silent. `OfflineSpeechCapture(recorder: WavReplayRecorder([...wavPaths]))` streams each WAV (any rate, resampled to 16 kHz) through the live pipeline in real time, one file per recording, followed by silence until `stop()` like a real microphone; once the list is used up it records from the real microphone.
 
 ## Metrics (`DeliveryMetrics.toJson()`)
 
@@ -97,7 +79,7 @@ Engine: sherpa-onnx (Apache-2.0) and onnxruntime (MIT). The Android `.so` files 
 ## Testing
 
 - `flutter test` runs the analyser, filler, word-timing and WAV tests on synthetic signals.
-- `example/` is an on-device test app. Build it with `--dart-define=SELFTEST=true` and push WAVs to `/sdcard/Android/data/com.prepsuite.prepsuite_speech_example/files/selftest/`, after the first launch creates that folder. The app transcribes the files, replays `b_answer.wav` through the live pipeline, speaks with Norman, records 3 s from the mic, and logs `PSX …` lines to logcat.
+- `example/` is an on-device test app (it uses `WavReplayRecorder` for the live path). Build it with `--dart-define=SELFTEST=true` and push WAVs to `/sdcard/Android/data/com.prepsuite.prepsuite_speech_example/files/selftest/`, after the first launch creates that folder. The app transcribes the files, replays `b_answer.wav` through the live pipeline, speaks with Norman, records 3 s from the mic, and logs `PSX …` lines to logcat.
 
 ## Limitations
 

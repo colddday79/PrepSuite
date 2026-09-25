@@ -21,20 +21,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # Model files from prepsuite_speech (lib/assets/models, created by
-  # tools/voice/fetch_models.sh). Every app using the package declares these.
-  assets:
-    - packages/prepsuite_speech/assets/models/manifest.json
-    - packages/prepsuite_speech/assets/models/asr/encoder.onnx
-    - packages/prepsuite_speech/assets/models/asr/decoder.onnx
-    - packages/prepsuite_speech/assets/models/asr/joiner.onnx
-    - packages/prepsuite_speech/assets/models/asr/tokens.txt
-    - packages/prepsuite_speech/assets/models/tts/en_US-norman-medium.onnx
-    - packages/prepsuite_speech/assets/models/tts/tokens.txt
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phontab
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phonindex
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phondata
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phondata-manifest
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/intonations
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/en_dict
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/lang/gmw/en
+  # The model assets come from prepsuite_speech itself (its pubspec declares
+  # the assets/models/ folders; create the files with tools/voice/fetch_models.sh).

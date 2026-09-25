@@ -30,7 +30,11 @@ migrate_working_dir/
 /build/
 /coverage/
 
-# Large model files: recreate with tools/voice/fetch_models.sh
-/lib/assets/models/*
-!/lib/assets/models/README.md
+# Large model files: recreate with tools/voice/fetch_models.sh. The folders
+# stay in git (README.md and .gitkeep files) so the asset directories declared
+# in pubspec.yaml exist in fresh clones and CI; the app then runs without voice.
+/assets/models/**
+!/assets/models/**/
+!/assets/models/README.md
+!/assets/models/**/.gitkeep
 *.onnx

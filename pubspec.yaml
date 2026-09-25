@@ -24,23 +24,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # The offline speech models are declared by packages/prepsuite_speech itself
+  # (as folders, so builds work before tools/voice/fetch_models.sh has run).
   assets:
     - assets/video/presence_loop.mp4
     - assets/fonts/OFL.txt
-    - packages/prepsuite_speech/assets/models/manifest.json
-    - packages/prepsuite_speech/assets/models/asr/encoder.onnx
-    - packages/prepsuite_speech/assets/models/asr/decoder.onnx
-    - packages/prepsuite_speech/assets/models/asr/joiner.onnx
-    - packages/prepsuite_speech/assets/models/asr/tokens.txt
-    - packages/prepsuite_speech/assets/models/tts/en_US-norman-medium.onnx
-    - packages/prepsuite_speech/assets/models/tts/tokens.txt
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phontab
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phonindex
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phondata
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/phondata-manifest
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/intonations
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/en_dict
-    - packages/prepsuite_speech/assets/models/tts/espeak-ng-data/lang/gmw/en
   fonts:
     - family: MonaSans
       fonts:

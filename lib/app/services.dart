@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../coach/coach_api.dart';
 import '../coach/contracts.dart';
+import '../coach/speech_adapter.dart';
 import 'session.dart';
 
 /// Everything a screen needs from the outside world. Swapped wholesale in tests.
@@ -17,7 +18,9 @@ class AppServices {
     required this.coachLabel,
     required this.speechLabel,
     SessionStore? sessions,
-  }) : sessions = sessions ?? SessionStore();
+    SpeechSetup? speechSetup,
+  }) : sessions = sessions ?? SessionStore(),
+       speechSetup = speechSetup ?? SpeechSetup.ready();
 
   final CoachApi coach;
   final SpeechCapture speech;
@@ -32,6 +35,9 @@ class AppServices {
   final String speechLabel;
 
   final SessionStore sessions;
+
+  /// Offline speech preparation (model copy on first launch, then loading), started at launch.
+  final SpeechSetup speechSetup;
 }
 
 class AppScope extends InheritedWidget {

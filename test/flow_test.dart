@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:prepsuite_speech/prepsuite_speech.dart' show SpeechModelsMissing;
 import 'package:prepsuite/app/app.dart';
 import 'package:prepsuite/app/services.dart';
 import 'package:prepsuite/coach/contracts.dart';
 import 'package:prepsuite/coach/coach_api.dart';
 import 'package:prepsuite/coach/fakes.dart';
+import 'package:prepsuite/coach/speech_adapter.dart';
 import 'package:prepsuite/design/hologram.dart';
 import 'package:prepsuite/features/intake/intake_screen.dart';
 
@@ -94,7 +96,7 @@ class _TrackedSpeech extends FakeSpeechCapture {
 }
 
 class _Rig {
-  _Rig({int questionFailures = 0, int feedbackFailures = 0, int wrapupFailures = 0, bool consented = false, MicAccess mic = MicAccess.granted})
+  _Rig({int questionFailures = 0, int feedbackFailures = 0, int wrapupFailures = 0, bool consented = false, MicAccess mic = MicAccess.granted, this.setup})
       : coach = _CoachSpy(questionFailures: questionFailures, feedbackFailures: feedbackFailures, wrapupFailures: wrapupFailures),
         speech = _TrackedSpeech(),
         voice = FakeInterviewerVoice(),
@@ -106,8 +108,10 @@ class _Rig {
   final FakeInterviewerVoice voice;
   final MemoryConsentStore consent;
   final GrantedMicPermission micPermission;
+  final SpeechSetup? setup;
 
   late final services = AppServices(
+    speechSetup: setup,
     coach: coach,
     speech: speech,
     voice: voice,
@@ -498,6 +502,42 @@ void main() {
     expect(rig.coach.feedbackCalls, hasLength(5));
     expect(find.text('Tips'), findsOneWidget);
     expect(rig.services.sessions.last!.wrapup, isNotNull);
+  });
+
+  testWidgets('first launch shows real set-up progress, then the interviewer asks', (tester) async {
+    final gate = Completer<void>();
+    final setup = SpeechSetup(prepareModels: (progress) async {
+      progress(0.42);
+      await gate.future;
+    });
+    final rig = _Rig(consented: true, setup: setup);
+    await _openIntake(tester, rig);
+    expect(find.text('Setting up the voice on this phone'), findsOneWidget);
+    expect(find.textContaining('42%'), findsOneWidget);
+    expect(_record(), findsNothing);
+
+    gate.complete();
+    await _settle(tester, 1600);
+    expect(find.text('Setting up the voice on this phone'), findsNothing);
+    expect(_record(), findsOneWidget);
+  });
+
+  testWidgets('a build without speech models offers typing and says why', (tester) async {
+    final setup = SpeechSetup(prepareModels: (_) async => throw const SpeechModelsMissing('no manifest'));
+    final rig = _Rig(consented: true, setup: setup);
+    await _openIntake(tester, rig);
+    expect(find.text("Voice isn't available."), findsOneWidget);
+    expect(find.textContaining('offline speech files are missing'), findsOneWidget);
+    expect(find.byKey(const ValueKey('job-field')), findsOneWidget);
+    expect(find.text('Say it instead'), findsNothing);
+
+    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Barista at a busy cafe');
+    await tester.pump();
+    await _tap(tester, find.text('Use this'));
+    await _settle(tester, 1800);
+    // Answers are typed too, and the interviewer never tried to record.
+    expect(find.byKey(const ValueKey('answer-field')), findsOneWidget);
+    expect(rig.speech.startCalls, 0);
   });
 
   test('fake coach says it is a sample', () async {

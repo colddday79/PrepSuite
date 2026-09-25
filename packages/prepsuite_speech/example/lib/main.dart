@@ -9,13 +9,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:prepsuite_speech/delivery_analyzer.dart' show readWav;
 import 'package:prepsuite_speech/prepsuite_speech.dart';
-import 'package:record/record.dart';
 
 const selfTest = bool.fromEnvironment('SELFTEST');
 
@@ -25,51 +22,6 @@ void log(String s) {
 }
 
 void main() => runApp(const MaterialApp(home: SpeechDemo()));
-
-/// Stands in for the microphone (the emulator mic is silent): streams a WAV's
-/// samples as PCM16 in 50 ms chunks at real-time pace.
-class WavReplayRecorder extends AudioRecorder {
-  WavReplayRecorder(this.path);
-  final String path;
-  StreamController<Uint8List>? _ctrl;
-  Timer? _timer;
-
-  @override
-  Future<bool> hasPermission({bool request = true}) async => true;
-
-  @override
-  Future<Stream<Uint8List>> startStream(RecordConfig config) async {
-    final audio = readWav(path);
-    final pcm = ByteData(audio.samples.length * 2);
-    for (var i = 0; i < audio.samples.length; i++) {
-      pcm.setInt16(i * 2, (audio.samples[i] * 32767).round().clamp(-32768, 32767), Endian.little);
-    }
-    final bytes = pcm.buffer.asUint8List();
-    final ctrl = _ctrl = StreamController<Uint8List>();
-    var off = 0;
-    _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      if (off >= bytes.length) {
-        _timer?.cancel();
-        ctrl.close();
-        return;
-      }
-      final end = math.min(off + 1600, bytes.length);
-      ctrl.add(Uint8List.sublistView(bytes, off, end));
-      off = end;
-    });
-    return ctrl.stream;
-  }
-
-  @override
-  Future<String?> stop() async {
-    _timer?.cancel();
-    if (!(_ctrl?.isClosed ?? true)) await _ctrl!.close();
-    return null;
-  }
-
-  @override
-  Future<void> dispose() => stop();
-}
 
 class SpeechDemo extends StatefulWidget {
   const SpeechDemo({super.key});
@@ -163,7 +115,7 @@ class _SpeechDemoState extends State<SpeechDemo> {
     final replay = wavs.where((f) => f.path.endsWith('b_answer.wav')).toList();
     if (replay.isNotEmpty) {
       final live = OfflineSpeechCapture(
-        recorder: WavReplayRecorder(replay.first.path),
+        recorder: WavReplayRecorder([replay.first.path], closeAtEnd: true),
         models: SpeechModels.paths,
       );
       final partials = <String>[];

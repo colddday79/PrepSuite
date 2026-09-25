@@ -172,7 +172,7 @@ class CoachException implements Exception {
   String get userMessage => switch (kind) {
     CoachErrorKind.offline => "Can't reach the coach. Check your connection and that the coach server is running, then try again.",
     CoachErrorKind.timeout =>
-      'The coach took longer than a minute to answer. Try again.',
+      'The coach is taking too long to answer. Try again in a moment.',
     CoachErrorKind.server => _serverUserMessage(message),
     CoachErrorKind.badResponse =>
       "The coach sent back something we couldn't read. Try again.",
@@ -236,7 +236,7 @@ class HttpCoachApi implements CoachApi {
   HttpCoachApi({
     required this.endpoint,
     http.Client? client,
-    this.timeout = const Duration(seconds: 60),
+    this.timeout = const Duration(seconds: 120),
   }) : _client = client ?? http.Client(),
        _ownsClient = client == null;
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/services.dart';
@@ -17,7 +18,7 @@ import '../interview/interview_screen.dart';
 const _jobQuestion = 'What job are you preparing for?';
 const _maxJobRecording = Duration(seconds: 10);
 
-enum _Phase { asking, ready, preparing, recording, transcribing, review, unheard, micOff, loading, error }
+enum _Phase { settingUp, asking, ready, preparing, recording, transcribing, review, unheard, micOff, loading, error }
 
 /// Step one: the interviewer asks for the job, the person says it (10 seconds at most), checks
 /// what we heard, and the coach writes questions for that role.
@@ -48,6 +49,9 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
   bool _handedOff = false;
   String? _speechError;
 
+  /// Why voice is unavailable (for example, a build without the speech files); typing is offered.
+  String? _voiceNote;
+
   @override
   void initState() {
     super.initState();
@@ -60,8 +64,40 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
       _partialSub = _services.speech.partialText.listen((text) {
         if (mounted && _phase == _Phase.recording) setState(() => _partial = text);
       });
-      _ask();
+      _services.speechSetup.state.addListener(_onSpeechSetup);
+      unawaited(_services.speechSetup.prepare().catchError((Object _) {}));
+      _begin();
     });
+  }
+
+  /// Waits for the offline speech set-up (first launch copies the model files) before the
+  /// interviewer asks, and falls back to typing when voice is not available.
+  void _begin() {
+    final setup = _services.speechSetup.state.value;
+    if (!_typing && setup.isFailed) {
+      _voiceNote = setup.error;
+      _typing = true;
+    }
+    if (!_typing && !setup.isReady) {
+      _question.start(_jobQuestion);
+      _question.showAll();
+      setState(() => _phase = _Phase.settingUp);
+      return;
+    }
+    _ask();
+  }
+
+  void _onSpeechSetup() {
+    if (!mounted || _phase != _Phase.settingUp) return;
+    final setup = _services.speechSetup.state.value;
+    if (setup.isReady) {
+      _ask();
+    } else if (setup.isFailed) {
+      _voiceNote = setup.error;
+      _typeInstead();
+    } else {
+      setState(() {});
+    }
   }
 
   @override
@@ -76,6 +112,7 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
     _operation++;
     _ticker?.cancel();
     _partialSub?.cancel();
+    _services.speechSetup.state.removeListener(_onSpeechSetup);
     if (!_handedOff) {
       _services.voice.stop();
       _services.speech.cancel();
@@ -203,8 +240,13 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
     try {
       final set = await _services.coach.questions(job: job, count: 5);
       if (!mounted) return;
-      // Typing the job alone doesn't switch answers to typing; only "Practise by typing" does.
-      final session = PracticeSession(job: job, set: set, preferTyping: widget.preferTyping);
+      // Typing the job alone doesn't switch answers to typing; "Practise by typing" does, and so
+      // does a phone where voice is not available.
+      final session = PracticeSession(
+        job: job,
+        set: set,
+        preferTyping: widget.preferTyping || _services.speechSetup.state.value.isFailed,
+      );
       await _services.voice.stop();
       if (!mounted) return;
       _handedOff = true;
@@ -299,12 +341,30 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
           else
             Center(child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead)),
         ];
+      case _Phase.settingUp:
+        return [
+          const SizedBox(height: Space.l),
+          _SetupProgress(setup: _services.speechSetup.state.value),
+          const SizedBox(height: Space.xl),
+          Center(child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead)),
+        ];
       case _Phase.transcribing:
         return const [SizedBox(height: Space.l), LoadingLine('Turning your voice into text')];
       case _Phase.preparing:
         return const [SizedBox(height: Space.l), LoadingLine('Preparing microphone')];
       case _Phase.review:
+        final voiceNote = _voiceNote;
+        final voiceMissing = _services.speechSetup.state.value.missing;
         return [
+          if (voiceNote != null && _typing) ...[
+            ProblemNote(
+              title: "Voice isn't available.",
+              body: kDebugMode && voiceMissing
+                  ? '$voiceNote (Developers: run tools/voice/fetch_models.sh, then rebuild.)'
+                  : voiceNote,
+            ),
+            const SizedBox(height: Space.xl),
+          ],
           Text(
             _typing ? 'Type the job you want, in a few words.' : "Here's what we heard. Fix anything we got wrong.",
             style: PrepType.body,
@@ -321,13 +381,14 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
           const SizedBox(height: Space.xxl),
           PrimaryButton('Use this', onPressed: _job.text.trim().isEmpty ? null : _submit),
           const SizedBox(height: Space.s),
-          Center(
-            child: QuietButton(
-              _typing ? 'Say it instead' : 'Record again',
-              icon: _typing ? PrepIcons.mic : PrepIcons.replay,
-              onPressed: _record,
+          if (!(_typing && voiceMissing))
+            Center(
+              child: QuietButton(
+                _typing ? 'Say it instead' : 'Record again',
+                icon: _typing ? PrepIcons.mic : PrepIcons.replay,
+                onPressed: _record,
+              ),
             ),
-          ),
         ];
       case _Phase.unheard:
         return [
@@ -375,5 +436,43 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
           Center(child: QuietButton('Change the job', onPressed: () => setState(() => _phase = _Phase.review))),
         ];
     }
+  }
+}
+
+/// First-launch set-up of the offline speech files, said plainly with real progress.
+class _SetupProgress extends StatelessWidget {
+  const _SetupProgress({required this.setup});
+
+  final SpeechReadiness setup;
+
+  @override
+  Widget build(BuildContext context) {
+    final percent = (setup.progress * 100).floor();
+    return Semantics(
+      liveRegion: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(setup.copying ? 'Setting up the voice on this phone' : 'Getting the voice ready', style: PrepType.bodyLMedium),
+          const SizedBox(height: Space.xs),
+          Text(
+            setup.copying
+                ? 'First launch only: copying the offline speech files. $percent%'
+                : 'Loading offline speech. This takes a moment.',
+            style: PrepType.meta,
+          ),
+          const SizedBox(height: Space.m),
+          ClipRRect(
+            borderRadius: const BorderRadius.all(Radius.circular(2)),
+            child: LinearProgressIndicator(
+              value: setup.copying ? setup.progress : null,
+              minHeight: 2,
+              color: PrepColors.accent,
+              backgroundColor: PrepColors.line,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

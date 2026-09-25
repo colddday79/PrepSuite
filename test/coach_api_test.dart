@@ -21,6 +21,9 @@ const DeliveryMetrics metrics = DeliveryMetrics(
   loudnessDbMean: -23.1,
   loudnessDbSd: 4.2,
   trailingOff: false,
+  pitchHzMean: null,
+  pitchSemitoneSd: null,
+  monotone: null,
   speechRatio: 0.82,
 );
 
@@ -169,6 +172,9 @@ void main() {
         loudnessDbMean: double.negativeInfinity,
         loudnessDbSd: 0,
         trailingOff: true,
+        pitchHzMean: null,
+        pitchSemitoneSd: null,
+        monotone: null,
         speechRatio: 0,
       );
       await h.api.feedback(
@@ -464,7 +470,7 @@ void main() {
       expect(e.kind, CoachErrorKind.timeout);
       expect(
         e.userMessage,
-        'The coach took longer than a minute to answer. Try again.',
+        'The coach is taking too long to answer. Try again in a moment.',
       );
     });
 
