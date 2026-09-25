@@ -62,7 +62,7 @@ abstract class ConsentStore {
 }
 
 class PrefsConsentStore implements ConsentStore {
-  static const _key = 'consent.voice_to_text.v1';
+  static const _key = 'consent.voice_to_text.v2';
 
   @override
   Future<bool> accepted() async {

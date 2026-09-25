@@ -96,15 +96,18 @@ class _AsrWorker {
 
   void begin(String path) {
     _dropLive();
+    so.OnlineStream? stream;
     try {
       File(path).parent.createSync(recursive: true);
-      final stream = rec.createStream();
+      stream = rec.createStream();
       stream.acceptWaveform(
         samples: Float32List((_leadS * asrSampleRate).round()),
         sampleRate: asrSampleRate,
       );
       live = _Live(stream, StreamingWavWriter(path, asrSampleRate), path);
     } catch (e) {
+      stream?.free();
+      _deleteRecording(path);
       reply.send(['log', 'begin failed: $e']);
     }
   }
@@ -135,22 +138,25 @@ class _AsrWorker {
     try {
       l.wav.close();
       if (!keep) {
-        l.stream.free();
-        File(l.path).deleteSync();
+        _deleteRecording(l.path);
         reply.send(['result', id, null]);
         return;
       }
       final samples = pcm16ToFloat(l.pcm.takeBytes());
       reply.send(['result', id, _finish(l.stream, samples, asrSampleRate, l.path)]);
     } catch (e) {
+      _deleteRecording(l.path);
       reply.send(['failed', id, '$e']);
+    } finally {
+      l.stream.free();
     }
   }
 
   void file(int id, String path) {
+    so.OnlineStream? stream;
     try {
       final audio = readWav(path);
-      final stream = rec.createStream();
+      stream = rec.createStream();
       stream.acceptWaveform(
         samples: Float32List((_leadS * audio.sampleRate).round()),
         sampleRate: audio.sampleRate,
@@ -169,6 +175,8 @@ class _AsrWorker {
       reply.send(['result', id, _finish(stream, audio.samples, audio.sampleRate, path)]);
     } catch (e) {
       reply.send(['failed', id, '$e']);
+    } finally {
+      stream?.free();
     }
   }
 
@@ -182,7 +190,6 @@ class _AsrWorker {
       rec.decode(stream);
     }
     final r = rec.getResult(stream);
-    stream.free();
 
     final rawText = r.text.trim();
     final allCaps = rawText.isNotEmpty && !RegExp(r'[a-z]').hasMatch(rawText);
@@ -215,9 +222,17 @@ class _AsrWorker {
     if (l == null) return;
     try {
       l.wav.close();
-      l.stream.free();
     } catch (_) {}
+    l.stream.free();
+    _deleteRecording(l.path);
   }
 
   void close() => _dropLive();
+}
+
+void _deleteRecording(String path) {
+  try {
+    final file = File(path);
+    if (file.existsSync()) file.deleteSync();
+  } on FileSystemException catch (_) {}
 }

@@ -30,6 +30,7 @@ class _WrapupScreenState extends State<WrapupScreen> {
   bool _loading = false;
   CoachException? _error;
   bool _started = false;
+  bool _requestInFlight = false;
 
   Wrapup? get _wrapup => widget.session.wrapup;
 
@@ -49,15 +50,21 @@ class _WrapupScreenState extends State<WrapupScreen> {
   }
 
   Future<void> _load() async {
+    if (_requestInFlight) return;
+    _requestInFlight = true;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final wrapup = await _services.coach.wrapup(job: widget.session.job, answers: widget.session.summaries());
-      if (!mounted) return;
       widget.session.wrapup = wrapup;
-      _services.sessions.finished(widget.session);
+      // Finish an in-flight save after leaving this page, but never replace a
+      // newer practice or restore notes the person has explicitly deleted.
+      if (identical(_services.sessions.last, widget.session)) {
+        await _services.sessions.finished(widget.session);
+      }
+      if (!mounted) return;
       setState(() => _loading = false);
     } on CoachException catch (e) {
       if (!mounted) return;
@@ -71,6 +78,8 @@ class _WrapupScreenState extends State<WrapupScreen> {
         _loading = false;
         _error = CoachException(CoachErrorKind.badResponse, message: '$e');
       });
+    } finally {
+      _requestInFlight = false;
     }
   }
 
@@ -102,6 +111,10 @@ class _WrapupScreenState extends State<WrapupScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (wrapup?.mock ?? false) ...[
+                          Text('Sample notes', style: PrepType.label.copyWith(color: PrepColors.accent)),
+                          const SizedBox(height: Space.s),
+                        ],
                         Semantics(header: true, child: Text('Before your interview', style: PrepType.headline)),
                         const SizedBox(height: Space.xs),
                         Text('Read these last-minute notes just before you walk in.', style: PrepType.meta),
@@ -122,6 +135,22 @@ class _WrapupScreenState extends State<WrapupScreen> {
                   _ListSection(title: 'Tips', items: wrapup.tips),
                   _ListSection(title: 'Stories to use', items: wrapup.storiesToUse),
                 ],
+                ListenableBuilder(
+                  listenable: _services.sessions,
+                  builder: (context, _) => !_services.sessions.saveFailed
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.all(Space.gutter),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const ProblemNote(title: 'Notes are not saved yet.', body: 'Keep this screen open and try saving again before closing the app.'),
+                              const SizedBox(height: Space.m),
+                              PrimaryButton('Save again', onPressed: () => _services.sessions.finished(widget.session)),
+                            ],
+                          ),
+                        ),
+                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(Space.gutter, Space.x4, Space.gutter, Space.xxl),
                   child: wrapup != null || _error != null

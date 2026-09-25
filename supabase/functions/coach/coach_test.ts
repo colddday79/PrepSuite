@@ -5,6 +5,7 @@ import { assert, assertEquals, assertMatch, assertStringIncludes } from "jsr:@st
 import Anthropic from "npm:@anthropic-ai/sdk@0.128.0";
 import { type ClaudeClient, createHandler, verifiedQuote } from "./index.ts";
 import { FEEDBACK_SCHEMA, MODEL, QUESTIONS_SCHEMA, WRAPUP_SCHEMA } from "./prompts.ts";
+import { deliverySummary } from "./delivery.ts";
 
 type Params = Anthropic.MessageCreateParamsNonStreaming;
 type Message = Anthropic.Message;
@@ -135,6 +136,19 @@ Deno.test("health on every path, with the mock flag", async () => {
     model: MODEL,
     cloud: true,
   });
+});
+
+Deno.test("an unconfigured coach cannot silently return demo answers", async () => {
+  const handler = createHandler({ log: quiet });
+  const health = await send(handler, null, "/health", "GET");
+  assertEquals(health.status, 503);
+  assertEquals(health.body, {
+    ok: false, mock: false, provider: "unconfigured", model: null, cloud: false,
+  });
+  const response = await send(handler, { action: "questions", job: "barista" });
+  assertEquals(response.status, 503);
+  assertEquals(response.body.error.code, "not_configured");
+  assertEquals(response.body.questions, undefined);
 });
 
 Deno.test("POST works on /, /coach and the Supabase function path; other routes do not", async () => {
@@ -403,6 +417,65 @@ Deno.test("wrapup: strict lists stay within the contract", async () => {
   assertEquals(calls[0].output_config?.format, { type: "json_schema", schema: WRAPUP_SCHEMA });
   assertEquals([r.body.tips.length, r.body.last_minute_notes.length, r.body.stories_to_use.length], [3, 3, 0]);
   assertStringIncludes(calls[0].messages[0].content as string, '<answer number="2">');
+});
+
+Deno.test("wrapup: provider story objects become verified quotes in the app contract", async () => {
+  const { handler } = fake(() =>
+    textReply({
+      tips: ["Explain your action.", "Describe the result.", "Keep examples relevant."],
+      last_minute_notes: ["One action.", "One result.", "Pause between points."],
+      stories_to_use: [{ answer_index: 1, evidence: "I remade it straight away" }],
+    })
+  );
+  const response = await send(handler, wrapupBody());
+  assertEquals(response.status, 200);
+  assertEquals(response.body.stories_to_use, ['Question 1: "I remade it straight away"']);
+  assertEquals(WRAPUP_SCHEMA.properties.stories_to_use.items.required, ["answer_index", "evidence"]);
+});
+
+Deno.test("wrapup: invented quotes, wrong answer references, and the old string shape are rejected", async () => {
+  for (const story of [
+    { answer_index: 1, evidence: "I increased sales by fifty percent" },
+    { answer_index: 2, evidence: "I remade it straight away" },
+    { answer_index: 0, evidence: "I remade it straight away" },
+    { answer_index: 3, evidence: "I remade it straight away" },
+    { answer_index: 1.5, evidence: "I remade it straight away" },
+    "An invented story",
+  ]) {
+    const { handler } = fake(() => textReply({
+      tips: ["A.", "B.", "C."],
+      last_minute_notes: ["A.", "B.", "C."],
+      stories_to_use: [story],
+    }));
+    const response = await send(handler, wrapupBody());
+    assertEquals(response.status, 502, JSON.stringify(story));
+    assertEquals(response.body.error.code, "upstream");
+  }
+});
+
+Deno.test("feedback: voice observations come from measurements even when the AI invents a delivery claim", async () => {
+  const { handler } = fake(() => textReply({
+    headline: "Add the outcome.", problem: "Explain what changed.", evidence: "",
+    fix: "Say how the example ended.", strength: "Your action is clear.",
+    delivery: "You sound nervous, dishonest and unemployable at 250 words per minute.",
+  }));
+  const measured = await send(handler, feedbackBody());
+  assertEquals(measured.body.delivery, deliverySummary(DELIVERY));
+  assertStringIncludes(measured.body.delivery, "136 words per minute");
+  assert(!/nervous|dishonest|unemployable|250/.test(measured.body.delivery));
+  const typed = await send(handler, feedbackBody({ delivery: null }));
+  assertEquals(typed.body.delivery, "No voice measurements were available for this answer.");
+});
+
+Deno.test("delivery: unsupported pitch and insufficient speech never produce a tone judgement", () => {
+  assertEquals(deliverySummary(null), "No voice measurements were available for this answer.");
+  assertEquals(deliverySummary({ ...DELIVERY, words: 0 }), "Too little recognized speech to measure delivery reliably.");
+  const base = { ...DELIVERY, trailing_off: false, filler_count: 0, longest_pause_s: 1, wpm: 130 };
+  assert(!/pitch/.test(deliverySummary({ ...base, pitch_hz_mean: null, pitch_semitone_sd: null, monotone: true })));
+  assertStringIncludes(deliverySummary(base), "1.4 semitones");
+  assertStringIncludes(deliverySummary({ ...base, wpm: 185 }), "185 words per minute");
+  assertStringIncludes(deliverySummary({ ...base, longest_pause_s: 4.2 }), "4.2 seconds");
+  assertStringIncludes(deliverySummary({ ...base, trailing_off: true }), "microphone distance");
 });
 
 Deno.test("rejects provider replies containing non-text blocks", async () => {

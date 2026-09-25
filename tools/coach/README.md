@@ -8,9 +8,7 @@ Edge Function.
 ## Run locally
 
 ```sh
-tools/coach/run-local.sh                                           # foreground
-nohup tools/coach/run-local.sh > /tmp/prepsuite-coach.log 2>&1 &   # background
-kill $(lsof -ti tcp:8787)                                          # stop
+tools/coach/run-local.sh                                         # foreground; Ctrl-C to stop
 ```
 
 It listens on `0.0.0.0:8787`. Point the app at:
@@ -26,8 +24,13 @@ free, deterministic, job-aware demo responses.
 For example, with Ollama running on this computer:
 
 ```sh
-OLLAMA_MODEL=gemma4:31b-cloud tools/coach/run-local.sh
+COACH_MOCK=0 OLLAMA_MODEL=gemma4:31b-cloud tools/coach/run-local.sh
 ```
+
+This model uses Ollama's cloud through the local Ollama app, so it needs internet and an Ollama sign-in.
+It is not an offline language model. The service sends the transcript and numeric voice measurements;
+it never uploads the recording. To use an installed local model instead, set `OLLAMA_MODEL` to its name.
+The health reply reports the actual provider, selected model, and whether it uses cloud inference.
 
 ## Add an Anthropic key
 
@@ -51,6 +54,18 @@ limiting before a public release.
 
 ## Smoke test
 
+Run the complete real-provider flow with invented job and answer text:
+
+```sh
+deno run --allow-net tools/coach/smoke.ts http://127.0.0.1:8787
+```
+
+It checks health, generates five job questions, requests feedback on five answers, then requests tips,
+last-minute notes, and reusable stories. It fails if the server is in demo mode. Each response is printed
+for review. For a separate test server, use `PORT=8788` when starting the coach and pass that port here.
+
+Individual requests:
+
 ```sh
 curl -s localhost:8787/health
 curl -s -X POST localhost:8787/coach -H 'content-type: application/json' \
@@ -62,7 +77,7 @@ curl -s -X POST localhost:8787/coach -H 'content-type: application/json' \
 ## Tests
 
 ```sh
-deno test supabase/functions/coach/   # fake Claude client: no network, no key
+deno test --node-modules-dir=none supabase/functions/coach/  # injected providers: no network or key
 ```
 
 ## Notes for the app
@@ -74,7 +89,14 @@ deno test supabase/functions/coach/   # fake Claude client: no network, no key
 - `count` defaults to 5. In feedback, `delivery` may be `null` or omitted, and `pitch_hz_mean`,
   `pitch_semitone_sd` and `monotone` may be `null`. In wrap-up, each answer's `headline`, `problem` and
   `delivery` are optional. Unknown fields are ignored.
-- `evidence` is always an exact quote from the transcript or `""` (the server drops quotes it cannot find).
+- `evidence` is a verified transcript quote or `""`. Unverifiable provider quotes are rejected, never
+  silently turned into invented feedback. Wrap-up stories are tied to source answer numbers and verified
+  quotes; the HTTP `stories_to_use` field remains a list of strings.
+- Feedback identifies one content problem, one practical change, and a specific strength. It distinguishes
+  motivation questions, hypothetical scenarios, and questions asking for a past example.
+- Voice feedback is computed from supplied measurements, including pace, pauses, fillers, volume changes,
+  and pitch variation when available. These observations do not establish emotion, confidence, personality,
+  honesty, or employability. Typed answers receive no tone judgement.
 - Live calls take a few seconds (feedback longest). Give the HTTP client a 120 s timeout and show progress.
 - Provider settings: structured JSON outputs, short response limits, and strict server-side validation of
   quotes, lists, and delivery measurements. The health response identifies the active provider and model.

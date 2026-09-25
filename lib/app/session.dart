@@ -54,6 +54,7 @@ class SessionStore extends ChangeNotifier {
   bool _restored = false;
   int _revision = 0;
   Future<void> _write = Future<void>.value();
+  bool _disposed = false;
   bool saveFailed = false;
 
   /// The most recent session, including one whose final AI request needs retrying.
@@ -84,7 +85,7 @@ class SessionStore extends ChangeNotifier {
       final notes = data['wrapup'];
       if (notes is Map<String, dynamic>) session.wrapup = Wrapup.fromJson(notes);
       _last = session;
-      notifyListeners();
+      _notify();
     } catch (_) {
       // A missing or incompatible saved run must not block starting a new one.
     }
@@ -93,7 +94,8 @@ class SessionStore extends ChangeNotifier {
   Future<void> finished(PracticeSession session) async {
     _last = session;
     _revision++;
-    notifyListeners();
+    saveFailed = false;
+    _notify();
     if (!persist) return;
     final payload = jsonEncode({
       'job': session.job,
@@ -126,24 +128,45 @@ class SessionStore extends ChangeNotifier {
         'mock': session.wrapup!.mock,
       },
     });
+    await _queueWrite((prefs) => prefs.setString(_key, payload));
+  }
+
+  /// Save and delete operations share one queue so deleting old notes cannot
+  /// erase a newer session that finishes while preferences are being opened.
+  Future<void> _queueWrite(Future<bool> Function(SharedPreferences) action) {
+    final revision = _revision;
     _write = _write.then((_) async {
+      bool failed;
       try {
-        saveFailed = !await (await SharedPreferences.getInstance()).setString(_key, payload);
+        failed = !await action(await SharedPreferences.getInstance());
       } catch (_) {
-        saveFailed = true;
+        failed = true;
       }
-      notifyListeners();
+      if (revision == _revision) {
+        saveFailed = failed;
+        _notify();
+      }
     });
-    await _write;
+    return _write;
   }
 
   Future<void> clear() async {
     _revision++;
     _last = null;
-    notifyListeners();
+    saveFailed = false;
+    _notify();
     if (persist) {
-      await _write;
-      await (await SharedPreferences.getInstance()).remove(_key);
+      await _queueWrite((prefs) => prefs.remove(_key));
     }
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

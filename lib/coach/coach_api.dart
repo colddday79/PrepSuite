@@ -149,8 +149,11 @@ class Wrapup {
 class CoachHealth {
   final bool ok;
   final bool mock;
+  final String provider;
+  final String model;
+  final bool cloud;
 
-  const CoachHealth({required this.ok, required this.mock});
+  const CoachHealth({required this.ok, required this.mock, this.provider = '', this.model = '', this.cloud = false});
 }
 
 // ---------------------------------------------------------------------------
@@ -285,19 +288,11 @@ class HttpCoachApi implements CoachApi {
       if (delivery == null) 'typed': true,
     });
     final fb = AnswerFeedback.fromJson(json);
-    final texts = [
-      fb.headline,
-      fb.problem,
-      fb.evidence,
-      fb.fix,
-      fb.delivery,
-      fb.strength,
-    ];
-    if (texts.every((t) => t.isEmpty)) {
+    if ([fb.headline, fb.problem, fb.fix].any((t) => t.isEmpty)) {
       throw const CoachException(
         CoachErrorKind.badResponse,
         code: 'empty_feedback',
-        message: 'The response had no feedback text.',
+        message: 'The response was missing the main feedback or suggested fix.',
       );
     }
     return fb;
@@ -313,7 +308,11 @@ class HttpCoachApi implements CoachApi {
       'job': job,
       'answers': [for (final a in answers) a.toJson()],
     });
-    return Wrapup.fromJson(json);
+    final notes = Wrapup.fromJson(json);
+    if (notes.tips.isEmpty || notes.lastMinuteNotes.isEmpty) {
+      throw const CoachException(CoachErrorKind.badResponse, code: 'empty_notes', message: 'The response had no usable interview notes.');
+    }
+    return notes;
   }
 
   @override
@@ -352,7 +351,8 @@ class HttpCoachApi implements CoachApi {
       if (res.statusCode < 200 || res.statusCode >= 300) return null;
       final body = jsonDecode(utf8.decode(res.bodyBytes));
       if (body is! Map || body['ok'] != true) return null;
-      return CoachHealth(ok: true, mock: body['mock'] == true);
+      return CoachHealth(ok: true, mock: body['mock'] == true,
+        provider: _str(body['provider']), model: _str(body['model']), cloud: body['cloud'] == true);
     } catch (_) {
       return null;
     }

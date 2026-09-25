@@ -46,11 +46,13 @@ class _ConsentSheet extends StatelessWidget {
           const _Point(
             icon: PrepIcons.arrowUpRight,
             text: 'Only that text and simple voice measurements, like your pace, pauses and filler words, '
-                'are sent to our AI (Claude, made by Anthropic). It uses them to write your questions and feedback.',
+                'are sent to the coach service and its AI provider to write your questions and feedback. '
+                'This can use a cloud AI service, even though speech recognition runs on your phone.',
           ),
           const _Point(
             icon: PrepIcons.lock,
-            text: 'Your recordings stay on this phone. They are never uploaded.',
+            text: 'Audio is not uploaded. Temporary recordings are deleted after transcription. '
+                'Your latest practice and notes are saved on this device; you can delete them in Settings.',
           ),
           const SizedBox(height: Space.l),
           if (infoOnly)

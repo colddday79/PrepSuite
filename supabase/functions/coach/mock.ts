@@ -1,5 +1,5 @@
-// Deterministic, job-aware stand-in for Claude. Used when no Anthropic key is
-// configured or COACH_MOCK=1, so the app can be tested end to end for free.
+// Deterministic, job-aware demo responses. Used only when COACH_MOCK=1
+// is explicitly configured, so the app can be tested end to end for free.
 // Same response shapes as the live path, no randomness: same input, same output.
 
 import type {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -5,15 +7,34 @@ import '../design/tokens.dart';
 import '../features/home/home_screen.dart';
 import 'services.dart';
 
-class PrepSuiteApp extends StatelessWidget {
+class PrepSuiteApp extends StatefulWidget {
   const PrepSuiteApp({super.key, required this.services});
 
   final AppServices services;
 
   @override
+  State<PrepSuiteApp> createState() => _PrepSuiteAppState();
+}
+
+class _PrepSuiteAppState extends State<PrepSuiteApp> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.services.sessions.restore());
+  }
+
+  @override
+  void didUpdateWidget(PrepSuiteApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.services.sessions != oldWidget.services.sessions) {
+      unawaited(widget.services.sessions.restore());
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AppScope(
-      services: services,
+      services: widget.services,
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
           statusBarColor: Color(0x00000000),

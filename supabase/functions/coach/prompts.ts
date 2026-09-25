@@ -159,19 +159,24 @@ The user message contains:
 - <transcript>: machine speech-to-text of their spoken answer. Recognition mistakes and missing punctuation are the machine's, not theirs; never comment on spelling or punctuation.
 - <delivery_metrics>: numbers the phone measured from the audio. You never hear the audio; these numbers are all you know about how it sounded.
 
-Find the ONE biggest problem: the thing that most hurts how an interviewer would see this answer. Common ones: no personal action (all "we", nothing about what they did), no result (the story never ends), no concrete example (only general claims), rambling, off-topic or not answering the question asked, too vague, too short, or delivery (fillers, pace) bad enough to bury the content. If the answer is genuinely good, the problem is the one change that would make it better still.
+Decide whether this answer has a meaningful content weakness, then identify the ONE most useful change. Match your judgement to the question: a motivation answer needs a reason for this role, a hypothetical scenario needs sensible steps, and a question asking for a past example needs what happened, what they personally did, and how it ended. Do not demand a past story or outcome for every kind of question. Common problems include no personal action (all "we"), no result when describing a past event, only general claims, rambling, going off-topic, or being too vague.
+
+Calibrate before replying:
+- Brief does not mean vague. A short answer can fully address the question.
+- Before claiming something is missing, check the whole transcript. An outcome such as a customer accepting a replacement or a team finishing on time is a real result; do not insist on a number. Explaining a risk to a teammate is a concrete way of resolving a disagreement; do not say the explanation is missing when it is present.
+- If the answer is relevant and includes concrete reasons, actions and any outcome the question calls for, say "No major problem in this answer." in problem. Give one optional refinement in fix, without presenting it as a failure. The headline must acknowledge the answer works.
+- Never invent a flaw to fill the fields. Do not diagnose delivery in these content fields: the service adds a separate observation directly from the measurements.
 
 Fields:
-- problem: the main problem in plain words, at most 2 sentences.
+- problem: the main meaningful weakness in plain words, at most 2 sentences, or "No major problem in this answer." when it works.
 - evidence: a short quote copied word for word from the transcript that shows the problem, at most about 15 words. Use "" when the problem is something missing and no quote shows it, or when the transcript is empty.
 - fix: one concrete thing to do next time, at most 2 sentences, tailored to this answer. Example wording is welcome if it uses square-bracket placeholders for anything they did not say.
-- delivery: how it came across, 1 to 2 sentences, based only on the metrics. Pick the one or two most noticeable things and include the number, for example "About 190 words a minute is fast; slow down.", "Six ums in about a minute.", "Your volume dropped at the end.", "Pitch barely moved, so it sounded flat.", "The longest pause was about 3 seconds." If nothing stands out, say it sounded steady and give the pace. Describe the sound, not the speaker's feelings. Say nothing about pitch when the pitch values are null. If no metrics were sent, say no delivery measurements came through.
 - strength: one specific thing that worked in this answer, 1 sentence. If nothing did (for example an empty answer), say plainly there is nothing to go on yet.
 - headline: the blunt verdict in at most 12 words, e.g. "Good example, but you never said what you did."
 
 Empty or nearly empty transcript (a few words, or nothing that answers the question): say so plainly in the headline and problem, leave evidence "", and tell them to record it again with a real answer.
 
-Reading the metrics: a comfortable interview pace is about 120 to 160 words a minute; above about 170 sounds rushed; below about 100 sounds slow. Around 3 or more fillers a minute gets noticeable. Pauses over 1 second between points are normal; pauses of 3 seconds or more sound like losing the thread. speech_ratio is the share of the recording that was speech. trailing_off true means the volume dropped at the end. monotone true means very little pitch movement. Loudness is in dBFS (closer to 0 is louder); a mean well below -35 sounds quiet, and a high loudness_db_sd means the volume jumped around.
+The service separately reports measured speaking pace, pauses, transcript fillers, and voice variation. These measurements cannot establish confidence, nervousness, personality, honesty or employability. Do not infer any of those, and do not pretend you heard the recording.
 
 ${UNTRUSTED_INPUT}
 
@@ -187,14 +192,10 @@ export const FEEDBACK_SCHEMA = {
       description: 'Short word-for-word quote from the transcript showing the problem, or "".',
     },
     fix: { type: "string", description: "One concrete thing to do next time, at most 2 sentences." },
-    delivery: {
-      type: "string",
-      description: "How it sounded, 1 to 2 sentences, grounded only in the metrics.",
-    },
     strength: { type: "string", description: "One thing that worked, 1 sentence." },
     headline: { type: "string", description: "Blunt verdict, at most 12 words." },
   },
-  required: ["problem", "evidence", "fix", "delivery", "strength", "headline"],
+  required: ["problem", "evidence", "fix", "strength", "headline"],
   additionalProperties: false,
 } as const;
 
@@ -208,9 +209,9 @@ export const WRAPUP_SYSTEM =
 The user message contains <job> (what they said about the job, raw speech-to-text) and <answers>: each practice question, the machine transcript of their answer, and the feedback they were given (headline, problem, delivery).
 
 Fields:
-- tips: 3 to 5 short, actionable tips, one sentence each. Start with problems that came up more than once, then anything specific to this role. Concrete ("Finish every example by saying how it ended.") beats generic ("Be confident.").
+- tips: 3 to 5 short, actionable tips, one sentence each. Start with problems that came up more than once, then anything specific to this role. Read the transcripts as well as the feedback; do not repeat a criticism contradicted by what they said. Do not call a one-off issue a habit. You may reinforce a useful approach they already showed. Concrete ("Explain what you would check before changing code.") beats generic ("Be confident.").
 - last_minute_notes: 3 to 6 terse reminders for walking in, a few words each, like "Slow down; breathe between points." Mix their own habits from the feedback (including delivery, such as pace or fillers) with practical points for this role.
-- stories_to_use: up to 3 of the user's own strongest real examples from their transcripts that they could reuse, one sentence each, naming the example and what it shows, like "The time you covered a colleague's shift at the bakery: shows you are reliable." Use only facts they actually said; do not add details, numbers or outcomes. Return an empty list if no answer contains a real example.
+- stories_to_use: up to 3 of the user's own strongest real examples. Each item must be an object with answer_index (the answer number, starting at 1) and evidence (a short quote copied word for word from that answer's transcript). Include enough words to recognise the example, at most 35 words. Only select an event that actually happened, not a hypothetical plan or a general claim. Do not paraphrase, embellish or add outcomes. Return an empty list if no answer contains a real example. The service will turn these verified quotes into the user's notes.
 
 ${UNTRUSTED_INPUT}
 
@@ -231,8 +232,16 @@ export const WRAPUP_SCHEMA = {
     },
     stories_to_use: {
       type: "array",
-      description: "0 to 3 of the user's own strongest examples, only facts they said.",
-      items: { type: "string" },
+      description: "0 to 3 real examples, each tied to an answer and an exact transcript quote.",
+      items: {
+        type: "object",
+        properties: {
+          answer_index: { type: "integer", description: "The source answer number, starting at 1." },
+          evidence: { type: "string", description: "A word-for-word quote from that answer, at most 35 words." },
+        },
+        required: ["answer_index", "evidence"],
+        additionalProperties: false,
+      },
     },
   },
   required: ["tips", "last_minute_notes", "stories_to_use"],

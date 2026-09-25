@@ -21,6 +21,10 @@ class FeedbackView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (feedback.mock) ...[
+          Text('Sample feedback', style: PrepType.label.copyWith(color: PrepColors.accent)),
+          const SizedBox(height: Space.s),
+        ],
         Text(question, style: PrepType.meta.copyWith(color: PrepColors.text3), maxLines: 2, overflow: TextOverflow.ellipsis),
         const SizedBox(height: Space.m),
         Semantics(
@@ -40,8 +44,8 @@ class FeedbackView extends StatelessWidget {
         if (fix.isNotEmpty) _Section(label: 'Fix it', child: Text(fix, style: PrepType.bodyL)),
         if (delivery.isNotEmpty || typed)
           _Section(
-            label: 'How it sounded',
-            child: Text(delivery.isNotEmpty ? delivery : 'You typed this one, so there was no voice to judge.', style: PrepType.body),
+            label: typed ? 'Voice delivery not assessed' : 'How it sounded',
+            child: Text(typed ? 'This answer was typed or edited. Voice delivery was not assessed.' : delivery, style: PrepType.body),
           ),
         if (strength.isNotEmpty) _Section(label: 'What worked', child: Text(strength, style: PrepType.body)),
       ],

@@ -26,6 +26,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _askedOnce = false;
+  bool _starting = false;
+  Future<bool>? _consentRequest;
 
   @override
   void didChangeDependencies() {
@@ -34,24 +36,32 @@ class _HomeScreenState extends State<HomeScreen> {
     _askedOnce = true;
     // First run: explain what happens to the person's voice before anything else.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final services = AppScope.of(context);
-      if (await services.consent.accepted() || !mounted) return;
-      if (await showConsentSheet(context)) await services.consent.accept();
+      if (mounted) await _ensureConsent();
     });
   }
 
-  Future<void> _start({bool typing = false}) async {
+  Future<bool> _ensureConsent() => _consentRequest ??= _requestConsent().whenComplete(() => _consentRequest = null);
+
+  Future<bool> _requestConsent() async {
     final services = AppScope.of(context);
-    if (!await services.consent.accepted()) {
-      if (!mounted) return;
-      final ok = await showConsentSheet(context);
-      if (!ok) return;
-      await services.consent.accept();
+    if (await services.consent.accepted()) return true;
+    if (!mounted) return false;
+    if (!await showConsentSheet(context)) return false;
+    await services.consent.accept();
+    return true;
+  }
+
+  Future<void> _start({bool typing = false}) async {
+    if (_starting) return;
+    _starting = true;
+    try {
+      if (!await _ensureConsent() || !mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => IntakeScreen(preferTyping: typing)),
+      );
+    } finally {
+      _starting = false;
     }
-    if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => IntakeScreen(preferTyping: typing)),
-    );
   }
 
   void _openNotes() {
@@ -95,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Semantics(
                           header: true,
-                          child: Text("Tell me the job. I'll ask what they will ask you.", style: PrepType.question),
+                          child: Text("Tell me the job. Let's practise for it.", style: PrepType.question),
                         ),
                         const SizedBox(height: Space.m),
                         Row(
@@ -137,8 +147,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     final last = sessions.last;
                     return LinkRow(
                       icon: PrepIcons.write,
-                      title: 'Last-minute notes',
-                      meta: last == null ? 'Finish a practice to keep your notes here.' : 'Your notes for ${last.jobTitle}.',
+                      title: last != null && last.wrapup == null ? 'Finish your interview notes' : 'Last-minute notes',
+                      meta: last == null ? 'Finish a practice to keep your notes here.'
+                          : last.wrapup == null ? 'Your answers are saved. Tap to retry the notes for ${last.jobTitle}.'
+                          : 'Your notes for ${last.jobTitle}.',
                       onTap: last == null ? null : _openNotes,
                     );
                   },
@@ -186,6 +198,23 @@ class _SettingsSheet extends StatefulWidget {
 class _SettingsSheetState extends State<_SettingsSheet> {
   late Future<CoachHealth> _health = widget.services.coach.health();
 
+  Future<void> _deletePractice() async {
+    final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      title: const Text('Delete this practice?'),
+      content: const Text('This removes your saved job, answers, feedback and interview notes from this device.'),
+      actions: [
+        QuietButton('Cancel', onPressed: () => Navigator.pop(context, false)),
+        QuietButton('Delete', color: PrepColors.danger, onPressed: () => Navigator.pop(context, true)),
+      ],
+    ));
+    if (confirmed != true) return;
+    await widget.services.sessions.clear();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+      widget.services.sessions.saveFailed ? "Couldn't delete the saved practice. Try again." : 'Saved practice deleted.',
+    )));
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -210,7 +239,12 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               } else {
                 status = 'Not reachable. Start the coach server, then check again.';
               }
-              return _InfoRow(icon: PrepIcons.compass, title: 'Coach', lines: [status, widget.services.coachLabel]);
+              return _InfoRow(icon: PrepIcons.compass, title: 'Coach', lines: [
+                status,
+                if (snap.data?.provider.isNotEmpty ?? false)
+                  '${snap.data!.provider} · ${snap.data!.model}${snap.data!.cloud ? ' · cloud AI' : ''}',
+                widget.services.coachLabel,
+              ]);
             },
           ),
           const Hairline(indent: Space.gutter + 24 + Space.l),
@@ -221,6 +255,13 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             title: 'Privacy',
             meta: 'What stays on this phone and what is sent.',
             onTap: () => showConsentSheet(context, infoOnly: true),
+          ),
+          ListenableBuilder(
+            listenable: widget.services.sessions,
+            builder: (context, _) => widget.services.sessions.last == null && !widget.services.sessions.saveFailed
+                ? const SizedBox.shrink()
+                : LinkRow(icon: PrepIcons.write, title: 'Delete saved practice',
+                    meta: 'Remove your answers, feedback and notes from this device.', onTap: _deletePractice),
           ),
           const SizedBox(height: Space.l),
           Padding(
