@@ -6,7 +6,7 @@ import '../../design/components.dart';
 import '../../design/icons.dart';
 
 /// What Norman reads out on the interview screen besides the question itself.
-enum Spoken { feedback, reply }
+enum Spoken { feedback, reply, notes }
 
 /// Norman is shared by the question, the feedback and the coach's replies. Each read-out gets a
 /// turn, so the Hear and Stop controls follow what he is actually saying, and a read-out that
