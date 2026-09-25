@@ -155,6 +155,8 @@ class RecordButton extends StatelessWidget {
       button: true,
       enabled: enabled,
       label: recording ? 'Stop recording' : 'Start recording',
+      // excludeSemantics hides the InkWell's own tap, so screen readers need it here.
+      onTap: onPressed,
       excludeSemantics: true,
       child: SizedBox.square(
         dimension: 116,

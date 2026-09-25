@@ -152,18 +152,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: Space.xxl),
                         PrimaryButton('Start practice', key: const ValueKey('start-practice'), onPressed: _start),
                         const SizedBox(height: Space.xs),
-                        InkWell(
-                          borderRadius: BorderRadius.circular(Radii.chip),
-                          onTap: () => showConsentSheet(context, infoOnly: true),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(minHeight: 48),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text('Recordings stay on this phone.', style: PrepType.meta.copyWith(color: PrepColors.text3)),
-                                ),
-                                Text('Privacy', style: PrepType.label),
-                              ],
+                        FocusRing(
+                          radius: Radii.chip,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(Radii.chip),
+                            onTap: () => showConsentSheet(context, infoOnly: true),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 48),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text('Recordings stay on this phone.', style: PrepType.meta.copyWith(color: PrepColors.text3)),
+                                  ),
+                                  Text('Privacy', style: PrepType.label),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -257,7 +260,7 @@ Future<void> showSettingsSheet(BuildContext context) {
     useSafeArea: true,
     isScrollControlled: true,
     backgroundColor: PrepColors.surface1,
-    barrierColor: const Color(0xB3000000),
+    barrierColor: PrepColors.scrim,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.sheet))),
     builder: (context) => _SettingsSheet(services: services),
   );

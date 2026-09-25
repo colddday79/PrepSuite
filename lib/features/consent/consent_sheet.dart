@@ -12,7 +12,7 @@ Future<bool> showConsentSheet(BuildContext context, {bool infoOnly = false}) asy
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: PrepColors.surface1,
-    barrierColor: const Color(0xB3000000),
+    barrierColor: PrepColors.scrim,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.sheet))),
     builder: (context) => _ConsentSheet(infoOnly: infoOnly),
   );
