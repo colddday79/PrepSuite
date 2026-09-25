@@ -1,20 +1,32 @@
 # PrepSuite
 
-Android-first interview practice. The app is currently a working skeleton: design system, navigation, onboarding, the voice practice screen (live AGSL orb, text-to-speech, local WAV recording with silence detection), quiet practice exercises, history with filters, and settings. Transcription, feedback, sign-in and billing are not connected yet.
+Interview practice for a first job, built in Flutter for Android and iPhone: say the job, answer
+questions out loud, get short honest feedback on each answer, and finish with last-minute notes.
 
-## Build
+## Run
 
-Gradle needs Android Studio's bundled JDK 21 (the system Java 8 will not work):
+    cd ~/Documents/PrepSuite
+    tools/coach/run-local.sh &                    # the AI coach server (mock mode until a key is added)
+    flutter run                                   # the app (emulator or a plugged-in phone)
+    flutter run --dart-define=COACH_FAKE=true     # built-in sample coach, no server needed
+    flutter run --dart-define=COACH_URL=http://<your-mac-ip>:8787/coach   # a real phone on the same Wi-Fi
 
-    export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
-    ./gradlew testDebugUnitTest assembleDebug
-    adb install -r app/build/outputs/apk/debug/app-debug.apk
+The coach server defaults to `http://10.0.2.2:8787/coach` on the Android emulator and
+`http://localhost:8787/coach` on the iOS simulator. Plain http is allowed only in debug builds.
+Add a Claude key as described in `tools/coach/README.md`.
 
-Toolchain: AGP 9.2.1, Gradle 9.4.1, Kotlin 2.4.0, Compose BOM 2026.06.01, compileSdk 36, minSdk 29.
+## Layout
 
-## Services
+- `lib/`, `android/`, `ios/`, `test/`: the Flutter app
+- `packages/prepsuite_speech/`: offline speech-to-text, delivery metrics and the Norman interviewer voice (models: `tools/voice/fetch_models.sh`)
+- `supabase/functions/coach/`: the Claude coach service (Deno)
+- `tools/blender/`: scripts that render the gold assistant
+- `docs/`: PRD, build plan and handoff notes
+- `legacy/android-native/`: the earlier Kotlin/Compose app, kept for reference
 
-- GitHub: https://github.com/jungwooshim1212/PrepSuite
-- Supabase project reference: `qtwhzseowgktmocsjwib` (dev project; no migrations or client connection yet)
+## Check
 
-Keep credentials in local secret storage or server-side environment configuration, never in Git. No old SportsSnap application source is included.
+    flutter analyze
+    flutter test
+
+Mona Sans is licensed under the SIL Open Font License 1.1 (`assets/fonts/OFL.txt`).

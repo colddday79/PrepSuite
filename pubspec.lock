@@ -459,7 +459,7 @@ packages:
   prepsuite_speech:
     dependency: "direct main"
     description:
-      path: "../packages/prepsuite_speech"
+      path: "packages/prepsuite_speech"
       relative: true
     source: path
     version: "0.1.0"

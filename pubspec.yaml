@@ -13,7 +13,7 @@ dependencies:
   path_drawing: ^1.0.1
   permission_handler: ^12.0.1
   prepsuite_speech:
-    path: ../packages/prepsuite_speech
+    path: packages/prepsuite_speech
   shared_preferences: ^2.5.5
   video_player: ^2.14.0
 
