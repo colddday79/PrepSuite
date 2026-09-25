@@ -57,14 +57,14 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
   }
 }
 
-/// Dark only. Mona Sans everywhere, gold as the one accent, a quiet press tint instead of ripples,
+/// Dark only. Jost for text (Bodoni Moda comes in through PrepType), gold as the one accent, a quiet press tint instead of ripples,
 /// and no hover effects.
 ThemeData prepTheme() {
   final press = PrepColors.press;
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    fontFamily: 'MonaSans',
+    fontFamily: PrepFonts.text,
     scaffoldBackgroundColor: PrepColors.bg,
     canvasColor: PrepColors.bg,
     colorScheme: const ColorScheme.dark(

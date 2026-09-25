@@ -1065,14 +1065,25 @@ def animate(scene, spinners, bars, breathe, seconds, fps):
     scene.frame_set(1)
 
 
-def setup_render(scene, res, samples):
-    scene.render.engine = "CYCLES"
+def use_gpu(scene):
+    """Metal on the Mac. A build without Metal (Linux, the bpy module in the cloud) renders on the CPU."""
     prefs = bpy.context.preferences.addons["cycles"].preferences
-    prefs.compute_device_type = "METAL"
+    try:
+        prefs.compute_device_type = "METAL"
+    except TypeError:
+        scene.cycles.device = "CPU"
+        print("DEVICE CPU")
+        return
     prefs.get_devices()
     for d in prefs.devices:
         d.use = True
     scene.cycles.device = "GPU"
+    print("DEVICE GPU", [d.name for d in prefs.devices])
+
+
+def setup_render(scene, res, samples):
+    scene.render.engine = "CYCLES"
+    use_gpu(scene)
     scene.cycles.samples = samples
     scene.cycles.use_denoising = False
     scene.cycles.max_bounces = 4

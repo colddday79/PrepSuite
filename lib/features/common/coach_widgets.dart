@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../design/components.dart';
 import '../../design/hologram.dart';
+import '../../design/icons.dart';
 import '../../design/tokens.dart';
 
 /// Shared frame for the coach screens: top bar, the presence (smaller when the keyboard is up),
@@ -194,6 +195,85 @@ class RecordButton extends StatelessWidget {
   }
 }
 
+/// Home's one main control: a gold disc with a microphone, inside the sixty-tick ring that counts
+/// down the ten seconds. While recording the disc turns to the recording colour with a stop mark.
+class MicButton extends StatelessWidget {
+  const MicButton({super.key, required this.recording, required this.progress, required this.onPressed});
+
+  final bool recording;
+  final ValueListenable<double> progress;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    final fill = recording ? PrepColors.recording : enabled ? PrepColors.accent : PrepColors.surface2;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: recording ? 'Stop recording' : 'Say the job',
+      excludeSemantics: true,
+      child: SizedBox.square(
+        dimension: 112,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Positioned.fill(
+              child: ValueListenableBuilder<double>(
+                valueListenable: progress,
+                builder: (context, p, _) => CustomPaint(
+                  painter: _TickRing(progress: p, countdown: true, active: recording),
+                ),
+              ),
+            ),
+            AnimatedContainer(
+              duration: Motion.enter,
+              curve: Motion.decelerate,
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: fill,
+                // A little of the presence's light caught around the disc.
+                boxShadow: enabled
+                    ? [BoxShadow(color: fill.withValues(alpha: 0.28), blurRadius: 28, spreadRadius: 2)]
+                    : const [],
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  key: const ValueKey('record-button'),
+                  onTap: onPressed,
+                  child: Center(
+                    child: AnimatedSwitcher(
+                      duration: Motion.fade,
+                      child: recording
+                          ? Container(
+                              key: const ValueKey('stop'),
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(color: PrepColors.text, borderRadius: BorderRadius.circular(5)),
+                            )
+                          : PrepIcon(
+                              PrepIcons.mic,
+                              key: const ValueKey('mic'),
+                              color: enabled ? PrepColors.bg : PrepColors.text3,
+                              size: 30,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TickRing extends CustomPainter {
   _TickRing({required this.progress, required this.countdown, required this.active});
 
@@ -230,18 +310,19 @@ class _TickRing extends CustomPainter {
 
 /// An honest progress line: says what is happening, with a thin indeterminate bar.
 class LoadingLine extends StatelessWidget {
-  const LoadingLine(this.text, {super.key});
+  const LoadingLine(this.text, {super.key, this.center = false});
 
   final String text;
+  final bool center;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       liveRegion: true,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: center ? CrossAxisAlignment.center : CrossAxisAlignment.start,
         children: [
-          Text(text, style: PrepType.bodyLMedium),
+          Text(text, style: PrepType.bodyLMedium, textAlign: center ? TextAlign.center : TextAlign.start),
           const SizedBox(height: Space.m),
           const ClipRRect(
             borderRadius: BorderRadius.all(Radius.circular(2)),
@@ -255,21 +336,23 @@ class LoadingLine extends StatelessWidget {
 
 /// A problem, said plainly, with what to do about it.
 class ProblemNote extends StatelessWidget {
-  const ProblemNote({super.key, required this.title, required this.body});
+  const ProblemNote({super.key, required this.title, required this.body, this.center = false});
 
   final String title;
   final String body;
+  final bool center;
 
   @override
   Widget build(BuildContext context) {
+    final align = center ? TextAlign.center : TextAlign.start;
     return Semantics(
       liveRegion: true,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: center ? CrossAxisAlignment.center : CrossAxisAlignment.start,
         children: [
-          Text(title, style: PrepType.titleM),
+          Text(title, style: PrepType.titleM, textAlign: align),
           const SizedBox(height: Space.xs),
-          Text(body, style: PrepType.body),
+          Text(body, style: PrepType.body, textAlign: align),
         ],
       ),
     );

@@ -9,7 +9,7 @@ import 'contracts.dart';
 /// through on an emulator or in widget tests.
 class FakeSpeechCapture implements SpeechCapture {
   FakeSpeechCapture({
-    this.jobText = 'I want a job as a junior barista at a busy coffee shop in the city.',
+    this.jobText = 'A junior barista job at a busy coffee shop in the city, and it is a group interview.',
     List<String>? answers,
     this.tick = const Duration(milliseconds: 50),
     this.msPerWord = 380,

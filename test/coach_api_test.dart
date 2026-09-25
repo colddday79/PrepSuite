@@ -193,7 +193,7 @@ void main() {
       final h = harness(
         (_) => jsonResponse({
           'tips': ['One'],
-          'last_minute_notes': [],
+          'last_minute_notes': ['Breathe'],
           'stories_to_use': [],
         }),
       );
@@ -336,15 +336,21 @@ void main() {
       final w = await harness(
         (_) => jsonResponse({
           'tips': ['  One  ', '', 3, null, 'Two'],
-          'last_minute_notes': 'not a list',
+          'last_minute_notes': [' Breathe ', false],
           'stories_to_use': ['Story'],
           'mock': true,
         }),
       ).api.wrapup(job: 'x', answers: const []);
       expect(w.tips, ['One', 'Two']);
-      expect(w.lastMinuteNotes, isEmpty);
+      expect(w.lastMinuteNotes, ['Breathe']);
       expect(w.storiesToUse, ['Story']);
       expect(w.mock, isTrue);
+
+      // Notes with no usable tips or reminders are a bad response, not an empty screen.
+      await expectLater(
+        harness((_) => jsonResponse({'tips': ['One'], 'last_minute_notes': 'not a list'})).api.wrapup(job: 'x', answers: const []),
+        throwsA(isA<CoachException>().having((e) => e.code, 'code', 'empty_notes')),
+      );
 
       final empty = Wrapup.fromJson(const {});
       expect([
