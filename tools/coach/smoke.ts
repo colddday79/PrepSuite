@@ -62,8 +62,21 @@ for (let i = 0; i < transcripts.length; i++) {
   }
   answers.push({ question: question.text, transcript: transcripts[i], ...feedback });
 }
+const asks: Record<string, unknown>[] = [];
+for (const userQuestion of ["How long should my answer be?", "What are they really looking for with this question?"]) {
+  const first = answers[0];
+  const reply = await request("/coach", {
+    action: "ask", job, user_question: userQuestion, question: first.question, answer: first.transcript,
+    feedback: { headline: first.headline, problem: first.problem, fix: first.fix },
+  });
+  const spoken = reply.answer;
+  check(typeof spoken === "string" && spoken.trim(), "Missing ask.answer");
+  check(spoken.trim().split(/\s+/).length <= 110, "The spoken answer is over 110 words.");
+  check(!/[—\n*#]/.test(spoken), "The spoken answer has an em dash, a line break or markdown.");
+  asks.push({ user_question: userQuestion, ...reply });
+}
 const wrapup = await request("/coach", { action: "wrapup", job, answers });
 check(Array.isArray(wrapup.tips) && wrapup.tips.length >= 3, "Expected personal tips.");
 check(Array.isArray(wrapup.last_minute_notes) && wrapup.last_minute_notes.length >= 3, "Expected interview reminders.");
 check(Array.isArray(wrapup.stories_to_use) && wrapup.stories_to_use.every((s) => typeof s === "string"), "The app expects stories as strings.");
-console.log(JSON.stringify({ health, questions, answers, wrapup }, null, 2));
+console.log(JSON.stringify({ health, questions, answers, asks, wrapup }, null, 2));

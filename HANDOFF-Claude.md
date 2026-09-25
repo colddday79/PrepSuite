@@ -3,7 +3,7 @@
 **Purpose of this file:** if the context window fills up, read this file first in a fresh chat. It has everything needed to resume without re-deriving it.
 
 **Owner:** colddday79@gmail.com
-**Last updated:** 2026-09-23 ~20:40 KST, by Claude (Opus 5.5). The app skeleton is built, installed on the emulator, and open as PR #1 (not merged yet). See §5.
+**Last updated:** 2026-09-25 ~22:00 KST, by Claude (Opus 5.5). The app is Flutter at the repo root (Session 5). Session 6 is the latest app state (big presence on Home, real AI by default, the AI voice answering questions), and Session 7 (draft PR #1, merged on top of Session 6) adds the fonts, the coach's access token and security, and the every-phone layout test. Read Sessions 5 to 7 first; §2–§5 are historical.
 
 ---
 
@@ -276,80 +276,121 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 
 ---
 
-## Session 6 (2026-09-25, cloud session): Home redesign, job by voice on Home, coach fix
+## Session 6 (2026-09-25 evening): big presence, real AI by default, the AI talks back
+
+**Owner's asks (while away, "do not ask questions"):**
+1. Make the AI presence about 50–60% of Home, with the "Tell me the job" panel moved below it.
+2. Use the Norman voice so the AI actually talks back and answers what the user asks.
+3. Make Start practice → 10 s job recording → AI questions actually work.
+4. If usage allows: the profile and a better, non-vibecoded design (UI UX Pro Max as reference).
+
+**Root cause of "the AI doesn't work":** the coach server on port 8787 was running in sample mode (`mock: true`), so questions were generic. Now:
+- `tools/coach/run-local.sh` picks real AI by default. It uses the Ollama app's `gemma4:31b-cloud`; the owner is signed in, and a request takes about 1–2 s. `COACH_MOCK=1` is the only way to get sample answers.
+- The server was restarted this way and verified end to end on the emulator:
+  1. The Norman-voiced WAV "I am applying for a junior data analyst job at a hospital…" goes through the real on-device ASR.
+  2. The AI writes five relevant questions.
+  3. A spoken answer gets real feedback that Norman reads aloud.
+  4. A spoken "How long should my answer be?" gets a contextual answer that Norman reads aloud.
+
+**What changed:**
+- **Presence video** re-rendered at 1440×1440 from the unchanged `tools/blender/models/gold_intelligence.py`:
+  - render settings: `--res 1440 --samples 20 --fps 24 --seconds 16`, rendered as PNG frames and then encoded with ffmpeg (libx264 CRF 20, High@4.1, 5.2 MB);
+  - poster frame at `assets/images/presence_poster.jpg`, shown until the video is ready and under reduced motion.
+  - `tools/blender/out/` had been lost with the iCloud copy. Renders now live in the session scratchpad.
+- **Home** (`lib/features/home/home_screen.dart`, `homePresenceSize`):
+  - The presence box is min(width × 1.12, usable height × 0.55), about 50% of the screen. The globe fills the width, and only the outer ring and black corners run off the edges (`OverflowBox` in `hologram.dart`).
+  - The frosted panel sits below it.
+  - The headline uses `PrepType.display` 30/36.
+  - Top-bar profile icon, a "Profile and history" row, and an interview countdown line from the profile.
+- **Intake and interview:** the presence grows while Norman asks and listens (intake about 38% of the height, questions about 28%), and `CoachScaffold` animates size changes. The intake hint now asks for the role, where, and a known requirement. A target role from the profile pre-fills typing.
+- **Voice** (`lib/features/interview/read_aloud.dart`, `ask_coach_panel.dart`):
+  - Norman reads a spoken version of the feedback (headline plus fix, 45 words at most).
+  - An inline "Ask the coach" panel takes a 15 s voice question or a typed one; the server's new `ask` action answers in 2–4 spoken sentences and Norman reads it.
+  - The wrap-up has "Hear your notes", on request only.
+  - Auto-play is skipped in typing sessions and when TalkBack is on.
+- **Norman bug fixed:** a fixed audioplayers `playerId` made `speak()` hang forever after a hot restart, so the UI sat on "speaking". Playback that never starts now times out after 8 s.
+- **New shared pieces:**
+  - `CoachApi.ask` / `CoachReply`;
+  - `lib/app/profile.dart` (`Profile`, `ProfileStore` in `AppServices.profile`, persisted under `profile.v1`);
+  - icons `calendar`, `chat`, `stop`, `edit`.
+- **`tools/run-phone.sh`:** starts the coach if needed and runs `flutter run` with `COACH_URL=http://<LAN IP>:8787/coach`. Use this for the Galaxy S26 (same Wi-Fi).
+- **Profile** (`lib/features/profile/`, from the top-bar user icon or the "Profile and history" row):
+  - name, target job, interview date and experience, saved as you type, optional and on the phone only;
+  - practice history from `SessionStore.history` (newest first, capped at 30, key `interview.history.v1`, one row per practice through `startedAt`);
+  - "Delete everything on this phone". `SessionStore.clearAll()` removes the practice plus history; Settings' delete now uses it too.
+  - Reviewed notes go back one step on Done.
+- **Design system** (`lib/design/components.dart`, `tokens.dart`, `prepTheme()` in `lib/app/app.dart`):
+  - PrimaryButton is a solid warm-white slab with press darken and a 0.98 scale (the gradient is gone);
+  - public `FocusRing` for keyboard and switch focus;
+  - every Material text role mapped to Mona Sans (otherwise the variable font's thin 200 default leaks through);
+  - themed date picker, dialogs, snackbars and sheets;
+  - new tokens `PrepType.titleL/button/caption`, `PrepColors.focus/scrim`, `Motion.pressScale`;
+  - contrast asserted in `test/design_test.dart`.
+- **Accessibility fixes:** IconAction and RecordButton now expose their tap to TalkBack (before this, screen readers could not activate them).
+- **State at the end:** 118 Flutter tests and 32 Deno tests pass, and `flutter analyze` is clean. Everything is pushed to `colddday79/PrepSuite` main. The coach server was left running on 8787 in real-AI (Ollama) mode.
+
+**Next steps:**
+- Run on the owner's Galaxy S26 with `tools/run-phone.sh -d R3KL708EVEH`, on the same Wi-Fi as the Mac.
+- The Ollama cloud model is a stopgap for development. Before release, decide the provider (Anthropic key vs Ollama) and add auth to the coach.
+- Licence decisions are still open: Kroko ASR (CC-BY-SA) and espeak-ng (GPL-3.0).
+- The fix text can contain AI placeholders in square brackets, like "[wait times or bed occupancy]". Consider asking the prompt for plain words instead.
+- **Tests:** the flow test's stale "Last-minute notes" finder was fixed (Home shows "Finish your interview notes" in that state). New tests are `home_screen_test.dart` and `ask_coach_test.dart`, plus ask cases in `coach_api_test.dart` and `coach_test.ts`.
+
+**How the work was run:**
+- Six agents, each in its own git worktree under `.claude/worktrees/` (gitignored). All six hit the session usage limit within about 15 minutes, having written little.
+- After the reset, only the two agents with progress were resumed (coach server, voice). Home, intake and wrap-up were done directly, then the profile and design-system agents were resumed.
+- Lesson: on this plan, six parallel Opus agents exhaust the 5-hour limit fast. Run two or three at a time, give each a narrow brief, and commit after each merge.
+
+**Emulator testing without a microphone:**
+- Test WAVs are synthesised with Norman via `tools/voice/.venv/bin/python` and `sherpa_onnx.OfflineTts` (see the session scratchpad `synth.py`).
+- Push them to `/data/local/tmp/prepsuite/` (chmod 755 on the dir, 644 on the files).
+- Run with `--dart-define=SPEECH_TEST_WAVS=/data/local/tmp/prepsuite/job.wav,...`; each recording consumes the next file.
+- `flutter run --pid-file F` then `kill -USR1 $(cat F)` hot-reloads and `-USR2` hot-restarts.
+
+---
+
+## Session 7 (2026-09-25, cloud session, merged on top of Session 6): fonts, security, every phone
 
 Branch `claude/wonderful-wright-ui4vwi`, draft PR https://github.com/colddday79/PrepSuite/pull/1. This ran
 in a Claude Code cloud container: no emulator, no phone, no Mac apps. Flutter 3.47.5 and Deno 2.9 were
-installed there for checks.
+installed there for checks. It started before Session 6 on the same asks, then merged Session 6's `main`.
 
-**Owner's asks this session:** make the hologram ("the AI model") much larger, around 50-60% of the page,
-with the glass box not covering it; better fonts using the UI UX Pro Max skill data
-(github.com/nextlevelbuilder/ui-ux-pro-max-skill); let people record the kind of job interview on Home; make
-the AI work properly; then refine the design. The owner gets frustrated when nothing visible changes. Push
-early and send screenshots.
+**Merge decisions:** Session 6's Home (presence about half the screen, frosted panel below it, Start
+practice → intake), the intake screen, the 1440 px presence video and poster, the profile, ask the coach
+and read-aloud are kept as they are. This session's own Home rework (the job recorded on Home itself,
+`MicButton`, `HologramHero`, a 1080 px render) was dropped for them.
 
-**Done:**
-- **Home = intake.** `lib/features/home/home_screen.dart` holds the whole job step: a gold `MicButton`
-  (in `coach_widgets.dart`) with a 10 s countdown ring, live words while listening, check and edit, then
-  `coach.questions` and a push to `InterviewScreen`. `lib/features/intake/intake_screen.dart` is deleted.
-  "Type instead" on Home now means a quiet session (`preferTyping`: questions as text, typed answers).
-- **Hologram.** `HologramHero` in `lib/design/hologram.dart` sizes the video square so the ring
-  (`presenceRing` = 0.905 of the square) reaches 6 dp from the screen edges. The square's empty black
-  corners may overflow the screen (`OverflowBox`). The top bar sits in the corners the round presence
-  leaves empty. The frosted glass panel is gone from Home; on the wrap-up screen it now starts below the presence.
-  `HologramVideo`: poster frame `assets/video/presence_poster.jpg`, which is also shown when the OS
-  removes animations, and `setBusy()` plays at 1.8x while the coach writes questions.
-- **Fonts.** Bodoni Moda (display: headlines, questions, wordmark) + Jost (text), the "Luxury Minimalist"
-  pairing from the skill's typography data (its generic design-system output suggested Inter, which is on
-  the owner's tell list). Mona Sans is removed. Bodoni `opsz` = 0.55 x size, capped at 18: at full display
-  size the hairlines vanished on a phone. `PrepType.display` is the Home headline.
-- **Coach (`supabase/functions/coach/index.ts`).** The per-route `effort` is now sent (it was defined but
-  never sent). `thinking: adaptive`, `max_tokens` = route cap + 12,000 (`THINKING_ROOM`), and server-side
-  refusal fallback (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`, via
-  `client.beta.messages`). The reply is read after the last `fallback` block. The question prompt uses
-  the interview type (technical, group, phone screen, final round).
-- **Tests.** `test/flow_test.dart` is rewritten for the new Home, plus a layout test that nothing overlaps
-  the presence. `test/screenshots_test.dart` writes PNGs to `build/screenshots/` with
-  `flutter test test/screenshots_test.dart --dart-define=SCREENSHOTS=true`. Results: 57 Flutter tests,
-  28 Deno tests, analyzer clean. Two old failures were also fixed: 3 stale tests, and an unused import that
-  failed `flutter analyze` in CI.
-- **Blender script.** `tools/blender/models/gold_intelligence.py` falls back to the CPU when Metal is
-  missing, so it renders with the `bpy` 5.0.1 wheel from PyPI (download.blender.org is blocked in the cloud).
+**What this session adds:**
+- **Fonts.** Bodoni Moda (headlines, questions, the wordmark) and Jost (all other text): the "Luxury
+  Minimalist" pairing from the UI UX Pro Max typography data (github.com/nextlevelbuilder/ui-ux-pro-max-skill),
+  which the owner asked for. Mona Sans is removed. `PrepFonts` in `tokens.dart`, and `prepTheme()` maps
+  every Material text role to them. Bodoni `opsz` = 0.55 × size, capped at 18 (hairlines vanished at the
+  full display size on a phone).
+- **Coach.** Claude calls send the per-route effort (it was defined but never sent), adaptive thinking,
+  `max_tokens` = route cap + 12,000 (`THINKING_ROOM`) and server-side refusal fallback
+  (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`). Questions follow the kind of
+  interview named ("barista, group interview").
+- **Security** (`SECURITY.md` has the full list and the owner's checklist): the coach answers only
+  requests with its access token (`x-coach-token`), which `tools/coach/run-local.sh` creates in
+  `supabase/functions/.env` and `tools/run-phone.sh` passes to the app. It also has rate limits, JSON-only
+  requests and security headers. Android backup and device transfer are off and release builds are
+  https-only. CI actions are pinned, gitleaks and Dependabot run, and a `coach` CI job was added.
+- **Every phone.** `test/layout_matrix_test.dart` walks Home, settings, the profile (date picker, delete
+  dialog), a whole practice (asking the coach, the end-practice dialog), the wrap-up read aloud, the history
+  and typing, on 12 sizes at text ×1 and ×2. It fails on any layout error and on any text cut off by a
+  box too small for it. Fixes it drove:
+  - `HeadingScale` on the Home wordmark and headline (headings grow at most 30%);
+  - scrollable alert dialogs;
+  - the date typed instead of the calendar when the calendar can't fit (text above 1.3×, or under 560 dp of height);
+  - a text-scaled slot for the hint under the interview's record button.
+- **Presence.** The wrap-up's glass panel no longer overlaps its presence. The video pauses in the
+  background and when the phone removes animations. The poster stays under the video, so there is no dark flash.
+- **Tests:** 148 Flutter tests pass, and `flutter analyze` is clean. There are 8 more screenshot tests, which run
+  with `--dart-define=SCREENSHOTS=true` and write `build/screenshots/`. 42 Deno tests pass.
 
 **Not done / next:**
-- Not run on a device. The owner should pull the branch and do a full `flutter run`, not a hot reload,
-  because the fonts and assets changed.
-- The wrap-up screen's glass panel now starts below its small presence as well (no overlap anywhere).
-- The Anthropic key is still needed for real feedback (see `tools/coach/README.md`). No live Claude call
-  was made this session.
-
-**Security pass (same session, owner asked for "all the security"):** see `SECURITY.md` for the full list
-and the owner checklist (GitHub, Anthropic, Supabase and Play settings only the owner can change).
-- The coach needs its access token (`x-coach-token`). `tools/coach/run-local.sh` creates one in
-  `supabase/functions/.env` and prints the `flutter run --dart-define=COACH_TOKEN=...` lines. Without the
-  token, the app gets 401 "turned away". The coach refuses a network listen without a token, and an Edge
-  deploy won't start without the `COACH_TOKEN` secret.
-- Rate limits (20/min and 300/day per client, 2,000/day total) and a lockout after 10 wrong tokens.
-  JSON only (415 otherwise), `no-store`/`nosniff`/CSP headers, no CORS unless `COACH_CORS_ORIGIN` is set.
-  The code is in `supabase/functions/coach/security.ts` and the tests in `security_test.ts`.
-- App: sends the token; release builds refuse non-https coach URLs (`CoachConfig.allowed`). Android:
-  `allowBackup=false`, `data_extraction_rules.xml` (no cloud backup or device transfer),
-  `network_security_config.xml` (https only, system CAs; debug overrides it for LAN http).
-  `tools/release/build-android.sh` builds with obfuscation.
-- Repo: `SECURITY.md`, Dependabot (pub + actions), CI actions pinned to commits, `persist-credentials:
-  false`, and a new `coach` CI job (deno check, lint and test). The Supabase `config.toml` auth defaults
-  are stronger (12-character passwords, email confirmation).
-- Couldn't do from the cloud: build the Android app (dl.google.com is blocked, so there's no Android SDK)
-  or change the account settings in the checklist.
-
-**Hologram loop is now 1080p** (`assets/video/presence_loop.mp4`: 1080x1080, 24 fps, 16 s, 3.7 MB, which is
-smaller than the old 720p file; the poster is its first frame). It was rendered on the cloud CPU with the
-`bpy` 5.0.1 wheel from PyPI, taking about 10 s a frame:
-- Scene: `python tools/blender/models/gold_intelligence.py -- --out OUT --res 1080 --samples 20 --fps 24 --seconds 16 --still still.png`
-  (this also saves `OUT/presence.blend`). Then the saved scene was rendered to a PNG sequence
-  (`render.render(animation=True)`), frames 1-384.
-- Encode: `ffmpeg -framerate 24 -i f_%04d.png -c:v libx264 -preset slow -crf 20 -profile:v high -level 4.0 -pix_fmt yuv420p -movflags +faststart -an presence_loop.mp4`
-  (SSIM 0.995 against the frames).
-- On the Mac, the one-step equivalent is `Blender -b --factory-startup --python-exit-code 1 --python
-  tools/blender/models/gold_intelligence.py -- --res 1080 --samples 20 --fps 24 --seconds 16 --animation`
-  (Blender's own encoder: larger file).
+- Nothing here was run on a device. The Android app can't be built from the cloud (Google's SDK
+  downloads are blocked).
+- In a very short window (split screen), the intake's record button needs a scroll, because the
+  presence keeps at least 200 dp there.
+- The owner-only settings in `SECURITY.md`'s checklist.

@@ -211,7 +211,7 @@ void main() {
       final h = harness(
         (_) => jsonResponse({
           'tips': ['One'],
-          'last_minute_notes': ['Breathe'],
+          'last_minute_notes': ['Breathe.'],
           'stories_to_use': [],
         }),
       );
@@ -253,6 +253,41 @@ void main() {
             'delivery': 'D2',
           },
         ],
+      });
+    });
+
+    test('ask sends the question and only the context it has', () async {
+      final h = harness(
+        (_) => jsonResponse({'answer': 'Aim for a minute.', 'mock': false}),
+      );
+      await h.api.ask(job: 'Barista', userQuestion: 'How long should it be?');
+      expect(bodyOf(h.requests.single), {
+        'action': 'ask',
+        'job': 'Barista',
+        'user_question': 'How long should it be?',
+      });
+
+      await h.api.ask(
+        job: '',
+        userQuestion: 'What are they looking for?',
+        question: 'Why this cafe?',
+        answer: 'I love coffee.',
+        feedback: AnswerFeedback.fromJson(feedbackBody),
+      );
+      final r = h.requests.last;
+      expect(r.method, 'POST');
+      expect(r.url, endpoint);
+      expect(bodyOf(r), {
+        'action': 'ask',
+        'job': '',
+        'user_question': 'What are they looking for?',
+        'question': 'Why this cafe?',
+        'answer': 'I love coffee.',
+        'feedback': {
+          'headline': 'You never said what you did.',
+          'problem': 'All team, no you.',
+          'fix': 'Say "I".',
+        },
       });
     });
   });
@@ -354,15 +389,27 @@ void main() {
       final w = await harness(
         (_) => jsonResponse({
           'tips': ['  One  ', '', 3, null, 'Two'],
-          'last_minute_notes': [' Breathe ', false],
+          'last_minute_notes': ['  Breathe.  ', 7],
           'stories_to_use': ['Story'],
           'mock': true,
         }),
       ).api.wrapup(job: 'x', answers: const []);
       expect(w.tips, ['One', 'Two']);
-      expect(w.lastMinuteNotes, ['Breathe']);
+      expect(w.lastMinuteNotes, ['Breathe.']);
       expect(w.storiesToUse, ['Story']);
       expect(w.mock, isTrue);
+      expect(
+        Wrapup.fromJson(const {'last_minute_notes': 'not a list'}).lastMinuteNotes,
+        isEmpty,
+      );
+
+      final noNotes = await caught(
+        harness(
+          (_) => jsonResponse({'tips': ['One'], 'last_minute_notes': 'not a list'}),
+        ).api.wrapup(job: 'x', answers: const []),
+      );
+      expect(noNotes.kind, CoachErrorKind.badResponse);
+      expect(noNotes.code, 'empty_notes');
 
       // Notes with no usable tips or reminders are a bad response, not an empty screen.
       await expectLater(
@@ -377,6 +424,29 @@ void main() {
         empty.storiesToUse,
       ], everyElement(isEmpty));
       expect(empty.mock, isFalse);
+    });
+
+    test('ask happy path', () async {
+      final reply = await harness(
+        (_) => jsonResponse({'answer': '  Aim for about a minute.  ', 'mock': true}),
+      ).api.ask(job: 'x', userQuestion: 'How long?');
+      expect(reply.answer, 'Aim for about a minute.');
+      expect(reply.mock, isTrue);
+    });
+
+    test('an empty ask answer is a bad response', () async {
+      for (final body in <Map<String, Object?>>[
+        {'answer': ''},
+        {'answer': '   '},
+        {'answer': 42},
+        {'mock': false},
+      ]) {
+        final e = await caught(
+          harness((_) => jsonResponse(body)).api.ask(job: 'x', userQuestion: 'q'),
+        );
+        expect(e.kind, CoachErrorKind.badResponse, reason: '$body');
+        expect(e.code, 'empty_answer', reason: '$body');
+      }
     });
 
     test('bodies are decoded as UTF-8 both ways', () async {
@@ -418,6 +488,30 @@ void main() {
         }
       },
     );
+
+    test('ask maps server errors and connection failures', () async {
+      for (final (status, code) in const [
+        (400, 'bad_request'),
+        (429, 'rate_limited'),
+        (502, 'upstream'),
+        (503, 'not_configured'),
+      ]) {
+        final h = harness(
+          (_) => jsonResponse({
+            'error': {'code': code, 'message': 'The coach said no.'},
+          }, status),
+        );
+        final e = await caught(h.api.ask(job: 'x', userQuestion: 'q'));
+        expect(e.kind, CoachErrorKind.server, reason: code);
+        expect(e.code, code);
+        expect(e.message, 'The coach said no.');
+      }
+      final offline = await caught(
+        harness((_) => throw http.ClientException('Connection refused')).api
+            .ask(job: 'x', userQuestion: 'q'),
+      );
+      expect(offline.kind, CoachErrorKind.offline);
+    });
 
     test('non-2xx without an error body uses http_<status>', () async {
       final h = harness((_) => http.Response('<html>Bad gateway</html>', 502));
@@ -687,6 +781,26 @@ void main() {
         expect(health.mock, isTrue);
       },
     );
+
+    test('ask answers length questions and uses the question on screen', () async {
+      final api = FakeCoachApi(latency: Duration.zero);
+      final length = await api.ask(job: 'Barista', userQuestion: 'How LONG should it be?');
+      expect(length.answer, startsWith('Aim for about a minute.'));
+      expect(length.mock, isTrue);
+      final onScreen = await api.ask(
+        job: 'Barista',
+        userQuestion: 'What do they want?',
+        question: 'Why us?',
+      );
+      expect(onScreen.answer, startsWith('For this one'));
+      final general = await api.ask(job: 'Barista', userQuestion: 'Any tips?');
+      expect(general.answer, startsWith('Start with your point'));
+      expect((await api.ask(job: 'Barista', userQuestion: 'Any tips?')).answer, general.answer);
+      for (final reply in [length, onScreen, general]) {
+        expect(reply.answer, isNot(contains('—')));
+        expect(reply.mock, isTrue);
+      }
+    });
 
     test('fake copy has no em dashes', () async {
       final api = FakeCoachApi(latency: Duration.zero);

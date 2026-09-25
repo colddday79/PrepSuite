@@ -28,7 +28,7 @@ flutter:
   # (as folders, so builds work before tools/voice/fetch_models.sh has run).
   assets:
     - assets/video/presence_loop.mp4
-    - assets/video/presence_poster.jpg
+    - assets/images/presence_poster.jpg
     - assets/fonts/BodoniModa-OFL.txt
     - assets/fonts/Jost-OFL.txt
   fonts:

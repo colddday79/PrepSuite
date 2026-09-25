@@ -48,7 +48,9 @@ class NormanVoice implements InterviewerVoice {
     ),
   );
 
-  final AudioPlayer _player = AudioPlayer(playerId: 'prepsuite_norman');
+  // A fixed playerId survives a hot restart on the native side and the new
+  // player never hears its completion events, so let the plugin pick one.
+  final AudioPlayer _player = AudioPlayer();
   late final StreamSubscription<void> _completeSub;
   final _level = StreamController<double>.broadcast();
 
@@ -154,7 +156,10 @@ class NormanVoice implements InterviewerVoice {
   Future<void> _play(_Chunk c, int id) async {
     final done = Completer<void>();
     _chunkDone = done;
-    await _player.play(DeviceFileSource(c.path, mimeType: 'audio/wav'), ctx: _audioContext);
+    // A stuck audio path must not hold the interview on "speaking" forever.
+    await _player
+        .play(DeviceFileSource(c.path, mimeType: 'audio/wav'), ctx: _audioContext)
+        .timeout(const Duration(seconds: 8), onTimeout: () => throw StateError('Norman voice did not start playing'));
     if (id != _utterance) {
       await _player.stop(); // stop() raced with play()
       return;

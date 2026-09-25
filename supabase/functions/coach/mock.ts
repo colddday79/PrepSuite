@@ -3,6 +3,8 @@
 // Same response shapes as the live path, no randomness: same input, same output.
 
 import type {
+  AskInput,
+  AskResult,
   Delivery,
   FeedbackInput,
   FeedbackResult,
@@ -679,4 +681,58 @@ export function mockWrapup(input: WrapupInput): WrapupResult {
   }
 
   return { tips: tips.slice(0, 5), last_minute_notes: notes.slice(0, 6), stories_to_use: stories };
+}
+
+// ---------------------------------------------------------------------------
+// Ask: the person's own question, answered in a few sentences read aloud
+// ---------------------------------------------------------------------------
+
+/** Checked in order; the first topic whose pattern matches the question wins. */
+const ASK_TOPICS: { test: RegExp; reply: (job: string, onScreen: boolean) => string }[] = [
+  {
+    test: /\b(salary|salaries|pay|pays|paid|wage|wages|earn|money)\b/,
+    reply: () =>
+      "I do not know what this employer pays, so I will not guess a number. Check the job advert and similar adverts near you. If it is not listed, ask the recruiter before the interview.",
+  },
+  {
+    test: /\b(company|employer|business|culture|values|about them)\b/,
+    reply: () =>
+      "I only know what you told me, so I cannot tell you about the employer itself. Read their website and the job advert before you go, and pick one thing you like about them to mention.",
+  },
+  {
+    test:
+      /\b(no (?:work )?experience|never (?:worked|had a job)|(?:don'?t|do not) have (?:any |an? )?(?:experience|example|job)|haven'?t (?:worked|had a job)|first job)\b/,
+    reply: () =>
+      "That is fine. Use an example from school, a hobby, volunteering or helping someone at home. Say what happened, what you did yourself, and how it ended.",
+  },
+  {
+    test: /\b(how long|long|length|short|minutes?|seconds?)\b/,
+    reply: (_job, onScreen) =>
+      `Aim for about 45 to 90 seconds ${onScreen ? "for this one" : "per answer"}. Make one point, back it with one real example, and finish with how it ended. Then stop.`,
+  },
+  {
+    test: /\b(looking for|look for|want to hear|want from|why (?:do|would) they ask|point of|testing)\b/,
+    reply: (job, onScreen) =>
+      onScreen
+        ? `With this question they want to see how you would handle a real part of ${job}. Give one clear example or plan: what happened, what you did, and how it ended.`
+        : `They want to know you can do ${job} and that you really want it. Back each point with one real example.`,
+  },
+  {
+    test: /\b(nervous|nerves|anxious|scared|panic|blank|freeze)\b/,
+    reply: () =>
+      "If your mind goes blank, it is fine to pause and say you need a second to think. Take a breath, go back to the question, and start with the part you are sure of.",
+  },
+];
+
+export function mockAsk(input: AskInput): AskResult {
+  const role = inferRole(input.job);
+  const job = role.noun ? `this ${role.noun} job` : "this job";
+  const asked = fold(input.user_question).replace(/[‘’]/g, "'");
+  const topic = ASK_TOPICS.find((t) => t.test.test(asked));
+  if (topic) return { answer: topic.reply(job, input.question.length > 0) };
+  const note = role.note ? ` ${role.note}` : "";
+  return {
+    answer:
+      `For ${job}, keep each answer to one clear point and one real example. Say what happened, what you did yourself, and how it ended.${note}`,
+  };
 }

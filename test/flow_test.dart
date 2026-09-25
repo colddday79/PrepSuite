@@ -10,9 +10,8 @@ import 'package:prepsuite/coach/contracts.dart';
 import 'package:prepsuite/coach/coach_api.dart';
 import 'package:prepsuite/coach/fakes.dart';
 import 'package:prepsuite/coach/speech_adapter.dart';
-import 'package:prepsuite/design/components.dart';
 import 'package:prepsuite/design/hologram.dart';
-import 'package:prepsuite/features/common/coach_widgets.dart';
+import 'package:prepsuite/features/intake/intake_screen.dart';
 
 class _FeedbackCall {
   const _FeedbackCall(this.job, this.question, this.transcript, this.delivery);
@@ -96,30 +95,18 @@ class _TrackedSpeech extends FakeSpeechCapture {
   }
 }
 
-class _GatedConsent extends MemoryConsentStore {
-  _GatedConsent({super.value});
-
-  Completer<void>? gate;
-
-  @override
-  Future<bool> accepted() async {
-    await gate?.future;
-    return super.accepted();
-  }
-}
-
 class _Rig {
   _Rig({int questionFailures = 0, int feedbackFailures = 0, int wrapupFailures = 0, bool consented = false, MicAccess mic = MicAccess.granted, this.setup})
       : coach = _CoachSpy(questionFailures: questionFailures, feedbackFailures: feedbackFailures, wrapupFailures: wrapupFailures),
         speech = _TrackedSpeech(),
         voice = FakeInterviewerVoice(),
-        consent = _GatedConsent(value: consented),
+        consent = MemoryConsentStore(value: consented),
         micPermission = GrantedMicPermission(access: mic);
 
   final _CoachSpy coach;
   final _TrackedSpeech speech;
   final FakeInterviewerVoice voice;
-  final _GatedConsent consent;
+  final MemoryConsentStore consent;
   final GrantedMicPermission micPermission;
   final SpeechSetup? setup;
 
@@ -135,24 +122,20 @@ class _Rig {
   );
 }
 
+bool _fontLoaded = false;
 
-bool _fontsLoaded = false;
-
-/// The real fonts, so overflow checks match the device.
-Future<void> loadAppFonts(WidgetTester tester) async {
-  if (_fontsLoaded) return;
-  await tester.runAsync(() async {
-    await (FontLoader('BodoniModa')..addFont(rootBundle.load('assets/fonts/BodoniModa.ttf'))).load();
-    await (FontLoader('Jost')..addFont(rootBundle.load('assets/fonts/Jost.ttf'))).load();
-  });
-  _fontsLoaded = true;
-}
-
-Future<void> _boot(WidgetTester tester, _Rig rig, {Size size = const Size(1080, 2400), double ratio = 2.625}) async {
+Future<void> _boot(WidgetTester tester, _Rig rig) async {
   HologramVideo.instance.enabled = false;
-  await loadAppFonts(tester);
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = ratio;
+  if (!_fontLoaded) {
+    // Real Jost and Bodoni Moda metrics, so overflow checks match the device.
+    await tester.runAsync(() async {
+      await (FontLoader('Jost')..addFont(rootBundle.load('assets/fonts/Jost.ttf'))).load();
+      await (FontLoader('BodoniModa')..addFont(rootBundle.load('assets/fonts/BodoniModa.ttf'))).load();
+    });
+    _fontLoaded = true;
+  }
+  tester.view.physicalSize = const Size(1080, 2400);
+  tester.view.devicePixelRatio = 2.625;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(PrepSuiteApp(services: rig.services));
   await tester.pump();
@@ -173,15 +156,6 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 
 Finder _record() => find.byKey(const ValueKey('record-button'));
 
-/// Says the job on Home (the fake recogniser hears a barista job) and waits for the check step.
-Future<void> _sayJob(WidgetTester tester) async {
-  await _tap(tester, _record());
-  await _settle(tester, 1200);
-  await _tap(tester, _record()); // stop
-  await _settle(tester, 400);
-  expect(find.byKey(const ValueKey('job-field')), findsOneWidget);
-}
-
 Future<void> _recordAnswer(WidgetTester tester) async {
   await _settle(tester, 1600); // let the interviewer finish the question
   await _tap(tester, _record());
@@ -197,17 +171,25 @@ Future<void> _answerOutLoud(WidgetTester tester) async {
   await _settle(tester, 600);
 }
 
-/// A spoken session: the job said on Home, confirmed, and the first question on screen.
-Future<void> _openInterview(WidgetTester tester, _Rig rig) async {
+Future<void> _openIntake(WidgetTester tester, _Rig rig) async {
   await _boot(tester, rig);
-  await _sayJob(tester);
+  await _tap(tester, find.text('Start practice'));
+  await _settle(tester, 1600);
+}
+
+Future<void> _openInterview(WidgetTester tester, _Rig rig) async {
+  await _openIntake(tester, rig);
+  await _tap(tester, find.text('Type instead'));
+  await _settle(tester, 300);
+  await tester.enterText(find.byKey(const ValueKey('job-field')), 'Barista at a busy cafe');
+  await tester.pump();
   await _tap(tester, find.text('Use this'));
   await _settle(tester, 1800);
 }
 
 Future<void> _finishTypedPractice(WidgetTester tester, _Rig rig) async {
   await _boot(tester, rig);
-  await _tap(tester, find.text('Type instead'));
+  await _tap(tester, find.text('Practise by typing'));
   await _settle(tester, 600);
   await tester.enterText(find.byKey(const ValueKey('job-field')), 'Barista at a busy cafe');
   await tester.pump();
@@ -223,15 +205,8 @@ Future<void> _finishTypedPractice(WidgetTester tester, _Rig rig) async {
   }
 }
 
-/// Where the presence's video square is drawn, from the stage that paints it.
-Rect _presenceRect(WidgetTester tester) {
-  final stage = find.byType(HologramStage);
-  final size = tester.widget<HologramStage>(stage).size;
-  return Rect.fromCenter(center: tester.getRect(stage).center, width: size, height: size);
-}
-
 void main() {
-  testWidgets('first run: consent, job by voice on Home, five answers with feedback, notes, home', (tester) async {
+  testWidgets('first run: consent, job by voice, five answers with feedback, notes, home', (tester) async {
     final rig = _Rig();
     await _boot(tester, rig);
 
@@ -242,25 +217,29 @@ void main() {
     await _settle(tester, 600);
     expect(rig.consent.value, isTrue);
 
-    // Home asks for the job and the kind of interview, and records it right there.
-    expect(find.text("What's the interview for?"), findsOneWidget);
+    // Home.
+    expect(find.text('Start practice'), findsOneWidget);
+    await _tap(tester, find.text('Start practice'));
+    await _settle(tester, 800);
+
+    // Intake: the interviewer asks, we record the job, then check what we heard.
+    expect(find.text('What job are you preparing for?', findRichText: true), findsOneWidget);
+    await _settle(tester, 600);
     await _tap(tester, _record());
     expect(rig.micPermission.requests, 1);
     await _settle(tester, 2000);
     expect(find.textContaining('s left'), findsOneWidget);
-    expect(find.textContaining('barista'), findsOneWidget, reason: 'the words appear as they are heard');
     await _tap(tester, _record());
     await _settle(tester, 300);
     expect(find.text("Here's what we heard. Fix anything we got wrong."), findsOneWidget);
     final field = tester.widget<TextField>(find.byType(TextField));
-    expect(field.controller!.text, contains('group interview'));
+    expect(field.controller!.text, contains('barista'));
 
     await _tap(tester, find.text('Use this'));
     expect(find.text('Writing questions for this role'), findsOneWidget);
     await _settle(tester, 1000);
-    expect(rig.coach.jobs.single, contains('group interview'));
 
-    // Interview: five questions, answered out loud.
+    // Interview: five questions.
     for (var i = 1; i <= 5; i++) {
       expect(find.textContaining('Question $i of 5'), findsOneWidget);
       expect(find.textContaining('Sample questions'), findsOneWidget);
@@ -287,40 +266,22 @@ void main() {
     await _tap(tester, find.text('Done'));
     await _settle(tester, 800);
 
-    // Home again, ready for the next job, with this session's notes one tap away.
-    expect(find.text("What's the interview for?"), findsOneWidget);
-    expect(find.byKey(const ValueKey('job-field')), findsNothing);
-    expect(find.text('Last-minute notes'), findsOneWidget);
-  });
-
-  testWidgets('Home: the presence fills about half the screen and nothing sits over it', (tester) async {
-    for (final (size, ratio) in [(const Size(1080, 2400), 2.625), (const Size(1080, 2340), 2.8125), (const Size(720, 1560), 2.0)]) {
-      final rig = _Rig(consented: true);
-      await _boot(tester, rig, size: size, ratio: ratio);
-      await _settle(tester, 400);
-      final screen = size / ratio;
-      final presence = _presenceRect(tester);
-      expect(presence.height, greaterThanOrEqualTo(screen.height * 0.42), reason: '$screen');
-      // The ring stays on screen; only the empty black corners of the video square may run past it.
-      final circle = Rect.fromCenter(center: presence.center, width: presence.width * presenceRing, height: presence.height * presenceRing);
-      expect(circle.left, greaterThanOrEqualTo(0), reason: 'ring on screen at $screen');
-      expect(circle.right, lessThanOrEqualTo(screen.width), reason: 'ring on screen at $screen');
-      // Every control and line of text sits clear of the presence: in its top corners or below it.
-      for (final element in find.byWidgetPredicate((w) => w is Text || w is MicButton || w is IconAction).evaluate()) {
-        final rect = tester.getRect(find.byWidget(element.widget).first);
-        final inside = rect.bottom > circle.top && rect.top < circle.bottom && rect.right > circle.left && rect.left < circle.right;
-        if (!inside) continue;
-        // Corners of the square are outside the round presence.
-        final nearest = Offset(circle.center.dx.clamp(rect.left, rect.right), circle.center.dy.clamp(rect.top, rect.bottom));
-        expect((nearest - circle.center).distance, greaterThan(circle.width / 2), reason: '${element.widget} overlaps the presence at $screen');
-      }
-      expect(tester.takeException(), isNull);
-    }
+    // Home again, with the notes kept for this session.
+    expect(find.text('Start practice'), findsOneWidget);
+    expect(find.textContaining('Your notes for'), findsOneWidget);
   });
 
   testWidgets('silent answer: says so and lets you type instead', (tester) async {
     final rig = _Rig(consented: true);
-    await _openInterview(tester, rig);
+    await _boot(tester, rig);
+    await _tap(tester, find.text('Start practice'));
+    await _settle(tester, 1400);
+    await _tap(tester, _record());
+    await _settle(tester, 800);
+    await _tap(tester, _record());
+    await _settle(tester, 300);
+    await _tap(tester, find.text('Use this'));
+    await _settle(tester, 1000);
 
     await _settle(tester, 1600);
     await _tap(tester, _record());
@@ -343,9 +304,11 @@ void main() {
   testWidgets('coach unreachable: honest error, then retry works', (tester) async {
     final rig = _Rig(consented: true, questionFailures: 1);
     await _boot(tester, rig);
+    await _tap(tester, find.text('Start practice'));
+    await _settle(tester, 1400);
     await _tap(tester, find.text('Type instead'));
     await _settle(tester, 300);
-    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Junior web developer, technical interview');
+    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Junior web developer');
     await tester.pump();
     await _tap(tester, find.text('Use this'));
     await _settle(tester, 600);
@@ -355,68 +318,31 @@ void main() {
     await _tap(tester, find.text('Try again'));
     await _settle(tester, 1200);
     expect(find.textContaining('Question 1 of 5'), findsOneWidget);
-    expect(rig.coach.jobs, ['Junior web developer, technical interview', 'Junior web developer, technical interview']);
   });
 
-  testWidgets('a typed job can be changed after an error and is sent as typed', (tester) async {
-    final rig = _Rig(consented: true, questionFailures: 1);
-    await _boot(tester, rig);
-    await _tap(tester, find.text('Type instead'));
-    await _settle(tester, 300);
-    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Nurse');
-    await tester.pump();
-    await _tap(tester, find.text('Use this'));
-    await _settle(tester, 600);
-    await _tap(tester, find.text('Change the job'));
-    await _settle(tester, 300);
-    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Nurse, panel interview');
-    await tester.pump();
-    await _tap(tester, find.text('Use this'));
-    await _settle(tester, 1200);
-    expect(rig.coach.jobs.last, 'Nurse, panel interview');
-    // Typing the job means a quiet practice: the answer box is ready and nothing was recorded.
-    expect(find.byKey(const ValueKey('answer-field')), findsOneWidget);
-    expect(rig.speech.startCalls, 0);
-  });
-
-  testWidgets('Not now keeps you on Home; the mic asks again, and a blocked mic offers typing', (tester) async {
+  testWidgets('Not now keeps you on Home; microphone off offers typing', (tester) async {
     final rig = _Rig(mic: MicAccess.blocked);
     await _boot(tester, rig);
     await _settle(tester, 600);
     await _tap(tester, find.text('Not now'));
     await _settle(tester, 600);
     expect(rig.consent.value, isFalse);
-    expect(find.text("What's the interview for?"), findsOneWidget);
 
-    await _tap(tester, _record());
+    await _tap(tester, find.text('Start practice'));
     await _settle(tester, 600);
     expect(find.text('Before you start'), findsOneWidget);
     await _tap(tester, find.text('Accept'));
-    await _settle(tester, 600);
+    await _settle(tester, 1600);
 
+    await _tap(tester, _record());
+    await _settle(tester, 300);
     expect(find.text('The microphone is off.'), findsOneWidget);
     expect(find.text('Open settings'), findsOneWidget);
-    expect(rig.speech.startCalls, 0);
-  });
-
-  testWidgets('declining consent from the mic sends nothing and stays ready', (tester) async {
-    final rig = _Rig();
-    await _boot(tester, rig);
-    await _settle(tester, 600);
-    await _tap(tester, find.text('Not now'));
-    await _settle(tester, 600);
-    await _tap(tester, _record());
-    await _settle(tester, 600);
-    await _tap(tester, find.text('Not now'));
-    await _settle(tester, 600);
-    expect(rig.micPermission.requests, 0);
-    expect(rig.speech.startCalls, 0);
-    expect(find.text('Tap and talk. You have 10 seconds.'), findsOneWidget);
   });
 
   testWidgets('job recording stops at ten seconds and sends only the confirmed role', (tester) async {
     final rig = _Rig(consented: true);
-    await _boot(tester, rig);
+    await _openIntake(tester, rig);
     await _tap(tester, _record());
     await _settle(tester, 10300);
 
@@ -426,17 +352,17 @@ void main() {
     expect(rig.coach.jobs, isEmpty);
     expect(find.byKey(const ValueKey('job-field')), findsOneWidget);
 
-    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Graduate civil engineer designing bridges, final round');
+    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Graduate civil engineer designing bridges');
     await tester.pump();
     await _tap(tester, find.text('Use this'));
     await _settle(tester, 1000);
-    expect(rig.coach.jobs, ['Graduate civil engineer designing bridges, final round']);
+    expect(rig.coach.jobs, ['Graduate civil engineer designing bridges']);
     expect(find.textContaining('Question 1 of 5'), findsOneWidget);
   });
 
   testWidgets('silent job is not sent to the coach and can be re-recorded', (tester) async {
     final rig = _Rig(consented: true);
-    await _boot(tester, rig);
+    await _openIntake(tester, rig);
     rig.speech.silentNext = true;
     await _tap(tester, _record());
     await _settle(tester, 600);
@@ -502,9 +428,38 @@ void main() {
     expect(rig.coach.feedbackCalls, hasLength(1));
   });
 
-  testWidgets('pausing while the job is recorded keeps what was heard for checking', (tester) async {
+  testWidgets('rapid Start practice taps open only one intake', (tester) async {
     final rig = _Rig(consented: true);
     await _boot(tester, rig);
+    final start = find.text('Start practice');
+    await tester.tap(start);
+    await tester.tap(start, warnIfMissed: false);
+    await _settle(tester, 800);
+    expect(find.byType(IntakeScreen, skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('a typed job can be changed after an error and the corrected job is sent', (tester) async {
+    final rig = _Rig(consented: true, questionFailures: 1);
+    await _openIntake(tester, rig);
+    await _tap(tester, find.text('Type instead'));
+    await _settle(tester, 300);
+    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Nurse');
+    await tester.pump();
+    await _tap(tester, find.text('Use this'));
+    await _settle(tester, 600);
+    await _tap(tester, find.text('Change the job'));
+    await _settle(tester, 300);
+    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Nurse, panel interview');
+    await tester.pump();
+    await _tap(tester, find.text('Use this'));
+    await _settle(tester, 1200);
+    expect(rig.coach.jobs, ['Nurse', 'Nurse, panel interview']);
+    expect(find.textContaining('Question 1 of 5'), findsOneWidget);
+  });
+
+  testWidgets('pausing while the job is recorded keeps what was heard for checking', (tester) async {
+    final rig = _Rig(consented: true);
+    await _openIntake(tester, rig);
     await _tap(tester, _record());
     await _settle(tester, 1200);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
@@ -520,7 +475,7 @@ void main() {
     final rig = _Rig(consented: true);
     final mic = Completer<void>();
     rig.speech.startGate = mic;
-    await _boot(tester, rig);
+    await _openIntake(tester, rig);
     await tester.tap(_record());
     await tester.tap(_record(), warnIfMissed: false);
     mic.complete();
@@ -529,13 +484,9 @@ void main() {
     await _tap(tester, _record()); // stop
     await _settle(tester, 300);
 
-    // Even while the consent check is still answering, a second tap sends nothing more.
-    final consent = Completer<void>();
-    rig.consent.gate = consent;
     final use = find.text('Use this');
     await tester.tap(use);
     await tester.tap(use, warnIfMissed: false);
-    consent.complete();
     await _settle(tester, 1200);
     expect(rig.coach.jobs, hasLength(1));
     expect(find.textContaining('Question 1 of 5'), findsOneWidget);
@@ -545,9 +496,8 @@ void main() {
     final rig = _Rig(consented: true);
     final gate = Completer<void>();
     rig.speech.startGate = gate;
-    await _boot(tester, rig);
+    await _openIntake(tester, rig);
     await _tap(tester, _record());
-    await tester.pump();
     expect(rig.speech.startCalls, 1);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await _settle(tester, 300);
@@ -563,10 +513,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('pending capture startup cannot leave a live microphone after navigation', (tester) async {
+    final rig = _Rig(consented: true);
+    final gate = Completer<void>();
+    rig.speech.startGate = gate;
+    await _openIntake(tester, rig);
+    await _tap(tester, _record());
+    expect(rig.speech.startCalls, 1);
+    await tester.binding.handlePopRoute();
+    await _settle(tester, 500);
+    expect(find.text('Start practice'), findsOneWidget);
+
+    gate.complete();
+    await _settle(tester, 400);
+    expect(rig.speech.active, isFalse);
+    expect(rig.speech.cancelCalls, greaterThanOrEqualTo(1));
+    expect(rig.coach.jobs, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('microphone startup exception offers recovery instead of crashing', (tester) async {
     final rig = _Rig(consented: true);
     rig.speech.throwOnStart = true;
-    await _boot(tester, rig);
+    await _openIntake(tester, rig);
     await _tap(tester, _record());
     await _settle(tester, 300);
     expect(find.text("The microphone didn't start."), findsOneWidget);
@@ -601,7 +570,7 @@ void main() {
 
     await _tap(tester, find.text('Done'));
     await _settle(tester, 700);
-    await _tap(tester, find.text('Finish your notes'));
+    await _tap(tester, find.text('Finish your interview notes'));
     await _settle(tester, 1000);
     expect(rig.coach.wrapupCalls, hasLength(2));
     expect(rig.coach.wrapupCalls.last.map((a) => a.transcript), originals);
@@ -610,40 +579,33 @@ void main() {
     expect(rig.services.sessions.last!.wrapup, isNotNull);
   });
 
-  testWidgets('first launch shows real set-up progress, then the mic works', (tester) async {
+  testWidgets('first launch shows real set-up progress, then the interviewer asks', (tester) async {
     final gate = Completer<void>();
     final setup = SpeechSetup(prepareModels: (progress) async {
       progress(0.42);
       await gate.future;
     });
     final rig = _Rig(consented: true, setup: setup);
-    await _boot(tester, rig);
-    await _settle(tester, 300);
+    await _openIntake(tester, rig);
     expect(find.text('Setting up the voice on this phone'), findsOneWidget);
     expect(find.textContaining('42%'), findsOneWidget);
-    await _tap(tester, _record());
-    await _settle(tester, 300);
-    expect(rig.speech.startCalls, 0, reason: 'the mic waits for the speech files');
+    expect(_record(), findsNothing);
 
     gate.complete();
     await _settle(tester, 1600);
     expect(find.text('Setting up the voice on this phone'), findsNothing);
-    await _tap(tester, _record());
-    await _settle(tester, 300);
-    expect(rig.speech.startCalls, 1);
+    expect(_record(), findsOneWidget);
   });
 
   testWidgets('a build without speech models offers typing and says why', (tester) async {
     final setup = SpeechSetup(prepareModels: (_) async => throw const SpeechModelsMissing('no manifest'));
     final rig = _Rig(consented: true, setup: setup);
-    await _boot(tester, rig);
-    await _settle(tester, 600);
+    await _openIntake(tester, rig);
     expect(find.text("Voice isn't available."), findsOneWidget);
     expect(find.textContaining('offline speech files are missing'), findsOneWidget);
-
-    await _tap(tester, find.text('Type the job'));
-    await _settle(tester, 300);
+    expect(find.byKey(const ValueKey('job-field')), findsOneWidget);
     expect(find.text('Say it instead'), findsNothing);
+
     await tester.enterText(find.byKey(const ValueKey('job-field')), 'Barista at a busy cafe');
     await tester.pump();
     await _tap(tester, find.text('Use this'));

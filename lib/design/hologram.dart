@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -15,15 +14,13 @@ class HologramVideo with WidgetsBindingObserver {
   static final HologramVideo instance = HologramVideo._();
   static const asset = 'assets/video/presence_loop.mp4';
 
-  /// The loop's first frame. Shown while the video starts, and instead of it when the phone is set
-  /// to remove animations.
-  static const poster = 'assets/video/presence_poster.jpg';
+  /// The loop's first frame: shown until the video is ready, and instead of it under reduced motion.
+  static const poster = 'assets/images/presence_poster.jpg';
 
   bool enabled = true;
   VideoPlayerController? _controller;
   final ValueNotifier<VideoPlayerController?> ready = ValueNotifier(null);
   bool _foreground = true;
-  bool _busy = false;
 
   Future<void> ensure() async {
     if (!enabled || _controller != null) return;
@@ -44,13 +41,6 @@ class HologramVideo with WidgetsBindingObserver {
       debugPrint('Presence video unavailable: $error');
       ready.value = null;
     }
-  }
-
-  /// True while the coach is working: the presence turns faster until it is set back to false.
-  void setBusy(bool busy) {
-    if (_busy == busy) return;
-    _busy = busy;
-    unawaited(ready.value?.setPlaybackSpeed(busy ? 1.8 : 1).catchError((Object _) {}));
   }
 
   static bool get _stillRequested => WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.disableAnimations;
@@ -83,9 +73,6 @@ class HologramVideo with WidgetsBindingObserver {
 
 /// How far the warm light reaches past the presence box, as a fraction of its size.
 const double _glowReach = 0.9;
-
-/// The outer measuring ring's diameter as a share of the video square (measured on the render).
-const double presenceRing = 0.905;
 
 /// The extra room above and below the presence box that the light spills into.
 double presenceSpill(double size) => size * (_glowReach - 0.5);
@@ -152,15 +139,16 @@ class HologramStage extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 const ColoredBox(color: Color(0xFF000000)),
-                // The square may be wider than the stage: its corners are empty black, and only
-                // the ring (presenceRing of it) has to stay in view.
-                Center(
-                  child: OverflowBox(
-                    minWidth: size,
-                    maxWidth: size,
-                    minHeight: size,
-                    maxHeight: size,
-                    child: Transform.scale(scale: 1 + 0.05 * l, child: const _PresenceVideo()),
+                // The box may be wider than the screen: only the black corners and the outer
+                // ring run off the edges, clipped by this stage.
+                OverflowBox(
+                  minWidth: size,
+                  maxWidth: size,
+                  minHeight: size,
+                  maxHeight: size,
+                  child: Transform.scale(
+                    scale: 1 + 0.05 * l,
+                    child: SizedBox.square(dimension: size, child: const _PresenceVideo()),
                   ),
                 ),
                 CustomPaint(painter: _ScreenedRoom(size: size, level: l)),
@@ -201,40 +189,6 @@ class _PresenceVideo extends StatelessWidget {
                 height: controller.value.size.height,
                 child: VideoPlayer(controller),
               ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// The presence as large as the space allows: its ring reaches to [margin] from the sides, or the
-/// whole square fits under [top], whichever is smaller. It is centred there, and its light spills
-/// past the edges behind whatever is laid out around it. Nothing is placed over the presence itself.
-class HologramHero extends StatelessWidget {
-  const HologramHero({super.key, this.top = 0, this.margin = 6, this.level});
-
-  final double top;
-  final double margin;
-  final ValueListenable<double>? level;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, box) {
-        final size = math.max(0.0, math.min((box.maxWidth - margin * 2) / presenceRing, box.maxHeight - top));
-        final spill = presenceSpill(size);
-        final boxTop = top + (box.maxHeight - top - size) / 2;
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              left: 0,
-              right: 0,
-              top: boxTop - spill,
-              height: size + spill * 2,
-              child: HologramStage(size: size, level: level),
             ),
           ],
         );

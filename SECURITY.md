@@ -10,13 +10,15 @@ reproduce it.
 
 - **Audio stays on the phone.** Speech is turned into text on the device, and each recording is
   deleted right after transcription.
-- **The coach gets text, not audio.** It receives the job, the question, the answer's text and voice
-  measurements (pace, pauses, fillers, loudness, pitch). It stores nothing and never logs
-  transcripts, prompts or keys.
-- **Saved practice stays on the phone.** Only the latest practice is saved, on the device. Android
-  backups and device-to-device transfers are turned off for the app's data
-  (`android/app/src/main/AndroidManifest.xml`, `res/xml/data_extraction_rules.xml`), and the person
-  can delete it in Settings.
+- **The coach gets text, not audio.** It receives the job, the question, the answer's text, voice
+  measurements (pace, pauses, fillers, loudness, pitch) and any question the person asks the coach.
+  It passes that text to the AI it runs with (Anthropic, or an Ollama model; Ollama's cloud models
+  run on Ollama's servers). It stores nothing and never logs transcripts, prompts or keys.
+- **Saved practice stays on the phone.** The latest practice, short summaries of up to 30 past
+  practices and the optional profile (name, target job, interview date, experience) are saved on the
+  device only. Android backups and device-to-device transfers are turned off for the app's data
+  (`android/app/src/main/AndroidManifest.xml`, `res/xml/data_extraction_rules.xml`). The person can
+  delete all of it in Profile, or the practice and its history in Settings.
 - **Encrypted connections only in release builds.** Android's `network_security_config.xml` blocks
   plain http and trusts only the phone's built-in certificate authorities, iOS App Transport
   Security blocks plain http, and `CoachConfig.allowed` refuses a non-https coach. Plain http is

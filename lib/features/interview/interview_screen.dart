@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -13,7 +14,9 @@ import '../../design/icons.dart';
 import '../../design/tokens.dart';
 import '../common/coach_widgets.dart';
 import '../wrapup/wrapup_screen.dart';
+import 'ask_coach_panel.dart';
 import 'feedback_view.dart';
+import 'read_aloud.dart';
 
 const _maxAnswer = Duration(minutes: 2);
 
@@ -38,8 +41,14 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
   final _elapsed = ValueNotifier<int>(0);
   final _typed = TextEditingController();
   final _scroll = ScrollController();
+  final _panelKey = GlobalKey();
   StreamSubscription<String>? _partialSub;
   Timer? _ticker;
+
+  /// Norman reading the feedback and the coach's answers (the question is read by [_ask]).
+  late final ReadAloud _read;
+  late final AskCoachController _asker;
+  bool _wired = false;
 
   int _index = 0;
   _Phase _phase = _Phase.speaking;
@@ -79,6 +88,29 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
   void didChangeDependencies() {
     super.didChangeDependencies();
     _services = AppScope.of(context);
+    if (!_wired) {
+      _wired = true;
+      _read = ReadAloud(_services.voice)..addListener(_changed);
+      _asker = AskCoachController(
+        services: _services,
+        voice: _read,
+        preferTyping: _session.preferTyping,
+        mayReadAloud: () => _mayReadAloud,
+      )..addListener(_changed);
+    }
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  /// Norman reads feedback and answers out on his own only in spoken sessions, with the app in
+  /// front, and not over a screen reader that is already reading the same words.
+  bool get _mayReadAloud {
+    if (_session.preferTyping || !mounted) return false;
+    final life = WidgetsBinding.instance.lifecycleState;
+    if (life == AppLifecycleState.hidden || life == AppLifecycleState.paused || life == AppLifecycleState.detached) return false;
+    return !MediaQuery.accessibleNavigationOf(context);
   }
 
   @override
@@ -87,6 +119,10 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     _operation++;
     _ticker?.cancel();
     _partialSub?.cancel();
+    _read.removeListener(_changed);
+    _asker.removeListener(_changed);
+    _asker.dispose();
+    _read.dispose();
     _services.voice.stop();
     _services.speech.cancel();
     _question.dispose();
@@ -137,7 +173,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     });
     _question.showAll();
     try {
-      await _services.voice.stop();
+      await _read.hush();
       if (!mounted || operation != _operation) return;
       final access = await _services.mic.request();
       if (!mounted || operation != _operation) return;
@@ -219,7 +255,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
 
   void _typeInstead() {
     _operation++;
-    _services.voice.stop();
+    unawaited(_read.hush());
     _question.showAll();
     setState(() => _phase = _Phase.typing);
   }
@@ -236,6 +272,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
 
   Future<void> _check() async {
     if (_phase == _Phase.checking) return;
+    final operation = ++_operation;
     setState(() {
       _error = null;
       _phase = _Phase.checking;
@@ -247,21 +284,24 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         transcript: _transcript,
         delivery: _metrics,
       );
-      if (!mounted) return;
+      if (!mounted || operation != _operation) return;
       _session.answers[_index] = AnswerRecord(transcript: _transcript, metrics: _metrics, feedback: feedback, typed: _wasTyped);
+      _asker.close();
       setState(() {
         _feedback = feedback;
         _phase = _Phase.feedback;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _toTop());
+      // Said once as it arrives; "Hear feedback" plays it again.
+      if (_mayReadAloud) unawaited(_read.say(Spoken.feedback, spokenFeedback(feedback)));
     } on CoachException catch (e) {
-      if (!mounted) return;
+      if (!mounted || operation != _operation) return;
       setState(() {
         _error = e;
         _phase = _Phase.error;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || operation != _operation) return;
       setState(() {
         _error = CoachException(CoachErrorKind.badResponse, message: '$e');
         _phase = _Phase.error;
@@ -270,6 +310,8 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
   }
 
   void _tryAgain() {
+    _asker.close();
+    unawaited(_read.hush());
     _typed.clear();
     _toTop();
     setState(() {
@@ -278,8 +320,35 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     });
   }
 
+  void _toggleFeedback() {
+    if (_read.current == Spoken.feedback) {
+      unawaited(_read.hush());
+      return;
+    }
+    final feedback = _feedback;
+    if (feedback == null || _asker.usingMic) return;
+    unawaited(_read.say(Spoken.feedback, spokenFeedback(feedback)));
+  }
+
+  void _openAsk() {
+    _asker.open(AskTopic(job: _session.job, question: _current.text, answer: _transcript, feedback: _feedback));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final panel = _panelKey.currentContext;
+      if (!mounted || panel == null) return;
+      Scrollable.ensureVisible(
+        panel,
+        duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : Motion.enter,
+        curve: Motion.standard,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
+  }
+
   Future<void> _next() async {
-    if (_leaving) return;
+    if (_leaving || _phase != _Phase.feedback) return;
+    // Norman stops mid-sentence rather than talking over the next question.
+    _asker.close();
+    unawaited(_read.hush());
     if (_isLast) {
       _leaving = true;
       await _services.sessions.finished(_session);
@@ -302,6 +371,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       final end = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
+          scrollable: true,
           backgroundColor: PrepColors.surface2,
           title: Text('End this practice?', style: PrepType.titleM),
           content: Text('Your answers and feedback from this practice will be lost.', style: PrepType.body),
@@ -318,7 +388,8 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     }
     _operation++;
     _ticker?.cancel();
-    await _services.voice.stop();
+    _asker.close();
+    await _read.hush();
     await _services.speech.cancel();
     if (mounted) Navigator.of(context).pop();
   }
@@ -326,7 +397,8 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.paused && state != AppLifecycleState.detached) return;
-    _services.voice.stop();
+    unawaited(_read.hush());
+    _asker.pause();
     if (_phase == _Phase.recording) {
       unawaited(_stop());
     } else if (_phase == _Phase.preparing || _phase == _Phase.speaking) {
@@ -335,6 +407,17 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       _question.showAll();
       setState(() => _phase = _Phase.ready);
     }
+  }
+
+  /// Larger while the interviewer asks and listens; smaller once there is text to read or edit.
+  double _presenceSize(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    return switch (_phase) {
+      _Phase.speaking || _Phase.ready || _Phase.preparing || _Phase.recording =>
+        math.min(screen.width * 0.8, screen.height * 0.28).clamp(152.0, 320.0),
+      _Phase.feedback => 112,
+      _ => 152,
+    };
   }
 
   @override
@@ -347,7 +430,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       },
       child: CoachScaffold(
         status: 'Question ${_index + 1} of $total · ${_session.jobTitle}',
-        presenceSize: _phase == _Phase.feedback ? 112 : 152,
+        presenceSize: _presenceSize(context),
         level: _level,
         onClose: _close,
         body: SingleChildScrollView(
@@ -363,12 +446,37 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
   }
 
   List<Widget> _feedbackContent() {
+    final feedback = _feedback!;
+    final canHear = _asker.voiceAvailable && spokenFeedback(feedback).isNotEmpty;
     return [
-      FeedbackView(question: _current.text, feedback: _feedback!, typed: _wasTyped),
+      FeedbackView(
+        question: _current.text,
+        feedback: feedback,
+        typed: _wasTyped,
+        listen: canHear
+            ? ReadAloudButton(
+                label: 'Hear feedback',
+                stopLabel: 'Stop reading the feedback',
+                speaking: _read.current == Spoken.feedback,
+                // Never read aloud into an open microphone.
+                onPressed: _asker.usingMic ? null : _toggleFeedback,
+              )
+            : null,
+      ),
+      if (_asker.isOpen) ...[
+        const SizedBox(height: Space.x3),
+        AskCoachPanel(key: _panelKey, controller: _asker, voice: _read),
+      ],
       const SizedBox(height: Space.x3),
       PrimaryButton(_isLast ? 'See your notes' : 'Next question', onPressed: _next),
       const SizedBox(height: Space.s),
-      Center(child: QuietButton('Try this one again', icon: PrepIcons.replay, onPressed: _tryAgain)),
+      Wrap(
+        alignment: WrapAlignment.center,
+        children: [
+          QuietButton('Try this one again', icon: PrepIcons.replay, onPressed: _tryAgain),
+          if (!_asker.isOpen) QuietButton('Ask the coach', icon: PrepIcons.chat, onPressed: _openAsk),
+        ],
+      ),
     ];
   }
 
@@ -403,8 +511,9 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         return [
           Center(child: RecordButton(recording: recording, progress: _progress, onPressed: recording ? _stop : _record)),
           const SizedBox(height: Space.m),
-          SizedBox(
-            height: 26,
+          // One line of timer or hint, the same height in both states; large text may wrap.
+          ConstrainedBox(
+            constraints: BoxConstraints(minHeight: MediaQuery.textScalerOf(context).scale(26)),
             child: Center(
               child: recording
                   ? ValueListenableBuilder<int>(

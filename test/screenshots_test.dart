@@ -1,4 +1,4 @@
-// Renders the Home screen to PNG files for design review, with the real fonts and the presence's
+// Renders Home and the start of a practice to PNG files for design review, with the real fonts and the presence's
 // poster frame. Skipped in the normal test run; to make them:
 //
 //   flutter test test/screenshots_test.dart --dart-define=SCREENSHOTS=true
@@ -90,21 +90,26 @@ void main() {
       await boot(tester, phone, services());
       await shoot(tester, '${phone.name}_1_home');
 
+      await tester.ensureVisible(find.text('Start practice'));
+      await tester.tap(find.text('Start practice'));
+      await settle(tester, 1600);
+      await shoot(tester, '${phone.name}_2_asking');
+
       await tester.tap(find.byKey(const ValueKey('record-button')));
       await settle(tester, 3400);
-      await shoot(tester, '${phone.name}_2_listening');
+      await shoot(tester, '${phone.name}_3_listening');
 
       await tester.tap(find.byKey(const ValueKey('record-button')));
       await settle(tester, 600);
-      await shoot(tester, '${phone.name}_3_check');
+      await shoot(tester, '${phone.name}_4_check');
 
       await tester.tap(find.text('Use this'));
       await settle(tester, 900);
-      await shoot(tester, '${phone.name}_4_writing_questions');
+      await shoot(tester, '${phone.name}_5_writing_questions');
 
       await settle(tester, 3000);
       await settle(tester, 2500);
-      await shoot(tester, '${phone.name}_5_first_question');
+      await shoot(tester, '${phone.name}_6_first_question');
     }, skip: !_enabled);
   }
 
@@ -119,13 +124,18 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await boot(tester, _Phone(name, size, ratio, top: 20), services());
       await shoot(tester, '${name}_1_home');
-      await tester.tap(find.byKey(const ValueKey('record-button')));
-      await settle(tester, 1500);
-      await tester.tap(find.byKey(const ValueKey('record-button')));
-      await settle(tester, 600);
+      // Short windows scroll, so each control is brought into view before it is tapped.
+      Future<void> tapInView(Finder finder, int ms) async {
+        await tester.ensureVisible(finder);
+        await tester.tap(finder);
+        await settle(tester, ms);
+      }
+
+      await tapInView(find.text('Start practice'), 1600);
+      await tapInView(find.byKey(const ValueKey('record-button')), 1500);
+      await tapInView(find.byKey(const ValueKey('record-button')), 600);
       await shoot(tester, '${name}_2_check');
-      await tester.tap(find.text('Use this'));
-      await settle(tester, 6000);
+      await tapInView(find.text('Use this'), 6000);
       await shoot(tester, '${name}_3_question');
     }, skip: !_enabled);
   }
@@ -139,8 +149,9 @@ void main() {
   testWidgets('typing the job with the keyboard up', (tester) async {
     const phone = Size(1080, 2400);
     await boot(tester, _phones.first, services());
-    await tester.tap(find.text('Type instead'));
-    await tester.pump();
+    await tester.ensureVisible(find.text('Practise by typing'));
+    await tester.tap(find.text('Practise by typing'));
+    await settle(tester, 600);
     tester.view.viewInsets = FakeViewPadding(bottom: 300 * 2.625);
     tester.view.padding = FakeViewPadding(top: 32 * 2.625);
     await settle(tester, 600);

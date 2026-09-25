@@ -7,11 +7,14 @@ import '../../design/tokens.dart';
 /// Feedback on one answer: a blunt headline, what went wrong, the words that show it, the fix,
 /// how it sounded, and what worked. Short and scannable, no scores.
 class FeedbackView extends StatelessWidget {
-  const FeedbackView({super.key, required this.question, required this.feedback, required this.typed});
+  const FeedbackView({super.key, required this.question, required this.feedback, required this.typed, this.listen});
 
   final String question;
   final AnswerFeedback feedback;
   final bool typed;
+
+  /// The control to hear the feedback read aloud (or stop it), shown under the headline.
+  final Widget? listen;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +39,14 @@ class FeedbackView extends StatelessWidget {
         if (feedback.problem.trim().isNotEmpty) ...[
           const SizedBox(height: Space.m),
           Text(feedback.problem.trim(), style: PrepType.bodyL),
+        ],
+        if (listen != null) ...[
+          const SizedBox(height: Space.xs),
+          // Nudged left so the icon, not the button's padding, lines up with the text.
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Transform.translate(offset: const Offset(-Space.m, 0), child: listen),
+          ),
         ],
         if (evidence.isNotEmpty)
           _Section(

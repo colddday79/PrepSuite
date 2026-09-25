@@ -1,11 +1,14 @@
-// Every screen on every kind of phone: walks the whole practice on small, standard and large
+// Every screen on every kind of phone: walks Home, settings, the profile, a whole practice (with
+// asking the coach and the notes read aloud) and practice history on small, standard and large
 // phones, a foldable, split screen and tablets, at normal and double text size, with safe-area
 // insets and the keyboard, and fails on any layout error (the "overflowed by N pixels" stripes).
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:prepsuite/app/app.dart';
+import 'package:prepsuite/app/profile.dart';
 import 'package:prepsuite/app/services.dart';
 import 'package:prepsuite/app/session.dart';
 import 'package:prepsuite/coach/coach_api.dart';
@@ -74,6 +77,8 @@ Future<void> _walkEverything(WidgetTester tester, _Device device, double scale) 
     consent: MemoryConsentStore(),
     mic: GrantedMicPermission(),
     sessions: SessionStore(),
+    // A date and a role, so Home shows its countdown line.
+    profile: ProfileStore(initial: Profile(interviewDate: DateTime.now().add(const Duration(days: 5)), targetRole: 'Junior barista')),
     coachLabel: 'layout',
     speechLabel: 'layout',
   );
@@ -85,11 +90,18 @@ Future<void> _walkEverything(WidgetTester tester, _Device device, double scale) 
     }
   }
 
-  // Each step must lay out without an error; the message names where it broke.
+  // Each step must lay out without an error, and no text may be cut off by a box too small for
+  // it (that raises no error, the words just disappear). The message names where it broke.
   Future<void> clean(String where) async {
     await settle(100);
-    final error = tester.takeException();
-    expect(error, isNull, reason: '$where on ${device.name} at text x${tester.platformDispatcher.textScaleFactor}');
+    final at = '$where on ${device.name} at text x${tester.platformDispatcher.textScaleFactor}';
+    expect(tester.takeException(), isNull, reason: at);
+    for (final element in find.byType(RichText).evaluate()) {
+      final text = element.renderObject! as RenderParagraph;
+      if (!text.hasSize || text.size.width == 0) continue;
+      final needed = text.getMaxIntrinsicHeight(text.size.width);
+      expect(needed, lessThanOrEqualTo(text.size.height + 0.5), reason: 'text cut off, "${text.text.toPlainText()}": $at');
+    }
   }
 
   Future<void> tap(Finder finder, [int ms = 600]) async {
@@ -105,6 +117,7 @@ Future<void> _walkEverything(WidgetTester tester, _Device device, double scale) 
   }
 
   final record = find.byKey(const ValueKey('record-button'));
+  Finder action(String label) => find.byWidgetPredicate((w) => w is IconAction && w.label == label);
 
   // First run: the consent sheet over Home.
   await settle(900);
@@ -113,35 +126,66 @@ Future<void> _walkEverything(WidgetTester tester, _Device device, double scale) 
   await clean('Home');
 
   // Settings sheet.
-  await tap(find.byWidgetPredicate((w) => w is IconAction && w.label == 'Settings'));
+  await tap(action('Settings'));
   await clean('settings sheet');
   await tester.binding.handlePopRoute();
   await settle();
 
-  // Say the job: listening, then checking what was heard.
-  await tap(record, 1500);
-  await clean('Home listening');
-  await tap(record, 400);
-  await clean('Home check');
+  // Profile: typing a detail with the keyboard up, the date picker and the delete dialog.
+  await tap(action('Profile'));
+  await clean('profile');
+  await tester.enterText(find.byKey(const ValueKey('profile-name')), 'Sam');
   await keyboard(true);
-  await clean('Home check with the keyboard up');
+  await clean('profile with the keyboard up');
+  await keyboard(false);
+  await tap(find.byKey(const ValueKey('profile-date')));
+  await clean('interview date picker');
+  await tap(find.text('Cancel'));
+  await tap(find.text('Delete everything on this phone'));
+  await clean('delete everything dialog');
+  await tap(find.text('Cancel'));
+  await tester.binding.handlePopRoute();
+  await settle();
+
+  // Say the job: the interviewer asks, listening, then checking what was heard.
+  await tap(find.text('Start practice'), 1600);
+  await clean('intake, the interviewer asking');
+  await tap(record, 1500);
+  await clean('intake listening');
+  await tap(record, 400);
+  await clean('intake check');
+  await keyboard(true);
+  await clean('intake check with the keyboard up');
   await keyboard(false);
 
   // The coach fails once: the error, then questions.
   await tap(find.text('Use this'), 300);
-  await clean('Home writing questions');
+  await clean('writing questions');
   await settle(400);
-  await clean('Home error');
+  await clean('questions error');
   await tap(find.text('Try again'), 1800);
   await clean('interview, question asked');
 
-  // Question 1 out loud: recording, checking, feedback.
+  // Question 1 out loud: recording, checking, feedback, then asking the coach by typing.
   await tap(record, 1200);
   await clean('interview recording');
   await tap(record, 400);
   await clean('interview check');
   await tap(find.text('Get feedback'), 800);
   await clean('feedback');
+  await tap(action('Close'));
+  await clean('end this practice dialog');
+  await tap(find.text('Keep going'));
+  await tap(find.text('Ask the coach'), 600);
+  await clean('ask the coach');
+  await tap(find.text('Type instead'), 300);
+  await keyboard(true);
+  await clean('typing a question for the coach, keyboard up');
+  await tester.enterText(find.byKey(const ValueKey('ask-field')), 'How long should this answer be?');
+  await keyboard(false);
+  await tap(find.text('Send question'), 800);
+  await clean("the coach's answer");
+  await tap(find.text('Close'), 300);
   await tap(find.text('Next question'), 1800);
 
   // Questions 2 to 5 typed, with the keyboard up.
@@ -156,14 +200,28 @@ Future<void> _walkEverything(WidgetTester tester, _Device device, double scale) 
     await tap(find.text(i == 5 ? 'See your notes' : 'Next question'), 1800);
   }
 
-  // The wrap-up notes, then Home again.
+  // The wrap-up notes, read aloud, then Home again.
   await settle(600);
   await clean('wrap-up');
+  await tap(find.text('Hear your notes'), 300);
+  await clean('wrap-up, reading the notes');
   await tap(find.text('Done'), 900);
   await clean('Home after a practice');
+  await tap(action('Settings'));
+  await tap(find.text('Delete saved practice'));
+  await clean('delete saved practice dialog');
+  await tap(find.text('Cancel'));
+  await tester.binding.handlePopRoute();
+  await settle();
+
+  // Practice history in the profile.
+  await tap(find.text('Profile and history'));
+  await clean('profile with practice history');
+  await tester.binding.handlePopRoute();
+  await settle();
 
   // Typing the job instead, keyboard up.
-  await tap(find.text('Type instead'), 300);
+  await tap(find.text('Practise by typing'), 600);
   await keyboard(true);
   await clean('typing the job');
   await keyboard(false);

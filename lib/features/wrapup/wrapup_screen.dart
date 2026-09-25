@@ -8,6 +8,7 @@ import '../../design/frosted_panel.dart';
 import '../../design/hologram.dart';
 import '../../design/tokens.dart';
 import '../common/coach_widgets.dart';
+import '../interview/read_aloud.dart';
 
 const double _presenceSize = 150;
 const double _barHeight = 64;
@@ -24,8 +25,9 @@ class WrapupScreen extends StatefulWidget {
   State<WrapupScreen> createState() => _WrapupScreenState();
 }
 
-class _WrapupScreenState extends State<WrapupScreen> {
+class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver {
   late AppServices _services;
+  ReadAloud? _reader;
   bool _loading = false;
   CoachException? _error;
   bool _started = false;
@@ -34,9 +36,44 @@ class _WrapupScreenState extends State<WrapupScreen> {
   Wrapup? get _wrapup => widget.session.wrapup;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    final reader = _reader;
+    if (reader != null) {
+      reader.hush();
+      reader.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) _reader?.hush();
+  }
+
+  /// Norman reads the last-minute notes only when asked: they are often read somewhere public.
+  void _toggleNotes(Wrapup wrapup) {
+    final reader = _reader;
+    if (reader == null) return;
+    if (reader.current == Spoken.notes) {
+      reader.hush();
+      return;
+    }
+    final text = wrapup.lastMinuteNotes.map(speakable).where((n) => n.isNotEmpty).join(' ');
+    reader.say(Spoken.notes, text);
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _services = AppScope.of(context);
+    _reader ??= ReadAloud(_services.voice);
     if (!_started) {
       _started = true;
       if (_wrapup == null) {
@@ -82,7 +119,17 @@ class _WrapupScreenState extends State<WrapupScreen> {
     }
   }
 
-  void _done() => Navigator.of(context).popUntil((route) => route.isFirst);
+  void _done() {
+    _reader?.hush();
+    final navigator = Navigator.of(context);
+    // Notes opened for review go back to where they were opened (Home or Profile); a finished
+    // practice goes home.
+    if (widget.review) {
+      navigator.maybePop();
+    } else {
+      navigator.popUntil((route) => route.isFirst);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +166,19 @@ class _WrapupScreenState extends State<WrapupScreen> {
                           Semantics(header: true, child: HeadingScale(child: Text('Before your interview', style: PrepType.headline))),
                           const SizedBox(height: Space.xs),
                           Text('Read these last-minute notes just before you walk in.', style: PrepType.meta),
+                          if (wrapup != null && wrapup.lastMinuteNotes.isNotEmpty)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: ListenableBuilder(
+                                listenable: _reader!,
+                                builder: (context, _) => ReadAloudButton(
+                                  label: 'Hear your notes',
+                                  stopLabel: 'Stop reading your notes',
+                                  speaking: _reader!.current == Spoken.notes,
+                                  onPressed: () => _toggleNotes(wrapup),
+                                ),
+                              ),
+                            ),
                           const SizedBox(height: Space.xxl),
                           if (wrapup != null)
                             ..._notes(wrapup.lastMinuteNotes)

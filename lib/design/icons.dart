@@ -28,7 +28,11 @@ enum PrepIcons {
   user('M12 3.5a4 4 0 1 1 0 8a4 4 0 1 1 0 -8z M4.5 20v-1a7.5 5.5 0 0 1 15 0v1'),
   mail('M3.5 5.5h17v13h-17z M3.5 6l8.5 7l8.5 -7'),
   compass('M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0 -18z M15.5 8.5l-2 5l-5 2l2 -5z'),
-  target('M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0 -18z M12 7a5 5 0 1 1 0 10a5 5 0 1 1 0 -10z M12 11v2');
+  target('M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0 -18z M12 7a5 5 0 1 1 0 10a5 5 0 1 1 0 -10z M12 11v2'),
+  calendar('M4.5 6h15v13.5h-15z M4.5 10h15 M8.5 3.5v4 M15.5 3.5v4'),
+  chat('M4.5 5.5h15v10.5h-8.5l-4.5 3.5v-3.5h-2z M8 9.5h8 M8 12.5h5'),
+  stop('M7 7h10v10h-10z'),
+  edit('M4.5 19.5l1 -4l10 -10l3 3l-10 10z M13.5 7.5l3 3');
 
   const PrepIcons(this.data);
   final String data;

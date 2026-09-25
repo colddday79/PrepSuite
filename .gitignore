@@ -62,3 +62,6 @@ app.*.map.json
 
 # Android release signing (see SECURITY.md)
 android/key.properties
+
+# Claude Code agent worktrees
+.claude/worktrees/

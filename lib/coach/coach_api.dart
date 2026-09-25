@@ -1,7 +1,7 @@
 // Client for the PrepSuite coach server, plus a fake for UI work and tests.
 //
 // Wire contract: every call is `POST {endpoint}` with a JSON body whose
-// "action" is "questions", "feedback" or "wrapup". Errors come back as
+// "action" is "questions", "feedback", "wrapup" or "ask". Errors come back as
 // {"error": {"code": ..., "message": ...}} with any status. Health is
 // `GET {endpoint}/health`, falling back to `GET {origin}/health`.
 
@@ -148,6 +148,17 @@ class Wrapup {
   );
 }
 
+/// The coach's short, spoken-style answer to something the person asked.
+class CoachReply {
+  final String answer;
+  final bool mock;
+
+  const CoachReply({required this.answer, required this.mock});
+
+  factory CoachReply.fromJson(Map<String, dynamic> j) =>
+      CoachReply(answer: _str(j['answer']), mock: _bool(j['mock']));
+}
+
 class CoachHealth {
   final bool ok;
   final bool mock;
@@ -236,6 +247,18 @@ abstract class CoachApi {
   Future<Wrapup> wrapup({
     required String job,
     required List<AnswerSummary> answers,
+  });
+
+  /// Answers the person's own question ("How long should this answer be?").
+  /// [question] is the interview question on screen, [answer] their latest
+  /// answer to it and [feedback] what the coach said about it; each is
+  /// optional context.
+  Future<CoachReply> ask({
+    required String job,
+    required String userQuestion,
+    String question = '',
+    String answer = '',
+    AnswerFeedback? feedback,
   });
 
   /// Never throws: returns `ok: false` when the coach can't be reached.
@@ -332,6 +355,34 @@ class HttpCoachApi implements CoachApi {
       throw const CoachException(CoachErrorKind.badResponse, code: 'empty_notes', message: 'The response had no usable interview notes.');
     }
     return notes;
+  }
+
+  @override
+  Future<CoachReply> ask({
+    required String job,
+    required String userQuestion,
+    String question = '',
+    String answer = '',
+    AnswerFeedback? feedback,
+  }) async {
+    final json = await _post({
+      'action': 'ask',
+      'job': job,
+      'user_question': userQuestion,
+      if (question.isNotEmpty) 'question': question,
+      if (answer.isNotEmpty) 'answer': answer,
+      if (feedback != null)
+        'feedback': {
+          'headline': feedback.headline,
+          'problem': feedback.problem,
+          'fix': feedback.fix,
+        },
+    });
+    final reply = CoachReply.fromJson(json);
+    if (reply.answer.isEmpty) {
+      throw const CoachException(CoachErrorKind.badResponse, code: 'empty_answer', message: 'The response had no answer.');
+    }
+    return reply;
   }
 
   @override
@@ -596,6 +647,27 @@ class FakeCoachApi implements CoachApi {
       ],
       mock: true,
     );
+  }
+
+  @override
+  Future<CoachReply> ask({
+    required String job,
+    required String userQuestion,
+    String question = '',
+    String answer = '',
+    AnswerFeedback? feedback,
+  }) async {
+    await Future<void>.delayed(latency);
+    final asked = userQuestion.toLowerCase();
+    final String reply;
+    if (asked.contains('long') || asked.contains('time') || asked.contains('minute')) {
+      reply = 'Aim for about a minute. Say your point first, give one real example, and finish with how it turned out.';
+    } else if (question.isNotEmpty) {
+      reply = 'For this one they want one real example. Say what happened, what you did yourself, and the result.';
+    } else {
+      reply = 'Start with your point, back it up with one example from your own experience, and end with the result.';
+    }
+    return CoachReply(answer: reply, mock: true);
   }
 
   @override
