@@ -122,7 +122,14 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
 
   void _done() {
     _reader?.hush();
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    final navigator = Navigator.of(context);
+    // Notes opened for review go back to where they were opened (Home or Profile); a finished
+    // practice goes home.
+    if (widget.review) {
+      navigator.maybePop();
+    } else {
+      navigator.popUntil((route) => route.isFirst);
+    }
   }
 
   @override

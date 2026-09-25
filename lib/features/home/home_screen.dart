@@ -281,14 +281,14 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   Future<void> _deletePractice() async {
     final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       title: const Text('Delete this practice?'),
-      content: const Text('This removes your saved job, answers, feedback and interview notes from this device.'),
+      content: const Text('This removes your saved job, answers, feedback, interview notes and practice history from this device.'),
       actions: [
         QuietButton('Cancel', onPressed: () => Navigator.pop(context, false)),
         QuietButton('Delete', color: PrepColors.danger, onPressed: () => Navigator.pop(context, true)),
       ],
     ));
     if (confirmed != true) return;
-    await widget.services.sessions.clear();
+    await widget.services.sessions.clearAll();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
       widget.services.sessions.saveFailed ? "Couldn't delete the saved practice. Try again." : 'Saved practice deleted.',
@@ -338,10 +338,10 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           ),
           ListenableBuilder(
             listenable: widget.services.sessions,
-            builder: (context, _) => widget.services.sessions.last == null && !widget.services.sessions.saveFailed
+            builder: (context, _) => widget.services.sessions.last == null && widget.services.sessions.history.isEmpty && !widget.services.sessions.saveFailed
                 ? const SizedBox.shrink()
                 : LinkRow(icon: PrepIcons.write, title: 'Delete saved practice',
-                    meta: 'Remove your answers, feedback and notes from this device.', onTap: _deletePractice),
+                    meta: 'Remove your answers, feedback, notes and history from this device.', onTap: _deletePractice),
           ),
           const SizedBox(height: Space.l),
           Padding(
