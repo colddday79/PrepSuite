@@ -31,6 +31,7 @@ Deno.test("Ollama: local requests use structured output and cloud requests use p
     const body = JSON.parse(captured?.body as string);
     assertEquals(body.stream, false);
     assertEquals(body.think, false);
+    assertEquals(body.options.num_predict, spec.maxTokens, "the route's token limit, with thinking off");
     assertEquals(body.format, cloud ? undefined : spec.schema);
     assertStringIncludes(body.messages[0].content, JSON.stringify(spec.schema));
     assertEquals(body.messages[1].content, "Private synthetic answer");
