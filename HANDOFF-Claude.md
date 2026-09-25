@@ -3,7 +3,7 @@
 **Purpose of this file:** if the context window fills up, read this file first in a fresh chat. It has everything needed to resume without re-deriving it.
 
 **Owner:** colddday79@gmail.com
-**Last updated:** 2026-09-23 ~20:40 KST, by Claude (Opus 5.5). The app skeleton is built, installed on the emulator, and open as PR #1 (not merged yet). See §5.
+**Last updated:** 2026-09-25 ~21:20 KST, by Claude (Opus 5.5). The app is Flutter at the repo root (Session 5), and Session 6 at the end of this file is the latest state: big presence on Home, real AI by default, and the AI voice answering questions. Read Sessions 5 and 6 first; §2–§5 are historical.
 
 ---
 
@@ -273,3 +273,76 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 - iOS was never built or tested this session (no Xcode on this Mac). sherpa_onnx claims iOS 13+ support but it's unverified here.
 - Auth/abuse-prevention on the coach Edge Function before any public deploy.
 - The repo is currently **public** on GitHub; the owner may want it private.
+
+---
+
+## Session 6 (2026-09-25 evening): big presence, real AI by default, the AI talks back
+
+**Owner's asks (while away, "do not ask questions"):**
+1. Make the AI presence about 50–60% of Home, with the "Tell me the job" panel moved below it.
+2. Use the Norman voice so the AI actually talks back and answers what the user asks.
+3. Make Start practice → 10 s job recording → AI questions actually work.
+4. If usage allows: the profile and a better, non-vibecoded design (UI UX Pro Max as reference).
+
+**Root cause of "the AI doesn't work":** the coach server on port 8787 was running in sample mode (`mock: true`), so questions were generic. Now:
+- `tools/coach/run-local.sh` picks real AI by default. It uses the Ollama app's `gemma4:31b-cloud`; the owner is signed in, and a request takes about 1–2 s. `COACH_MOCK=1` is the only way to get sample answers.
+- The server was restarted this way and verified end to end on the emulator:
+  1. The Norman-voiced WAV "I am applying for a junior data analyst job at a hospital…" goes through the real on-device ASR.
+  2. The AI writes five relevant questions.
+  3. A spoken answer gets real feedback that Norman reads aloud.
+  4. A spoken "How long should my answer be?" gets a contextual answer that Norman reads aloud.
+
+**What changed:**
+- **Presence video** re-rendered at 1440×1440 from the unchanged `tools/blender/models/gold_intelligence.py`:
+  - render settings: `--res 1440 --samples 20 --fps 24 --seconds 16`, rendered as PNG frames and then encoded with ffmpeg (libx264 CRF 20, High@4.1, 5.2 MB);
+  - poster frame at `assets/images/presence_poster.jpg`, shown until the video is ready and under reduced motion.
+  - `tools/blender/out/` had been lost with the iCloud copy. Renders now live in the session scratchpad.
+- **Home** (`lib/features/home/home_screen.dart`, `homePresenceSize`):
+  - The presence box is min(width × 1.12, usable height × 0.55), about 50% of the screen. The globe fills the width, and only the outer ring and black corners run off the edges (`OverflowBox` in `hologram.dart`).
+  - The frosted panel sits below it.
+  - The headline uses `PrepType.display` 30/36.
+  - Top-bar profile icon, a "Profile and history" row, and an interview countdown line from the profile.
+- **Intake and interview:** the presence grows while Norman asks and listens (intake about 38% of the height, questions about 28%), and `CoachScaffold` animates size changes. The intake hint now asks for the role, where, and a known requirement. A target role from the profile pre-fills typing.
+- **Voice** (`lib/features/interview/read_aloud.dart`, `ask_coach_panel.dart`):
+  - Norman reads a spoken version of the feedback (headline plus fix, 45 words at most).
+  - An inline "Ask the coach" panel takes a 15 s voice question or a typed one; the server's new `ask` action answers in 2–4 spoken sentences and Norman reads it.
+  - The wrap-up has "Hear your notes", on request only.
+  - Auto-play is skipped in typing sessions and when TalkBack is on.
+- **Norman bug fixed:** a fixed audioplayers `playerId` made `speak()` hang forever after a hot restart, so the UI sat on "speaking". Playback that never starts now times out after 8 s.
+- **New shared pieces:**
+  - `CoachApi.ask` / `CoachReply`;
+  - `lib/app/profile.dart` (`Profile`, `ProfileStore` in `AppServices.profile`, persisted under `profile.v1`);
+  - icons `calendar`, `chat`, `stop`, `edit`.
+- **`tools/run-phone.sh`:** starts the coach if needed and runs `flutter run` with `COACH_URL=http://<LAN IP>:8787/coach`. Use this for the Galaxy S26 (same Wi-Fi).
+- **Profile** (`lib/features/profile/`, from the top-bar user icon or the "Profile and history" row):
+  - name, target job, interview date and experience, saved as you type, optional and on the phone only;
+  - practice history from `SessionStore.history` (newest first, capped at 30, key `interview.history.v1`, one row per practice through `startedAt`);
+  - "Delete everything on this phone". `SessionStore.clearAll()` removes the practice plus history; Settings' delete now uses it too.
+  - Reviewed notes go back one step on Done.
+- **Design system** (`lib/design/components.dart`, `tokens.dart`, `prepTheme()` in `lib/app/app.dart`):
+  - PrimaryButton is a solid warm-white slab with press darken and a 0.98 scale (the gradient is gone);
+  - public `FocusRing` for keyboard and switch focus;
+  - every Material text role mapped to Mona Sans (otherwise the variable font's thin 200 default leaks through);
+  - themed date picker, dialogs, snackbars and sheets;
+  - new tokens `PrepType.titleL/button/caption`, `PrepColors.focus/scrim`, `Motion.pressScale`;
+  - contrast asserted in `test/design_test.dart`.
+- **Accessibility fixes:** IconAction and RecordButton now expose their tap to TalkBack (before this, screen readers could not activate them).
+- **State at the end:** 118 Flutter tests and 32 Deno tests pass, and `flutter analyze` is clean. Everything is pushed to `colddday79/PrepSuite` main. The coach server was left running on 8787 in real-AI (Ollama) mode.
+
+**Next steps:**
+- Run on the owner's Galaxy S26 with `tools/run-phone.sh -d R3KL708EVEH`, on the same Wi-Fi as the Mac.
+- The Ollama cloud model is a stopgap for development. Before release, decide the provider (Anthropic key vs Ollama) and add auth to the coach.
+- Licence decisions are still open: Kroko ASR (CC-BY-SA) and espeak-ng (GPL-3.0).
+- The fix text can contain AI placeholders in square brackets, like "[wait times or bed occupancy]". Consider asking the prompt for plain words instead.
+- **Tests:** the flow test's stale "Last-minute notes" finder was fixed (Home shows "Finish your interview notes" in that state). New tests are `home_screen_test.dart` and `ask_coach_test.dart`, plus ask cases in `coach_api_test.dart` and `coach_test.ts`.
+
+**How the work was run:**
+- Six agents, each in its own git worktree under `.claude/worktrees/` (gitignored). All six hit the session usage limit within about 15 minutes, having written little.
+- After the reset, only the two agents with progress were resumed (coach server, voice). Home, intake and wrap-up were done directly, then the profile and design-system agents were resumed.
+- Lesson: on this plan, six parallel Opus agents exhaust the 5-hour limit fast. Run two or three at a time, give each a narrow brief, and commit after each merge.
+
+**Emulator testing without a microphone:**
+- Test WAVs are synthesised with Norman via `tools/voice/.venv/bin/python` and `sherpa_onnx.OfflineTts` (see the session scratchpad `synth.py`).
+- Push them to `/data/local/tmp/prepsuite/` (chmod 755 on the dir, 644 on the files).
+- Run with `--dart-define=SPEECH_TEST_WAVS=/data/local/tmp/prepsuite/job.wav,...`; each recording consumes the next file.
+- `flutter run --pid-file F` then `kill -USR1 $(cat F)` hot-reloads and `-USR2` hot-restarts.
