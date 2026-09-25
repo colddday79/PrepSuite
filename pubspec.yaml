@@ -28,6 +28,7 @@ flutter:
   # (as folders, so builds work before tools/voice/fetch_models.sh has run).
   assets:
     - assets/video/presence_loop.mp4
+    - assets/images/presence_poster.jpg
     - assets/fonts/OFL.txt
   fonts:
     - family: MonaSans
