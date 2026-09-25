@@ -21,6 +21,7 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
   void initState() {
     super.initState();
     unawaited(widget.services.sessions.restore());
+    unawaited(widget.services.profile.restore());
   }
 
   @override
@@ -28,6 +29,9 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
     super.didUpdateWidget(oldWidget);
     if (widget.services.sessions != oldWidget.services.sessions) {
       unawaited(widget.services.sessions.restore());
+    }
+    if (widget.services.profile != oldWidget.services.profile) {
+      unawaited(widget.services.profile.restore());
     }
   }
 
