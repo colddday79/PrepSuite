@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -407,6 +408,17 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     }
   }
 
+  /// Larger while the interviewer asks and listens; smaller once there is text to read or edit.
+  double _presenceSize(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    return switch (_phase) {
+      _Phase.speaking || _Phase.ready || _Phase.preparing || _Phase.recording =>
+        math.min(screen.width * 0.8, screen.height * 0.28).clamp(152.0, 320.0),
+      _Phase.feedback => 112,
+      _ => 152,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final total = _session.questions.length;
@@ -417,7 +429,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       },
       child: CoachScaffold(
         status: 'Question ${_index + 1} of $total · ${_session.jobTitle}',
-        presenceSize: _phase == _Phase.feedback ? 112 : 152,
+        presenceSize: _presenceSize(context),
         level: _level,
         onClose: _close,
         body: SingleChildScrollView(
