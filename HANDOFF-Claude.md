@@ -273,3 +273,52 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 - iOS was never built or tested this session (no Xcode on this Mac). sherpa_onnx claims iOS 13+ support but it's unverified here.
 - Auth/abuse-prevention on the coach Edge Function before any public deploy.
 - The repo is currently **public** on GitHub; the owner may want it private.
+
+---
+
+## Session 6 (2026-09-25, cloud session): Home redesign, job by voice on Home, coach fix
+
+Branch `claude/wonderful-wright-ui4vwi`, draft PR https://github.com/colddday79/PrepSuite/pull/1. This ran
+in a Claude Code cloud container: no emulator, no phone, no Mac apps. Flutter 3.47.5 and Deno 2.9 were
+installed there for checks.
+
+**Owner's asks this session:** make the hologram ("the AI model") much larger, around 50-60% of the page,
+with the glass box not covering it; better fonts using the UI UX Pro Max skill data
+(github.com/nextlevelbuilder/ui-ux-pro-max-skill); let people record the kind of job interview on Home; make
+the AI work properly; then refine the design. The owner gets frustrated when nothing visible changes. Push
+early and send screenshots.
+
+**Done:**
+- **Home = intake.** `lib/features/home/home_screen.dart` holds the whole job step: a gold `MicButton`
+  (in `coach_widgets.dart`) with a 10 s countdown ring, live words while listening, check and edit, then
+  `coach.questions` and a push to `InterviewScreen`. `lib/features/intake/intake_screen.dart` is deleted.
+  "Type instead" on Home now means a quiet session (`preferTyping`: questions as text, typed answers).
+- **Hologram.** `HologramHero` in `lib/design/hologram.dart` sizes the video square so the ring
+  (`presenceRing` = 0.905 of the square) reaches 6 dp from the screen edges. The square's empty black
+  corners may overflow the screen (`OverflowBox`). The top bar sits in the corners the round presence
+  leaves empty. The frosted glass panel is gone from Home; on the wrap-up screen it now starts below the presence.
+  `HologramVideo`: poster frame `assets/video/presence_poster.jpg`, which is also shown when the OS
+  removes animations, and `setBusy()` plays at 1.8x while the coach writes questions.
+- **Fonts.** Bodoni Moda (display: headlines, questions, wordmark) + Jost (text), the "Luxury Minimalist"
+  pairing from the skill's typography data (its generic design-system output suggested Inter, which is on
+  the owner's tell list). Mona Sans is removed. Bodoni `opsz` = 0.55 x size, capped at 18: at full display
+  size the hairlines vanished on a phone. `PrepType.display` is the Home headline.
+- **Coach (`supabase/functions/coach/index.ts`).** The per-route `effort` is now sent (it was defined but
+  never sent). `thinking: adaptive`, `max_tokens` = route cap + 12,000 (`THINKING_ROOM`), and server-side
+  refusal fallback (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`, via
+  `client.beta.messages`). The reply is read after the last `fallback` block. The question prompt uses
+  the interview type (technical, group, phone screen, final round).
+- **Tests.** `test/flow_test.dart` is rewritten for the new Home, plus a layout test that nothing overlaps
+  the presence. `test/screenshots_test.dart` writes PNGs to `build/screenshots/` with
+  `flutter test test/screenshots_test.dart --dart-define=SCREENSHOTS=true`. Results: 57 Flutter tests,
+  28 Deno tests, analyzer clean. Two old failures were also fixed: 3 stale tests, and an unused import that
+  failed `flutter analyze` in CI.
+- **Blender script.** `tools/blender/models/gold_intelligence.py` falls back to the CPU when Metal is
+  missing, so it renders with the `bpy` 5.0.1 wheel from PyPI (download.blender.org is blocked in the cloud).
+
+**Not done / next:**
+- Not run on a device. The owner should pull the branch and do a full `flutter run`, not a hot reload,
+  because the fonts and assets changed.
+- The wrap-up screen's glass panel now starts below its small presence as well (no overlap anywhere).
+- The Anthropic key is still needed for real feedback (see `tools/coach/README.md`). No live Claude call
+  was made this session.

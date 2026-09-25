@@ -10,7 +10,6 @@ import '../../design/tokens.dart';
 import '../common/coach_widgets.dart';
 
 const double _presenceSize = 150;
-const double _panelOverlap = 44;
 const double _barHeight = 64;
 
 /// Step three: what to remember. The last-minute notes come first and largest, then tips and the
@@ -103,7 +102,8 @@ class _WrapupScreenState extends State<WrapupScreen> {
                   status: '${widget.session.jobTitle} · $answered ${answered == 1 ? 'answer' : 'answers'}',
                   onClose: _done,
                 ),
-                const SizedBox(height: _presenceSize - _panelOverlap),
+                // The panel starts below the presence, in its light, and never covers it.
+                const SizedBox(height: _presenceSize + Space.m),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
                   child: FrostedPanel(
