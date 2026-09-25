@@ -231,3 +231,45 @@ Also decided earlier in-session (owner's original message, still binding):
   - Mona Sans only, and keep the custom hairline icons.
   - No stat tiles, no badge above the headline, no em dashes in copy. The UI copy currently has some, e.g. "Your turn — tap Record".
 - **Watch out:** the GPT session's UI refresh (committed alongside this) already introduces several tells: `GlassCard` everywhere, `Tag` badges above headings, coloured icon tiles in onboarding, and a gradient primary button. Reconcile them deliberately.
+
+---
+
+## Session 5 (2026-09-25): rebuilt in Flutter, coach feature working, running on the owner's phone
+
+**Big change: the app is Flutter now, not Kotlin.** The owner asked for this so one codebase covers Android and iPhone. The old Kotlin/Compose app is kept for reference at `legacy/android-native/` — do not delete it, but do not build new features there either.
+
+**Repo moved to a new GitHub account.** It is now `github.com/colddday79/PrepSuite` (public), branch `main` (mirrors what was `m0-skeleton`). The old `jungwooshim1212/PrepSuite` repo is untouched and still has `origin`/`m0-skeleton` history up to commit `92be0d5`; this account's `gh`/git is now authenticated as `colddday79`. The old remote is kept as `old-origin` for reference.
+
+**Local path moved back to `~/Documents/PrepSuite`.** The iCloud PrepSuite folder caused real damage this session: iCloud silently deleted the whole working copy once and created duplicate `android 2` / `build 2` folders another time, corrupting the Flutter build. **Do not put this repo, or any large/actively-built project, inside `~/Library/Mobile Documents/com~apple~CloudDocs/` again.** `~/Documents/PrepSuite` is a plain (non-iCloud) folder and is now the only working copy. If it ever needs restoring, it's a straight `git clone https://github.com/colddday79/PrepSuite.git` plus `tools/voice/fetch_models.sh` for the speech models (gitignored, ~143 MB).
+
+**The owner's core feature is built and working end to end:**
+1. Job intake: 10 s voice recording → on-device transcript (editable) → sent to the coach server.
+2. Coach server generates 5 relevant interview questions for that job.
+3. User answers each by voice (up to 2 min); on-device speech-to-text + delivery metrics (pace, pauses, fillers, loudness, pitch) computed locally; server returns short, honest, evidence-quoting feedback (headline, problem, quote, fix, "how it sounded", one strength). No scores, no fabricated facts.
+4. Wrap-up screen: tips, last-minute notes, stories to use.
+Verified via screenshots and a real device run — see `e2e_1..5_*.png` and `port_*.png` in the session's scratchpad (not committed; regenerate if needed).
+
+**New pieces:**
+- **Flutter app** at the repo root (`pubspec.yaml`, `lib/`, `test/`, `android/`, `ios/`). Entry `lib/main.dart`; coach flow in `lib/coach/**` and `lib/features/{consent,intake,interview,wrapup}/**`; ported screens (History, Quiet practice, Settings, Profile, onboarding) in `lib/features/{history,quiet,settings,profile,onboarding}/**` plus `lib/data/**` for local persistence. Design system ported to `lib/design/{tokens,components,icons,frosted_panel,hologram}.dart`, following the same "warm near-black, gold accent, one real glass panel, no vibecoded tells" rules as before.
+- **`packages/prepsuite_speech/`**: a Flutter package, offline on-device speech-to-text (sherpa_onnx + a Kroko streaming ASR model, CC-BY-SA — needs a licence decision before release) and the owner's "Norman" Piper voice as the interviewer (`en_US-norman-medium`, MIT/public domain, verified against the owner's files in `~/Downloads`). `DeliveryAnalyzer` computes wpm, pauses, fillers, loudness, pitch/monotone from the raw PCM, pure Dart, unit-tested with synthetic signals. Models are NOT committed (~143 MB); `tools/voice/fetch_models.sh` rebuilds them after a fresh clone (downloads ASR + espeak-ng-data from k2-fsa/sherpa-onnx releases, converts Norman from `~/Downloads/en_US-norman-medium.onnx[.json]`). Without models present, the app falls back to typed input rather than failing.
+- **`supabase/functions/coach/`**: the Claude-backed AI server (Deno + `@anthropic-ai/sdk`, model `claude-opus-5`, adaptive thinking, per-route effort, server-side refusal fallbacks). Single `POST /coach` endpoint with three actions (`questions`/`feedback`/`wrapup`) and `GET /health`. Runs locally now via `tools/coach/run-local.sh` on port 8787 (mock mode — **no Anthropic key is configured on this Mac yet**; the owner must add one per `tools/coach/README.md`, not me). Deploys later to Supabase project `qtwhzseowgktmocsjwib` with `--no-verify-jwt` (needs an auth layer before any real release, since that makes the endpoint public).
+- **CI** (`.github/workflows/ci.yml`) now runs `flutter analyze` + `flutter test` instead of Gradle.
+
+**Running it:**
+```
+cd ~/Documents/PrepSuite
+tools/coach/run-local.sh &          # AI server, defaults to mock mode without a key
+flutter run                         # emulator, or -d <device-id> for a real phone
+flutter run --dart-define=COACH_URL=http://<mac-lan-ip>:8787/coach   # phone on same Wi-Fi
+```
+The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK installed and working over the same-Wi-Fi coach URL as of this session. Mac's LAN IP was `192.168.45.212` — re-check with `ipconfig getifaddr en0` since it can change.
+
+**Parallel-editing hazard this session:** at one point 2–3 agents (possibly including another assistant, "GPT Astra") were editing `packages/prepsuite_speech` and `supabase/functions/coach` simultaneously in the same working tree without git worktrees, causing an API-contract change (`SpeechCaptureAdapter`) mid-flight. It was resolved by the agents coordinating directly, but future multi-agent work on this repo should prefer isolated worktrees per agent (the `isolation: "worktree"` option) to avoid this, or explicitly partition files up front the way the prompts in this session did.
+
+**Not done / next steps:**
+- Add a real Anthropic API key so feedback is real, not sample output (owner's action, see `tools/coach/README.md`).
+- Decide on the Kroko ASR model's CC-BY-SA licence (attribution needed) or switch to the Apache-2.0 `librispeech` alternative (`ASR=librispeech tools/voice/fetch_models.sh`), which is less accurate.
+- espeak-ng (used to phonemise text for the Piper voice) is GPL-3.0 — needs a legal check before shipping.
+- iOS was never built or tested this session (no Xcode on this Mac). sherpa_onnx claims iOS 13+ support but it's unverified here.
+- Auth/abuse-prevention on the coach Edge Function before any public deploy.
+- The repo is currently **public** on GitHub; the owner may want it private.
