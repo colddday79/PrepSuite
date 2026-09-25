@@ -3,6 +3,9 @@
 Interview practice for a first job, built in Flutter for Android and iPhone: say the job, answer
 questions out loud, get short honest feedback on each answer, and finish with last-minute notes.
 
+**Picking this project back up? Read [`HANDOFF-Claude.md`](HANDOFF-Claude.md) first** — it has the
+current state, what's done, and what's next. `HANDOFF-GPT.md` is a second assistant's own notes.
+
 ## Run
 
     cd ~/Documents/PrepSuite
@@ -56,7 +59,8 @@ offers typing.
 - `packages/prepsuite_speech/`: offline speech-to-text, delivery metrics and the Norman interviewer voice (models: `tools/voice/fetch_models.sh`)
 - `supabase/functions/coach/`: the Claude coach service (Deno)
 - `tools/blender/`: scripts that render the gold assistant
-- `docs/`: PRD, build plan and handoff notes
+- `docs/`: PRD and build plan
+- `HANDOFF-Claude.md` / `HANDOFF-GPT.md`: session handoff notes (at the repo root so they're easy to find)
 - `legacy/android-native/`: the earlier Kotlin/Compose app, kept for reference
 
 ## Check
