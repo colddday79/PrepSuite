@@ -67,12 +67,14 @@ class Profile {
   };
 
   factory Profile.fromJson(Map<String, dynamic> json) {
-    final date = json['interview_date'];
+    final raw = json['interview_date'];
+    final date = raw is String ? DateTime.tryParse(raw) : null;
     final level = json['experience'];
     return Profile(
       name: json['name'] is String ? (json['name'] as String).trim() : '',
       targetRole: json['target_role'] is String ? (json['target_role'] as String).trim() : '',
-      interviewDate: date is String ? DateTime.tryParse(date) : null,
+      // Only the day matters, so a stored time of day (or zone) is dropped.
+      interviewDate: date == null ? null : DateTime(date.year, date.month, date.day),
       experience: level is String
           ? ExperienceLevel.values.where((l) => l.name == level).firstOrNull
           : null,
