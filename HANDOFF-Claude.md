@@ -341,3 +341,15 @@ and the owner checklist (GitHub, Anthropic, Supabase and Play settings only the 
   are stronger (12-character passwords, email confirmation).
 - Couldn't do from the cloud: build the Android app (dl.google.com is blocked, so there's no Android SDK)
   or change the account settings in the checklist.
+
+**Hologram loop is now 1080p** (`assets/video/presence_loop.mp4`: 1080x1080, 24 fps, 16 s, 3.7 MB, which is
+smaller than the old 720p file; the poster is its first frame). It was rendered on the cloud CPU with the
+`bpy` 5.0.1 wheel from PyPI, taking about 10 s a frame:
+- Scene: `python tools/blender/models/gold_intelligence.py -- --out OUT --res 1080 --samples 20 --fps 24 --seconds 16 --still still.png`
+  (this also saves `OUT/presence.blend`). Then the saved scene was rendered to a PNG sequence
+  (`render.render(animation=True)`), frames 1-384.
+- Encode: `ffmpeg -framerate 24 -i f_%04d.png -c:v libx264 -preset slow -crf 20 -profile:v high -level 4.0 -pix_fmt yuv420p -movflags +faststart -an presence_loop.mp4`
+  (SSIM 0.995 against the frames).
+- On the Mac, the one-step equivalent is `Blender -b --factory-startup --python-exit-code 1 --python
+  tools/blender/models/gold_intelligence.py -- --res 1080 --samples 20 --fps 24 --seconds 16 --animation`
+  (Blender's own encoder: larger file).
