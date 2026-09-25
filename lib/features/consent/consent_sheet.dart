@@ -34,7 +34,7 @@ class _ConsentSheet extends StatelessWidget {
         children: [
           Semantics(
             header: true,
-            child: Text(infoOnly ? 'How your voice is used' : 'Before you start', style: PrepType.headline),
+            child: HeadingScale(child: Text(infoOnly ? 'How your voice is used' : 'Before you start', style: PrepType.headline)),
           ),
           const SizedBox(height: Space.s),
           Text('Here is exactly what happens when you practise.', style: PrepType.body),

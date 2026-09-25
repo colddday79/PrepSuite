@@ -21,8 +21,10 @@ import '../wrapup/wrapup_screen.dart';
 const _maxJobRecording = Duration(seconds: 10);
 const double _barHeight = 56;
 
-/// The presence never gets smaller than this, even when the keyboard is up.
-const double _minStage = 220;
+/// The presence keeps at least this much height (a share of the screen, so a short window such as
+/// split screen still shows the mic), and less while the keyboard is up.
+const double _minStageShare = 0.3;
+const double _minStageMax = 220;
 const double _minStageWithKeyboard = 96;
 
 enum _Phase { idle, preparing, recording, transcribing, review, typing, unheard, micOff, loading, error }
@@ -300,7 +302,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Si
       backgroundColor: PrepColors.bg,
       body: LayoutBuilder(
         builder: (context, box) {
-          final minStage = insets.top + (keyboard ? _minStageWithKeyboard : _minStage);
+          final minStage = insets.top +
+              (keyboard ? _minStageWithKeyboard : (box.maxHeight * _minStageShare).clamp(120.0, _minStageMax));
           // The presence takes whatever the controls leave, so it is as big as the screen allows.
           return Column(
             children: [
@@ -309,14 +312,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Si
                 constraints: BoxConstraints(maxHeight: math.max(0, box.maxHeight - minStage)),
                 child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(Space.gutter, 0, Space.gutter, insets.bottom + Space.l),
-                  child: AnimatedSize(
-                    duration: Motion.enter,
-                    curve: Motion.decelerate,
-                    alignment: Alignment.bottomCenter,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: _content(),
+                  child: Readable(
+                    maxWidth: 520,
+                    child: AnimatedSize(
+                      duration: Motion.enter,
+                      curve: Motion.decelerate,
+                      alignment: Alignment.bottomCenter,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: _content(),
+                      ),
                     ),
                   ),
                 ),
@@ -344,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Si
             padding: const EdgeInsets.only(left: Space.gutter, right: Space.s),
             child: Row(
               children: [
-                Expanded(child: Text('PrepSuite', style: PrepType.wordmark)),
+                Expanded(child: HeadingScale(child: Text('PrepSuite', style: PrepType.wordmark))),
                 IconAction(PrepIcons.sliders, label: 'Settings', plain: true, onPressed: () => showSettingsSheet(context)),
               ],
             ),
@@ -404,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Si
         ];
       case _Phase.loading:
         return [
-          Text(_job.text.trim(), style: PrepType.question, textAlign: TextAlign.center),
+          HeadingScale(child: Text(_job.text.trim(), style: PrepType.question, textAlign: TextAlign.center)),
           const SizedBox(height: Space.xl),
           const LoadingLine('Writing questions for this role', center: true),
           const SizedBox(height: Space.x3),
@@ -427,7 +433,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Si
   List<Widget> _headline() => [
         Semantics(
           header: true,
-          child: Text("What's the interview for?", style: PrepType.display, textAlign: TextAlign.center),
+          child: HeadingScale(child: Text("What's the interview for?", style: PrepType.display, textAlign: TextAlign.center)),
         ),
         const SizedBox(height: Space.s),
       ];
@@ -674,7 +680,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-            child: Semantics(header: true, child: Text('Settings', style: PrepType.headline)),
+            child: Semantics(header: true, child: HeadingScale(child: Text('Settings', style: PrepType.headline))),
           ),
           const SizedBox(height: Space.l),
           FutureBuilder<CoachHealth>(

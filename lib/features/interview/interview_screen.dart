@@ -379,7 +379,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         Text('Sample questions', style: PrepType.meta),
         const SizedBox(height: Space.s),
       ],
-      RevealText(controller: _question, style: PrepType.question),
+      HeadingScale(child: RevealText(controller: _question, style: PrepType.question)),
       if (focus.isNotEmpty) ...[
         const SizedBox(height: Space.s),
         // Space is kept while the question is read out, so nothing below moves when it appears.

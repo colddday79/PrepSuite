@@ -108,6 +108,28 @@ void main() {
     }, skip: !_enabled);
   }
 
+  // The hardest fits: the smallest phone with double text, split screen, and a tablet.
+  for (final (name, size, ratio, scale) in const [
+    ('stress_se_text2x', Size(640, 1136), 2.0, 2.0),
+    ('stress_split_screen', Size(1082, 1181), 2.625, 1.0),
+    ('stress_tablet_landscape', Size(2732, 2048), 2.0, 1.0),
+  ]) {
+    testWidgets('home, $name', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await boot(tester, _Phone(name, size, ratio, top: 20), services());
+      await shoot(tester, '${name}_1_home');
+      await tester.tap(find.byKey(const ValueKey('record-button')));
+      await settle(tester, 1500);
+      await tester.tap(find.byKey(const ValueKey('record-button')));
+      await settle(tester, 600);
+      await shoot(tester, '${name}_2_check');
+      await tester.tap(find.text('Use this'));
+      await settle(tester, 6000);
+      await shoot(tester, '${name}_3_question');
+    }, skip: !_enabled);
+  }
+
   testWidgets('first run consent over Home', (tester) async {
     await boot(tester, _phones.first, services(consented: false));
     await settle(tester, 800);
