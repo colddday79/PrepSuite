@@ -495,7 +495,7 @@ void main() {
 
     await _tap(tester, find.text('Done'));
     await _settle(tester, 700);
-    await _tap(tester, find.text('Last-minute notes'));
+    await _tap(tester, find.text('Finish your interview notes'));
     await _settle(tester, 1000);
     expect(rig.coach.wrapupCalls, hasLength(2));
     expect(rig.coach.wrapupCalls.last.map((a) => a.transcript), originals);

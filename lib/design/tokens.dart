@@ -79,6 +79,8 @@ TextStyle _mona(
 
 /// Mona Sans only. Sizes and line heights match the native type scale.
 abstract final class PrepType {
+  /// The one big line on Home, under the presence.
+  static final display = _mona(30, 36, 600, tracking: -0.025);
   static final question = _mona(25, 34, 500, tracking: -0.02);
   static final questionM = _mona(20, 28, 500, tracking: -0.01);
   static final headline = _mona(28, 35, 700, tracking: -0.02);

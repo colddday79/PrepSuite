@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
+import '../../app/profile.dart';
 import '../../app/services.dart';
 import '../../coach/coach_api.dart';
 import '../../design/components.dart';
@@ -9,13 +12,20 @@ import '../../design/icons.dart';
 import '../../design/tokens.dart';
 import '../consent/consent_sheet.dart';
 import '../intake/intake_screen.dart';
+import '../profile/profile_screen.dart';
 import '../wrapup/wrapup_screen.dart';
 
-// Home stage geometry (ported from the native screen): the presence sits at the top and the panel
-// slides over its lower edge.
-const double _presenceSize = 232;
-const double _panelOverlap = 72;
-const double _barHeight = 64;
+const double _barHeight = 56;
+
+/// The presence box tucks this far under the top bar; the globe's outer ring starts lower still.
+const double _underBar = 16;
+
+/// Home's presence: about half the screen. On a phone the box is a little wider than the screen,
+/// so the globe fills the width and only its outer ring and the black corners run off the edges.
+double homePresenceSize(Size screen, EdgeInsets padding) {
+  final usable = screen.height - padding.vertical;
+  return math.min(screen.width * 1.12, usable * 0.55).clamp(240.0, 640.0);
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -70,33 +80,47 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => WrapupScreen(session: last, review: true)));
   }
 
+  void _openProfile() {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ProfileScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final sessions = AppScope.of(context).sessions;
+    final services = AppScope.of(context);
+    final sessions = services.sessions;
+    final media = MediaQuery.of(context);
+    final presence = homePresenceSize(media.size, media.padding);
     return Scaffold(
       backgroundColor: PrepColors.bg,
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
           child: PresenceBackdrop(
-            top: _barHeight + Space.s,
-            size: _presenceSize,
+            top: _barHeight - _underBar,
+            size: presence,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(
                   height: _barHeight,
                   child: Padding(
-                    padding: const EdgeInsets.only(left: Space.gutter, right: Space.s),
+                    padding: const EdgeInsets.only(left: Space.gutter, right: Space.xs),
                     child: Row(
                       children: [
-                        Expanded(child: Text('PrepSuite', style: PrepType.wordmark)),
+                        Expanded(
+                          child: Semantics(header: true, child: Text('PrepSuite', style: PrepType.wordmark)),
+                        ),
+                        IconAction(PrepIcons.user, label: 'Profile', plain: true, onPressed: _openProfile),
                         IconAction(PrepIcons.sliders, label: 'Settings', plain: true, onPressed: () => showSettingsSheet(context)),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: Space.s + _presenceSize - _panelOverlap),
+                KeyedSubtree(
+                  key: const ValueKey('home-presence'),
+                  child: SizedBox(height: presence - _underBar),
+                ),
+                const SizedBox(height: Space.m),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
                   child: FrostedPanel(
@@ -105,19 +129,29 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Semantics(
                           header: true,
-                          child: Text("Tell me the job. Let's practise for it.", style: PrepType.question),
+                          child: Text(
+                            "Tell me the job.\nLet's practise for it.",
+                            key: const ValueKey('home-headline'),
+                            style: PrepType.display,
+                            semanticsLabel: "Tell me the job. Let's practise for it.",
+                          ),
                         ),
                         const SizedBox(height: Space.m),
-                        Row(
-                          children: [
-                            const PrepIcon(PrepIcons.clock, color: PrepColors.text2, size: 18),
-                            const SizedBox(width: Space.s),
-                            Expanded(child: Text('Five questions, about ten minutes. Honest feedback on each.', style: PrepType.meta)),
-                          ],
+                        const _Fact(icon: PrepIcons.clock, text: 'Five questions, about ten minutes. Honest feedback on each.'),
+                        ValueListenableBuilder<Profile>(
+                          valueListenable: services.profile,
+                          builder: (context, profile, _) {
+                            final line = interviewCountdown(profile, DateTime.now());
+                            if (line == null) return const SizedBox.shrink();
+                            return Padding(
+                              padding: const EdgeInsets.only(top: Space.s),
+                              child: _Fact(icon: PrepIcons.calendar, text: line),
+                            );
+                          },
                         ),
                         const SizedBox(height: Space.xxl),
-                        PrimaryButton('Start practice', onPressed: _start),
-                        const SizedBox(height: Space.s),
+                        PrimaryButton('Start practice', key: const ValueKey('start-practice'), onPressed: _start),
+                        const SizedBox(height: Space.xs),
                         InkWell(
                           borderRadius: BorderRadius.circular(Radii.chip),
                           onTap: () => showConsentSheet(context, infoOnly: true),
@@ -162,12 +196,55 @@ class _HomeScreenState extends State<HomeScreen> {
                   meta: "Answer in writing when you can't talk out loud.",
                   onTap: () => _start(typing: true),
                 ),
-                const SizedBox(height: Space.xxl),
+                const Hairline(indent: Space.gutter + 24 + Space.l),
+                LinkRow(
+                  icon: PrepIcons.user,
+                  title: 'Profile and history',
+                  meta: 'Your interview date and past practices.',
+                  onTap: _openProfile,
+                ),
+                SizedBox(height: Space.xxl + media.padding.bottom),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// "Your interview is in 5 days." for Home, or null when there is no upcoming date.
+String? interviewCountdown(Profile profile, DateTime now) {
+  final days = profile.daysUntilInterview(now);
+  if (days == null || days < 0) return null;
+  final role = profile.targetRole.trim();
+  final when = switch (days) {
+    0 => 'Your interview is today',
+    1 => 'Your interview is tomorrow',
+    _ => 'Your interview is in $days days',
+  };
+  return role.isEmpty ? '$when.' : '$when, for $role.';
+}
+
+/// One quiet fact line under the headline: a hairline icon and a short sentence.
+class _Fact extends StatelessWidget {
+  const _Fact({required this.icon, required this.text});
+
+  final PrepIcons icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: PrepIcon(icon, color: PrepColors.text2, size: 18),
+        ),
+        const SizedBox(width: Space.s),
+        Expanded(child: Text(text, style: PrepType.meta)),
+      ],
     );
   }
 }

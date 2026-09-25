@@ -14,6 +14,9 @@ class HologramVideo with WidgetsBindingObserver {
   static final HologramVideo instance = HologramVideo._();
   static const asset = 'assets/video/presence_loop.mp4';
 
+  /// The loop's first frame: shown until the video is ready, and instead of it under reduced motion.
+  static const poster = 'assets/images/presence_poster.jpg';
+
   bool enabled = true;
   VideoPlayerController? _controller;
   final ValueNotifier<VideoPlayerController?> ready = ValueNotifier(null);
@@ -119,7 +122,13 @@ class HologramStage extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 const ColoredBox(color: Color(0xFF000000)),
-                Center(
+                // The box may be wider than the screen: only the black corners and the outer
+                // ring run off the edges, clipped by this stage.
+                OverflowBox(
+                  minWidth: size,
+                  maxWidth: size,
+                  minHeight: size,
+                  maxHeight: size,
                   child: Transform.scale(
                     scale: 1 + 0.05 * l,
                     child: SizedBox.square(dimension: size, child: const _PresenceVideo()),
@@ -140,10 +149,17 @@ class _PresenceVideo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const poster = Image(
+      image: AssetImage(HologramVideo.poster),
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+    );
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return poster;
     return ValueListenableBuilder<VideoPlayerController?>(
       valueListenable: HologramVideo.instance.ready,
       builder: (context, controller, _) {
-        if (controller == null) return const SizedBox.shrink();
+        if (controller == null) return poster;
         return FittedBox(
           fit: BoxFit.cover,
           child: SizedBox(

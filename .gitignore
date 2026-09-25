@@ -59,3 +59,6 @@ app.*.map.json
 /android/app/release
 # Widget Preview related
 .widget_preview/
+
+# Claude Code agent worktrees
+.claude/worktrees/
