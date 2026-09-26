@@ -20,6 +20,7 @@ class HologramVideo with WidgetsBindingObserver {
   bool enabled = true;
   VideoPlayerController? _controller;
   final ValueNotifier<VideoPlayerController?> ready = ValueNotifier(null);
+  bool _foreground = true;
 
   Future<void> ensure() async {
     if (!enabled || _controller != null) return;
@@ -33,24 +34,40 @@ class HologramVideo with WidgetsBindingObserver {
       await controller.initialize();
       await controller.setLooping(true);
       await controller.setVolume(0);
-      await controller.play();
       ready.value = controller;
       WidgetsBinding.instance.addObserver(this);
+      _sync();
     } catch (error) {
       debugPrint('Presence video unavailable: $error');
       ready.value = null;
     }
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
+  static bool get _stillRequested => WidgetsBinding.instance.platformDispatcher.accessibilityFeatures.disableAnimations;
+
+  void _sync() {
     final controller = ready.value;
     if (controller == null) return;
-    if (state == AppLifecycleState.resumed) {
-      controller.play();
-    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
-      controller.pause();
+    if (_foreground && !_stillRequested) {
+      unawaited(controller.play());
+    } else {
+      unawaited(controller.pause());
     }
+  }
+
+  @override
+  void didChangeAccessibilityFeatures() => _sync();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _foreground = true;
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      _foreground = false;
+    } else {
+      return;
+    }
+    _sync();
   }
 }
 
@@ -149,24 +166,31 @@ class _PresenceVideo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const poster = Image(
-      image: AssetImage(HologramVideo.poster),
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      filterQuality: FilterQuality.medium,
-    );
-    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return poster;
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     return ValueListenableBuilder<VideoPlayerController?>(
       valueListenable: HologramVideo.instance.ready,
       builder: (context, controller, _) {
-        if (controller == null) return poster;
-        return FittedBox(
+        const poster = Image(
+          image: AssetImage(HologramVideo.poster),
           fit: BoxFit.cover,
-          child: SizedBox(
-            width: controller.value.size.width,
-            height: controller.value.size.height,
-            child: VideoPlayer(controller),
-          ),
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+        );
+        if (still || controller == null) return poster;
+        // The poster stays underneath, so there is no dark flash before the first video frame.
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            poster,
+            FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: controller.value.size.width,
+                height: controller.value.size.height,
+                child: VideoPlayer(controller),
+              ),
+            ),
+          ],
         );
       },
     );

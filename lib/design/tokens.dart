@@ -78,55 +78,75 @@ abstract final class Motion {
   static const double pressScale = 0.98;
 }
 
-const String _family = 'MonaSans';
+/// Bodoni Moda for what the coach says (headlines, questions, the wordmark), Jost for everything
+/// you read or tap. The "Luxury Minimalist" pairing from the UI UX Pro Max typography data, chosen
+/// for the gold-on-black palette. Both are variable fonts under the SIL Open Font License 1.1.
+abstract final class PrepFonts {
+  static const display = 'BodoniModa';
+  static const text = 'Jost';
+}
 
-TextStyle _mona(
+FontWeight _weight(double weight) => FontWeight.values[((weight / 100).round() - 1).clamp(0, 8)];
+
+TextStyle _bodoni(double size, double height, double weight, {double tracking = 0, Color color = PrepColors.text}) {
+  return TextStyle(
+    fontFamily: PrepFonts.display,
+    fontSize: size,
+    height: height / size,
+    // Tracking is in em; Flutter wants logical pixels.
+    letterSpacing: tracking * size,
+    fontWeight: _weight(weight),
+    // The optical-size axis is tuned for print. On a phone the display cuts' hairlines all but
+    // vanish ("the" reads "thc"), so the axis runs at about half the point size, capped at 18.
+    fontVariations: [FontVariation.weight(weight), FontVariation('opsz', (size * 0.55).clamp(6, 18).toDouble())],
+    color: color,
+  );
+}
+
+TextStyle _jost(
   double size,
   double height,
   double weight, {
   double tracking = 0,
-  double width = 100,
   Color color = PrepColors.text,
   List<FontFeature>? features,
 }) {
   return TextStyle(
-    fontFamily: _family,
+    fontFamily: PrepFonts.text,
     fontSize: size,
     height: height / size,
-    // Tracking in the native tokens is in em; Flutter wants logical pixels.
     letterSpacing: tracking * size,
-    fontWeight: FontWeight.values[((weight / 100).round() - 1).clamp(0, 8)],
-    // The variable font's default weight is 200, so every style sets the axis explicitly.
-    fontVariations: [FontVariation.weight(weight), FontVariation.width(width)],
+    fontWeight: _weight(weight),
+    // A variable font's default instance isn't the weight asked for, so every style sets the axis.
+    fontVariations: [FontVariation.weight(weight)],
     fontFeatures: features,
     color: color,
   );
 }
 
-/// Mona Sans only. Weight carries the hierarchy (600 display and titles, 500 emphasis, 400 body);
-/// the width axis narrows only the brand-scale lines (wordmark, display) and the timer digits.
+/// Jost's x-height is lower than Mona Sans', so text sizes sit one step above the old scale.
 abstract final class PrepType {
   /// The one big line on Home, under the presence.
-  static final display = _mona(30, 36, 600, tracking: -0.025, width: 96);
-  static final question = _mona(25, 34, 500, tracking: -0.02);
-  static final questionM = _mona(20, 28, 500, tracking: -0.01);
-  static final headline = _mona(28, 35, 650, tracking: -0.02);
+  static final display = _bodoni(32, 37, 500, tracking: -0.01);
+  static final question = _bodoni(26, 33, 500, tracking: -0.005);
+  static final questionM = _bodoni(21, 28, 500);
+  static final headline = _bodoni(29, 35, 600, tracking: -0.01);
+  static final wordmark = _bodoni(23, 28, 600, tracking: -0.01);
 
   /// Dialog and sheet titles, a step above [titleM].
-  static final titleL = _mona(21, 27, 600, tracking: -0.015);
-  static final quote = _mona(16, 25, 400, tracking: 0.005);
-  static final titleM = _mona(17, 23, 600, tracking: -0.01);
-  static final bodyL = _mona(16, 24, 400);
-  static final bodyLMedium = _mona(16, 24, 500);
-  static final body = _mona(15, 23, 400, tracking: 0.005, color: PrepColors.text2);
+  static final titleL = _jost(22, 28, 500);
+  static final quote = _jost(17, 26, 400);
+  static final titleM = _jost(18, 24, 500);
+  static final bodyL = _jost(17, 25, 400);
+  static final bodyLMedium = _jost(17, 25, 500);
+  static final body = _jost(16, 24, 400, color: PrepColors.text2);
 
   /// The primary button label.
-  static final button = _mona(16, 20, 600, tracking: -0.005);
-  static final label = _mona(14, 20, 600, tracking: 0.01);
-  static final meta = _mona(13, 18, 500, tracking: 0.01, color: PrepColors.text2);
+  static final button = _jost(17, 22, 500, tracking: 0.005);
+  static final label = _jost(15, 20, 500, tracking: 0.01);
+  static final meta = _jost(14, 19, 400, tracking: 0.01, color: PrepColors.text2);
 
   /// Small print (helper and legal lines). Never below 12.
-  static final caption = _mona(12, 16, 500, tracking: 0.02, color: PrepColors.text3);
-  static final timer = _mona(22, 26, 400, width: 88, features: const [FontFeature.tabularFigures()]);
-  static final wordmark = _mona(18, 23, 700, tracking: -0.015, width: 92);
+  static final caption = _jost(13, 17, 400, tracking: 0.02, color: PrepColors.text3);
+  static final timer = _jost(22, 26, 400, features: const [FontFeature.tabularFigures()]);
 }

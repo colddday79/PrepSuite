@@ -424,10 +424,10 @@ bool _fontLoaded = false;
 Future<void> _openProfile(WidgetTester tester, AppServices services) async {
   HologramVideo.instance.enabled = false;
   if (!_fontLoaded) {
-    // Real Mona Sans metrics, so overflow checks match the device.
+    // Real Jost and Bodoni Moda metrics, so overflow checks match the device.
     await tester.runAsync(() async {
-      final loader = FontLoader('MonaSans')..addFont(rootBundle.load('assets/fonts/MonaSans.ttf'));
-      await loader.load();
+      await (FontLoader('Jost')..addFont(rootBundle.load('assets/fonts/Jost.ttf'))).load();
+      await (FontLoader('BodoniModa')..addFont(rootBundle.load('assets/fonts/BodoniModa.ttf'))).load();
     });
     _fontLoaded = true;
   }

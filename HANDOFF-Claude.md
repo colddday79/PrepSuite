@@ -3,7 +3,7 @@
 **Purpose of this file:** if the context window fills up, read this file first in a fresh chat. It has everything needed to resume without re-deriving it.
 
 **Owner:** colddday79@gmail.com
-**Last updated:** 2026-09-25 ~21:20 KST, by Claude (Opus 5.5). The app is Flutter at the repo root (Session 5), and Session 6 at the end of this file is the latest state: big presence on Home, real AI by default, and the AI voice answering questions. Read Sessions 5 and 6 first; §2–§5 are historical.
+**Last updated:** 2026-09-25 ~22:00 KST, by Claude (Opus 5.5). The app is Flutter at the repo root (Session 5). Session 6 is the latest app state (big presence on Home, real AI by default, the AI voice answering questions), and Session 7 (draft PR #1, merged on top of Session 6) adds the fonts, the coach's access token and security, and the every-phone layout test. Read Sessions 5 to 7 first; §2–§5 are historical.
 
 ---
 
@@ -346,3 +346,51 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 - Push them to `/data/local/tmp/prepsuite/` (chmod 755 on the dir, 644 on the files).
 - Run with `--dart-define=SPEECH_TEST_WAVS=/data/local/tmp/prepsuite/job.wav,...`; each recording consumes the next file.
 - `flutter run --pid-file F` then `kill -USR1 $(cat F)` hot-reloads and `-USR2` hot-restarts.
+
+---
+
+## Session 7 (2026-09-25, cloud session, merged on top of Session 6): fonts, security, every phone
+
+Branch `claude/wonderful-wright-ui4vwi`, draft PR https://github.com/colddday79/PrepSuite/pull/1. This ran
+in a Claude Code cloud container: no emulator, no phone, no Mac apps. Flutter 3.47.5 and Deno 2.9 were
+installed there for checks. It started before Session 6 on the same asks, then merged Session 6's `main`.
+
+**Merge decisions:** Session 6's Home (presence about half the screen, frosted panel below it, Start
+practice → intake), the intake screen, the 1440 px presence video and poster, the profile, ask the coach
+and read-aloud are kept as they are. This session's own Home rework (the job recorded on Home itself,
+`MicButton`, `HologramHero`, a 1080 px render) was dropped for them.
+
+**What this session adds:**
+- **Fonts.** Bodoni Moda (headlines, questions, the wordmark) and Jost (all other text): the "Luxury
+  Minimalist" pairing from the UI UX Pro Max typography data (github.com/nextlevelbuilder/ui-ux-pro-max-skill),
+  which the owner asked for. Mona Sans is removed. `PrepFonts` in `tokens.dart`, and `prepTheme()` maps
+  every Material text role to them. Bodoni `opsz` = 0.55 × size, capped at 18 (hairlines vanished at the
+  full display size on a phone).
+- **Coach.** Claude calls send the per-route effort (it was defined but never sent), adaptive thinking,
+  `max_tokens` = route cap + 12,000 (`THINKING_ROOM`) and server-side refusal fallback
+  (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`). Questions follow the kind of
+  interview named ("barista, group interview").
+- **Security** (`SECURITY.md` has the full list and the owner's checklist): the coach answers only
+  requests with its access token (`x-coach-token`), which `tools/coach/run-local.sh` creates in
+  `supabase/functions/.env` and `tools/run-phone.sh` passes to the app. It also has rate limits, JSON-only
+  requests and security headers. Android backup and device transfer are off and release builds are
+  https-only. CI actions are pinned, gitleaks and Dependabot run, and a `coach` CI job was added.
+- **Every phone.** `test/layout_matrix_test.dart` walks Home, settings, the profile (date picker, delete
+  dialog), a whole practice (asking the coach, the end-practice dialog), the wrap-up read aloud, the history
+  and typing, on 12 sizes at text ×1 and ×2. It fails on any layout error and on any text cut off by a
+  box too small for it. Fixes it drove:
+  - `HeadingScale` on the Home wordmark and headline (headings grow at most 30%);
+  - scrollable alert dialogs;
+  - the date typed instead of the calendar when the calendar can't fit (text above 1.3×, or under 560 dp of height);
+  - a text-scaled slot for the hint under the interview's record button.
+- **Presence.** The wrap-up's glass panel no longer overlaps its presence. The video pauses in the
+  background and when the phone removes animations. The poster stays under the video, so there is no dark flash.
+- **Tests:** 148 Flutter tests pass, and `flutter analyze` is clean. There are 8 more screenshot tests, which run
+  with `--dart-define=SCREENSHOTS=true` and write `build/screenshots/`. 42 Deno tests pass.
+
+**Not done / next:**
+- Nothing here was run on a device. The Android app can't be built from the cloud (Google's SDK
+  downloads are blocked).
+- In a very short window (split screen), the intake's record button needs a scroll, because the
+  presence keeps at least 200 dp there.
+- The owner-only settings in `SECURITY.md`'s checklist.

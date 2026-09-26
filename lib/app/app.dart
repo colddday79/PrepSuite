@@ -61,10 +61,11 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
   }
 }
 
-/// Dark only. Mona Sans everywhere (every Material text role maps to a [PrepType] style, so no
-/// default leaks through at the variable font's thin default weight), gold as the one accent, a
-/// quiet press tint instead of ripples, and no hover effects. Dialogs, the date picker, sheets,
-/// snack bars and selection controls are drawn from the same palette as the custom components.
+/// Dark only. Jost for text and Bodoni Moda for headlines (every Material text role maps to a
+/// [PrepType] style, so no default leaks through at a variable font's thin default weight), gold as
+/// the one accent, a quiet press tint instead of ripples, and no hover effects. Dialogs, the date
+/// picker, sheets, snack bars and selection controls are drawn from the same palette as the custom
+/// components.
 ThemeData prepTheme() {
   const clear = Color(0x00000000);
   const radius = BorderRadius.all(Radius.circular(Radii.control));
@@ -132,7 +133,7 @@ ThemeData prepTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    fontFamily: 'MonaSans',
+    fontFamily: PrepFonts.text,
     scaffoldBackgroundColor: PrepColors.bg,
     canvasColor: PrepColors.bg,
     colorScheme: const ColorScheme(

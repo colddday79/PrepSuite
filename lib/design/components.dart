@@ -465,3 +465,30 @@ class LinkRow extends StatelessWidget {
     );
   }
 }
+
+/// Headings are already large, so they grow at most 30% with the phone's text size while body
+/// text scales fully. At the largest text sizes that keeps the controls under a heading on screen.
+class HeadingScale extends StatelessWidget {
+  const HeadingScale({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: child);
+}
+
+/// Keeps reading width comfortable on tablets and open foldables; phones use their full width.
+class Readable extends StatelessWidget {
+  const Readable({super.key, required this.child, this.maxWidth = 560});
+
+  final Widget child;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(constraints: BoxConstraints(maxWidth: maxWidth), child: child),
+    );
+  }
+}

@@ -285,10 +285,12 @@ class InterviewerVoiceAdapter implements InterviewerVoice {
     final sub = _voice.level.listen((v) => peak = v > peak ? v : peak);
     try {
       await _voice.speak(text);
-      debugPrint(
-        'PrepSuite voice: played "${text.length > 48 ? '${text.substring(0, 48)}…' : text}" '
-        'in ${clock.elapsedMilliseconds} ms, peak level ${peak.toStringAsFixed(2)}',
-      );
+      if (kDebugMode) {
+        debugPrint(
+          'PrepSuite voice: played "${text.length > 48 ? '${text.substring(0, 48)}…' : text}" '
+          'in ${clock.elapsedMilliseconds} ms, peak level ${peak.toStringAsFixed(2)}',
+        );
+      }
     } finally {
       await sub.cancel();
     }

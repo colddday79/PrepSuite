@@ -48,7 +48,7 @@ class CoachScaffold extends StatelessWidget {
               children: [
                 CoachTopBar(onClose: onClose, status: status),
                 SizedBox(height: size),
-                Expanded(child: body),
+                Expanded(child: Readable(child: body)),
               ],
             ),
           ),

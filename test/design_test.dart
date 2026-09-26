@@ -30,10 +30,10 @@ Future<void> _pump(
   Size size = const Size(411, 891),
 }) async {
   if (!_fontLoaded) {
-    // Real Mona Sans metrics, so size and overflow checks match the device.
+    // Real Jost and Bodoni Moda metrics, so size and overflow checks match the device.
     await tester.runAsync(() async {
-      final loader = FontLoader('MonaSans')..addFont(rootBundle.load('assets/fonts/MonaSans.ttf'));
-      await loader.load();
+      await (FontLoader('Jost')..addFont(rootBundle.load('assets/fonts/Jost.ttf'))).load();
+      await (FontLoader('BodoniModa')..addFont(rootBundle.load('assets/fonts/BodoniModa.ttf'))).load();
     });
     _fontLoaded = true;
   }
@@ -295,17 +295,22 @@ void main() {
   });
 
   group('prepTheme', () {
-    testWidgets('every text role is Mona Sans with an explicit weight axis', (tester) async {
+    testWidgets('every text role is Bodoni Moda or Jost with an explicit weight axis', (tester) async {
       final theme = prepTheme().textTheme;
-      final roles = [
-        theme.displayLarge, theme.displayMedium, theme.displaySmall,
-        theme.headlineLarge, theme.headlineMedium, theme.headlineSmall,
+      final headlines = [theme.displayLarge, theme.displayMedium, theme.displaySmall, theme.headlineLarge, theme.headlineMedium];
+      final text = [
+        theme.headlineSmall,
         theme.titleLarge, theme.titleMedium, theme.titleSmall,
         theme.bodyLarge, theme.bodyMedium, theme.bodySmall,
         theme.labelLarge, theme.labelMedium, theme.labelSmall,
       ];
-      for (final style in roles) {
-        expect(style?.fontFamily, 'MonaSans');
+      for (final style in headlines) {
+        expect(style?.fontFamily, PrepFonts.display);
+      }
+      for (final style in text) {
+        expect(style?.fontFamily, PrepFonts.text);
+      }
+      for (final style in [...headlines, ...text]) {
         expect(style?.fontVariations?.any((v) => v.axis == 'wght' && v.value >= 400), isTrue);
       }
     });
@@ -326,7 +331,7 @@ void main() {
       final dialog = find.byType(Dialog);
       expect(tester.widget<Material>(_in<Material>(dialog).first).color, PrepColors.surface2);
       final day = tester.widget<Text>(find.text('14')).style!;
-      expect(day.fontFamily, 'MonaSans');
+      expect(day.fontFamily, PrepFonts.text);
       expect(day.color, PrepColors.text);
       expect(tester.widget<Text>(find.text('25')).style!.color, PrepColors.bg); // selected, on gold
       expect(tester.widget<Text>(find.text('5')).style!.color!.a, lessThan(1)); // before firstDate
@@ -353,7 +358,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.widget<Material>(_in<Material>(find.byType(AlertDialog)).first).color, PrepColors.surface2);
       final title = tester.widget<RichText>(find.descendant(of: find.byType(AlertDialog), matching: find.byType(RichText)).first);
-      expect(title.text.style?.fontFamily, 'MonaSans');
+      expect(title.text.style?.fontFamily, PrepFonts.text);
       await tester.tapAt(const Offset(4, 4));
       await tester.pumpAndSettle();
 

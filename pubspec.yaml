@@ -29,10 +29,15 @@ flutter:
   assets:
     - assets/video/presence_loop.mp4
     - assets/images/presence_poster.jpg
-    - assets/fonts/OFL.txt
+    - assets/fonts/BodoniModa-OFL.txt
+    - assets/fonts/Jost-OFL.txt
   fonts:
-    - family: MonaSans
+    # Both are variable fonts under the SIL Open Font License 1.1 (see the -OFL.txt files).
+    - family: BodoniModa
       fonts:
-        # Variable font (weight and width axes). SIL Open Font License 1.1,
-        # see assets/fonts/OFL.txt.
-        - asset: assets/fonts/MonaSans.ttf
+        # Weight 400-900 and optical size 6-96. Headlines, questions and the wordmark.
+        - asset: assets/fonts/BodoniModa.ttf
+    - family: Jost
+      fonts:
+        # Weight 100-900. Everything you read or tap.
+        - asset: assets/fonts/Jost.ttf

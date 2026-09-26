@@ -127,10 +127,10 @@ bool _fontLoaded = false;
 Future<void> _boot(WidgetTester tester, _Rig rig) async {
   HologramVideo.instance.enabled = false;
   if (!_fontLoaded) {
-    // Real Mona Sans metrics, so overflow checks match the device.
+    // Real Jost and Bodoni Moda metrics, so overflow checks match the device.
     await tester.runAsync(() async {
-      final loader = FontLoader('MonaSans')..addFont(rootBundle.load('assets/fonts/MonaSans.ttf'));
-      await loader.load();
+      await (FontLoader('Jost')..addFont(rootBundle.load('assets/fonts/Jost.ttf'))).load();
+      await (FontLoader('BodoniModa')..addFont(rootBundle.load('assets/fonts/BodoniModa.ttf'))).load();
     });
     _fontLoaded = true;
   }
@@ -436,6 +436,81 @@ void main() {
     await tester.tap(start, warnIfMissed: false);
     await _settle(tester, 800);
     expect(find.byType(IntakeScreen, skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('a typed job can be changed after an error and the corrected job is sent', (tester) async {
+    final rig = _Rig(consented: true, questionFailures: 1);
+    await _openIntake(tester, rig);
+    await _tap(tester, find.text('Type instead'));
+    await _settle(tester, 300);
+    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Nurse');
+    await tester.pump();
+    await _tap(tester, find.text('Use this'));
+    await _settle(tester, 600);
+    await _tap(tester, find.text('Change the job'));
+    await _settle(tester, 300);
+    await tester.enterText(find.byKey(const ValueKey('job-field')), 'Nurse, panel interview');
+    await tester.pump();
+    await _tap(tester, find.text('Use this'));
+    await _settle(tester, 1200);
+    expect(rig.coach.jobs, ['Nurse', 'Nurse, panel interview']);
+    expect(find.textContaining('Question 1 of 5'), findsOneWidget);
+  });
+
+  testWidgets('pausing while the job is recorded keeps what was heard for checking', (tester) async {
+    final rig = _Rig(consented: true);
+    await _openIntake(tester, rig);
+    await _tap(tester, _record());
+    await _settle(tester, 1200);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await _settle(tester, 400);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await _settle(tester, 400);
+    expect(rig.speech.active, isFalse);
+    expect(find.byKey(const ValueKey('job-field')), findsOneWidget);
+    expect(rig.coach.jobs, isEmpty);
+  });
+
+  testWidgets('rapid taps start one recording and send the job once', (tester) async {
+    final rig = _Rig(consented: true);
+    final mic = Completer<void>();
+    rig.speech.startGate = mic;
+    await _openIntake(tester, rig);
+    await tester.tap(_record());
+    await tester.tap(_record(), warnIfMissed: false);
+    mic.complete();
+    await _settle(tester, 1200);
+    expect(rig.speech.startCalls, 1);
+    await _tap(tester, _record()); // stop
+    await _settle(tester, 300);
+
+    final use = find.text('Use this');
+    await tester.tap(use);
+    await tester.tap(use, warnIfMissed: false);
+    await _settle(tester, 1200);
+    expect(rig.coach.jobs, hasLength(1));
+    expect(find.textContaining('Question 1 of 5'), findsOneWidget);
+  });
+
+  testWidgets('pending capture startup cannot leave a live microphone after the app is paused', (tester) async {
+    final rig = _Rig(consented: true);
+    final gate = Completer<void>();
+    rig.speech.startGate = gate;
+    await _openIntake(tester, rig);
+    await _tap(tester, _record());
+    expect(rig.speech.startCalls, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await _settle(tester, 300);
+
+    gate.complete();
+    await _settle(tester, 400);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await _settle(tester, 300);
+    expect(rig.speech.active, isFalse);
+    expect(rig.speech.cancelCalls, greaterThanOrEqualTo(1));
+    expect(rig.coach.jobs, isEmpty);
+    expect(find.text('10 seconds'), findsOneWidget); // back to ready to record
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('pending capture startup cannot leave a live microphone after navigation', (tester) async {

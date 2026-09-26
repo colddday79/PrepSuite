@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../coach/coach_api.dart';
+import '../../design/components.dart';
 import '../../design/tokens.dart';
 
 /// Feedback on one answer: a blunt headline, what went wrong, the words that show it, the fix,
@@ -33,7 +34,7 @@ class FeedbackView extends StatelessWidget {
         Semantics(
           header: true,
           liveRegion: true,
-          child: Text(feedback.headline.trim().isEmpty ? 'Here is what to fix.' : feedback.headline.trim(), style: PrepType.headline),
+          child: HeadingScale(child: Text(feedback.headline.trim().isEmpty ? 'Here is what to fix.' : feedback.headline.trim(), style: PrepType.headline)),
         ),
         if (feedback.problem.trim().isNotEmpty) ...[
           const SizedBox(height: Space.m),

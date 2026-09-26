@@ -371,6 +371,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       final end = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
+          scrollable: true,
           backgroundColor: PrepColors.surface2,
           title: Text('End this practice?', style: PrepType.titleM),
           content: Text('Your answers will be lost.', style: PrepType.body),
@@ -485,7 +486,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         Text('Sample questions', style: PrepType.meta),
         const SizedBox(height: Space.s),
       ],
-      RevealText(controller: _question, style: PrepType.question),
+      HeadingScale(child: RevealText(controller: _question, style: PrepType.question)),
       const SizedBox(height: Space.xxl),
       ..._phaseContent(),
     ];
@@ -501,8 +502,9 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         return [
           Center(child: RecordButton(recording: recording, progress: _progress, onPressed: recording ? _stop : _record)),
           const SizedBox(height: Space.m),
-          SizedBox(
-            height: 26,
+          // One line of timer or hint, the same height in both states; large text may wrap.
+          ConstrainedBox(
+            constraints: BoxConstraints(minHeight: MediaQuery.textScalerOf(context).scale(26)),
             child: Center(
               child: recording
                   ? ValueListenableBuilder<int>(

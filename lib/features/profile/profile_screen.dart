@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../app/profile.dart';
@@ -66,8 +68,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (initial.isBefore(today)) initial = today;
     if (initial.isAfter(lastDay)) initial = lastDay;
     // The picker's palette comes from prepTheme(); only the toggle icons need the app's own set.
+    // The calendar's day cells are a fixed 48 dp and the grid needs about 560 dp of height, both
+    // growing with the text. When they can't fit (very large text, split screen, a phone on its
+    // side) the date is typed instead, so no number is ever cut off.
+    final media = MediaQuery.of(context);
+    final scale = media.textScaler.scale(1);
+    final calendarFits = scale <= 1.3 && media.size.height - media.padding.vertical >= 560 * math.max(1.0, scale);
     final picked = await showDatePicker(
       context: context,
+      initialEntryMode: calendarFits ? DatePickerEntryMode.calendar : DatePickerEntryMode.inputOnly,
       initialDate: initial,
       firstDate: today,
       lastDate: lastDay,
@@ -98,6 +107,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       barrierColor: PrepColors.scrim,
       builder: (context) => AlertDialog(
+        // Scrolls rather than cutting off its text when the text is large or the window short.
+        scrollable: true,
         title: const Text('Delete everything on this phone?'),
         content: const Text(
           "This deletes your details, your saved practice with its notes, and your practice history. "

@@ -3,10 +3,15 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Asked for only when the person first taps record. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Practice data never leaves the phone in a backup (older Android: allowBackup; Android 12
+         and later: data_extraction_rules). Release builds are https only (network_security_config). -->
     <application
         android:label="PrepSuite"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"

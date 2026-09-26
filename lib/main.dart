@@ -44,9 +44,8 @@ const Duration _coachTimeout = Duration(seconds: 120);
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
-    yield LicenseEntryWithLineBreaks([
-      'Mona Sans',
-    ], await rootBundle.loadString('assets/fonts/OFL.txt'));
+    yield LicenseEntryWithLineBreaks(['Bodoni Moda'], await rootBundle.loadString('assets/fonts/BodoniModa-OFL.txt'));
+    yield LicenseEntryWithLineBreaks(['Jost'], await rootBundle.loadString('assets/fonts/Jost-OFL.txt'));
   });
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   HologramVideo.instance.ensure();
@@ -62,7 +61,7 @@ AppServices createServices() {
   final endpoint = CoachConfig.endpoint();
   final CoachApi coach = _fakeCoach
       ? FakeCoachApi()
-      : HttpCoachApi(endpoint: endpoint, timeout: _coachTimeout);
+      : HttpCoachApi(endpoint: endpoint, timeout: _coachTimeout, token: CoachConfig.token);
   final coachLabel = _fakeCoach
       ? 'Built-in sample coach (COACH_FAKE)'
       : endpoint.toString();

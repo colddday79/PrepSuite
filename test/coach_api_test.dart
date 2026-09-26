@@ -57,6 +57,7 @@ http.Response jsonResponse(Object? body, [int status = 200]) =>
 ({HttpCoachApi api, List<http.Request> requests}) harness(
   FutureOr<http.Response> Function(http.Request request) reply, {
   Duration timeout = const Duration(seconds: 60),
+  String token = '',
 }) {
   final requests = <http.Request>[];
   final client = MockClient((request) async {
@@ -64,7 +65,7 @@ http.Response jsonResponse(Object? body, [int status = 200]) =>
     return reply(request);
   });
   return (
-    api: HttpCoachApi(endpoint: endpoint, client: client, timeout: timeout),
+    api: HttpCoachApi(endpoint: endpoint, client: client, timeout: timeout, token: token),
     requests: requests,
   );
 }
@@ -109,6 +110,23 @@ void main() {
         'job': '  Barista at a busy cafe\n',
         'count': 3,
       });
+    });
+
+    test('the access token goes with every request, and only when there is one', () async {
+      final h = harness((r) => r.method == 'GET' ? jsonResponse({'ok': true, 'mock': false}) : jsonResponse(questionsBody), token: 'coach-token-0123456789');
+      await h.api.questions(job: 'Barista');
+      await h.api.health();
+      expect(h.requests.map((r) => r.headers['x-coach-token']), everyElement('coach-token-0123456789'));
+      final open = harness((_) => jsonResponse(questionsBody));
+      await open.api.questions(job: 'Barista');
+      expect(open.requests.single.headers.containsKey('x-coach-token'), isFalse);
+    });
+
+    test('a coach that turns the app away says so plainly', () async {
+      final h = harness((_) => jsonResponse({'error': {'code': 'unauthorized', 'message': 'This app is not allowed to use the coach.'}}, 401));
+      final e = await caught(h.api.questions(job: 'Barista'));
+      expect(e.code, 'unauthorized');
+      expect(e.userMessage, contains('COACH_TOKEN'));
     });
 
     test('questions defaults count to 5', () async {
@@ -392,6 +410,12 @@ void main() {
       );
       expect(noNotes.kind, CoachErrorKind.badResponse);
       expect(noNotes.code, 'empty_notes');
+
+      // Notes with no usable tips or reminders are a bad response, not an empty screen.
+      await expectLater(
+        harness((_) => jsonResponse({'tips': ['One'], 'last_minute_notes': 'not a list'})).api.wrapup(job: 'x', answers: const []),
+        throwsA(isA<CoachException>().having((e) => e.code, 'code', 'empty_notes')),
+      );
 
       final empty = Wrapup.fromJson(const {});
       expect([

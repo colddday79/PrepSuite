@@ -15,6 +15,21 @@ import { mockAsk, mockFeedback, mockQuestions, mockWrapup } from "./mock.ts";
 import { deliverySummary } from "./delivery.ts";
 import { createOllamaProvider } from "./ollama.ts";
 import {
+  clientKey,
+  corsHeaders,
+  DAY,
+  DEFAULT_LIMITS,
+  isJson,
+  isLoopback,
+  MINUTE,
+  type RateLimits,
+  SECURITY_HEADERS,
+  TOKEN_HEADER,
+  tokenDigest,
+  tokenMatches,
+  Windows,
+} from "./security.ts";
+import {
   ASK_SCHEMA,
   ASK_SYSTEM,
   type AskFeedback,
@@ -55,8 +70,15 @@ export interface RouteSpec {
   system: string;
   schema: Record<string, unknown>;
   effort: "low" | "medium" | "high";
+  /** Cap on the visible JSON reply. Claude gets THINKING_ROOM on top of it. */
   maxTokens: number;
 }
+
+/** Adaptive thinking counts against max_tokens, so Claude's cap leaves room to think before replying. */
+export const THINKING_ROOM = 12_000;
+
+/** On a safety-classifier decline, the API re-runs the request on the model recommended for that category. */
+const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 const ROUTES: Record<Route, RouteSpec> = {
   // low: a short, well-specified list right after the 10 s recording; the user is watching a spinner.
@@ -72,8 +94,10 @@ const ROUTES: Record<Route, RouteSpec> = {
 
 /** The slice of the Anthropic client this service uses (tests pass a fake). */
 export interface ClaudeClient {
-  messages: {
-    create(params: Anthropic.MessageCreateParamsNonStreaming): PromiseLike<Anthropic.Message>;
+  beta: {
+    messages: {
+      create(params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming): PromiseLike<Anthropic.Beta.Messages.BetaMessage>;
+    };
   };
 }
 
@@ -87,7 +111,7 @@ export interface CoachProvider {
 
 export type Logger = (entry: Record<string, unknown>) => void;
 
-type ErrorCode = "bad_request" | "upstream" | "rate_limited" | "not_configured";
+type ErrorCode = "bad_request" | "unauthorized" | "upstream" | "rate_limited" | "not_configured";
 
 export class CoachError extends Error {
   constructor(readonly status: number, readonly code: ErrorCode, message: string) {
@@ -320,12 +344,15 @@ function askPrompt(i: AskInput): string {
 async function callClaude(client: ClaudeClient, route: Route, userContent: string, log: Logger, model = MODEL): Promise<unknown> {
   const spec = ROUTES[route];
   const started = Date.now();
-  const message = await client.messages.create({
+  const message = await client.beta.messages.create({
     model,
-    max_tokens: spec.maxTokens,
-    output_config: { format: { type: "json_schema", schema: spec.schema } },
+    max_tokens: spec.maxTokens + THINKING_ROOM,
+    thinking: { type: "adaptive" },
+    output_config: { effort: spec.effort, format: { type: "json_schema", schema: spec.schema } },
     system: [{ type: "text", text: spec.system, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: userContent }],
+    betas: [FALLBACK_BETA],
+    fallbacks: "default",
   });
 
   log({
@@ -347,7 +374,10 @@ async function callClaude(client: ClaudeClient, route: Route, userContent: strin
   }
 
   if (message.stop_reason !== "end_turn") badShape();
+  // Thinking blocks carry no reply text. After a fallback, the reply is what follows the last switch point.
+  const lastSwitch = message.content.findLastIndex((b) => b.type === "fallback");
   const json = message.content
+    .slice(lastSwitch + 1)
     .map((b) => (b.type === "text" ? b.text : ""))
     .join("");
   try {
@@ -547,16 +577,10 @@ function toCoachError(err: unknown, log: Logger): CoachError {
 // HTTP
 // ---------------------------------------------------------------------------
 
-const CORS: Record<string, string> = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
-};
-
-function json(status: number, body: unknown): Response {
+function json(status: number, body: unknown, headers: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS, "content-type": "application/json; charset=utf-8" },
+    headers: { ...headers, "content-type": "application/json; charset=utf-8" },
   });
 }
 
@@ -642,44 +666,90 @@ export interface HandlerOptions {
   /** Demo/test responses must be explicitly enabled, including in tests. */
   mock?: boolean;
   log?: Logger;
+  /** When set, POST /coach needs this value in the x-coach-token header (16 characters or more). */
+  token?: string;
+  /** Overrides for the per-client and daily limits (see DEFAULT_LIMITS). */
+  limits?: Partial<RateLimits>;
+  /** A browser origin allowed to call the coach. None by default: the app is not a browser. */
+  corsOrigin?: string;
+  /** Take the client address from x-forwarded-for. Only behind a gateway that sets it (Supabase). */
+  trustForwardedFor?: boolean;
+  /** Clock for the rate limits, for tests. */
+  now?: () => number;
 }
 
-export function createHandler(opts: HandlerOptions): (req: Request) => Promise<Response> {
+/** What Deno.serve passes alongside the request; only the peer address is used. */
+export type RequestInfo = { remoteAddr?: { hostname?: string } };
+
+export function createHandler(opts: HandlerOptions): (req: Request, info?: RequestInfo) => Promise<Response> {
   const mock = opts.mock === true;
   const provider = mock ? null : opts.provider ?? (opts.client ? createClaudeProvider(opts.client) : null);
   const log: Logger = opts.log ?? ((entry) => console.log(JSON.stringify({ t: new Date().toISOString(), ...entry })));
+  const expected = opts.token === undefined ? null : tokenDigest(opts.token);
+  const limits = { ...DEFAULT_LIMITS, ...opts.limits };
+  const perMinute = new Windows(MINUTE, limits.perMinute);
+  const perDay = new Windows(DAY, limits.perDay);
+  const everyone = new Windows(DAY, limits.globalPerDay);
+  const badTokens = new Windows(10 * MINUTE, limits.badTokens);
+  const now = opts.now ?? Date.now;
+  const headers = { ...SECURITY_HEADERS, ...corsHeaders(opts.corsOrigin) };
+  const trusted = async (req: Request) => !expected || await tokenMatches(req.headers.get(TOKEN_HEADER), await expected);
 
-  return async (req: Request): Promise<Response> => {
+  return async (req: Request, info?: RequestInfo): Promise<Response> => {
     const started = Date.now();
     const path = routePath(new URL(req.url).pathname);
     let action = "-";
     let res: Response;
     try {
       if (req.method === "OPTIONS") {
-        res = new Response(null, { status: 204, headers: CORS });
+        res = new Response(null, { status: 204, headers });
       } else if (path === "/health" || path === "/coach/health") {
         if (req.method !== "GET") throw new CoachError(405, "bad_request", "Use GET for health checks.");
         const configured = mock || provider !== null;
-        res = json(configured ? 200 : 503, {
-          ok: configured, mock,
-          provider: mock ? "demo" : provider?.name ?? "unconfigured",
-          model: provider?.model ?? null,
-          cloud: provider?.cloud ?? false,
-        });
+        // Anyone can see whether the coach is up (the phone's browser check); only the app sees what runs it.
+        res = json(configured ? 200 : 503, await trusted(req)
+          ? {
+            ok: configured, mock,
+            provider: mock ? "demo" : provider?.name ?? "unconfigured",
+            model: provider?.model ?? null,
+            cloud: provider?.cloud ?? false,
+          }
+          : { ok: configured, mock }, headers);
       } else if (path === "/" || path === "/coach") {
         if (req.method !== "POST") throw new CoachError(405, "bad_request", "Use POST with a JSON body.");
+        const client = clientKey(req, info, opts.trustForwardedFor === true);
+        const t = now();
+        if (expected) {
+          if (badTokens.full(client, t)) {
+            throw new CoachError(429, "rate_limited", "Too many wrong access tokens. Wait ten minutes and try again.");
+          }
+          if (!await trusted(req)) {
+            badTokens.hit(client, t);
+            throw new CoachError(401, "unauthorized", "This app is not allowed to use the coach.");
+          }
+        }
+        if (!isJson(req)) throw new CoachError(415, "bad_request", "Send the request as application/json.");
+        if (!perMinute.hit(client, t)) {
+          throw new CoachError(429, "rate_limited", "Too many requests. Wait a minute and try again.");
+        }
+        if (!perDay.hit(client, t)) {
+          throw new CoachError(429, "rate_limited", "You have reached today's practice limit. Try again tomorrow.");
+        }
+        if (!everyone.hit("*", t)) {
+          throw new CoachError(429, "rate_limited", "The coach has reached today's limit. Try again tomorrow.");
+        }
         const body = await readJson(req);
         action = typeof body.action === "string" ? body.action.slice(0, 20) : "-";
         if (!mock && !provider) {
           throw new CoachError(503, "not_configured", "The AI coach is not configured. Start the coach server with Ollama or an Anthropic API key.");
         }
-        res = json(200, { ...(await dispatch(body, provider, log)), mock });
+        res = json(200, { ...(await dispatch(body, provider, log)), mock }, headers);
       } else {
         throw new CoachError(404, "bad_request", `Nothing at ${path}. Use POST /coach or GET /health.`);
       }
     } catch (err) {
       const e = toCoachError(err, log);
-      res = json(e.status, { error: { code: e.code, message: e.message } });
+      res = json(e.status, { error: { code: e.code, message: e.message } }, headers);
     }
     log({ event: "request", method: req.method, path, action, status: res.status, ms: Date.now() - started, mock });
     return res;
@@ -689,6 +759,14 @@ export function createHandler(opts: HandlerOptions): (req: Request) => Promise<R
 // ---------------------------------------------------------------------------
 // Entry point: `deno run` locally, or the Supabase Edge Runtime
 // ---------------------------------------------------------------------------
+
+function envInt(name: string): number | undefined {
+  const raw = Deno.env.get(name)?.trim();
+  if (!raw) return undefined;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`${name} must be a whole number of 1 or more.`);
+  return n;
+}
 
 function main(): void {
   const forceMock = Deno.env.get("COACH_MOCK") === "1";
@@ -703,22 +781,42 @@ function main(): void {
     : client
     ? createClaudeProvider(client)
     : null;
-  const handler = createHandler({ provider, mock: forceMock });
+  // Without a token anyone who can reach the coach can spend its AI credit, so an open coach is
+  // only allowed on this computer's loopback address, or when COACH_ALLOW_OPEN=1 says so.
+  const token = Deno.env.get("COACH_TOKEN")?.trim() || undefined;
+  const allowOpen = Deno.env.get("COACH_ALLOW_OPEN") === "1";
+  const limits: Partial<RateLimits> = {};
+  for (const [key, name] of [["perMinute", "COACH_RATE_PER_MINUTE"], ["perDay", "COACH_RATE_PER_DAY"], ["globalPerDay", "COACH_DAILY_LIMIT"]] as const) {
+    const n = envInt(name);
+    if (n !== undefined) limits[key] = n;
+  }
+  const corsOrigin = Deno.env.get("COACH_CORS_ORIGIN")?.trim() || undefined;
+  const edge = "EdgeRuntime" in globalThis;
+  const handler = createHandler({ provider, mock: forceMock, token, limits, corsOrigin, trustForwardedFor: edge });
   const mode = forceMock
     ? "mock"
     : provider
     ? `${provider.name}, ${provider.model}`
     : "unconfigured";
+  const access = token ? "access token required" : "open";
 
-  if ("EdgeRuntime" in globalThis) {
-    console.log(`coach ready (${mode})`);
+  if (edge) {
+    if (!token && !allowOpen) {
+      throw new Error("Set the COACH_TOKEN secret (16 characters or more) before deploying the coach.");
+    }
+    console.log(`coach ready (${mode}, ${access})`);
     Deno.serve(handler);
     return;
   }
   const port = Number(Deno.env.get("PORT") ?? 8787);
-  const hostname = Deno.env.get("HOST") ?? "0.0.0.0";
+  const hostname = Deno.env.get("HOST") ?? "127.0.0.1";
+  if (!token && !allowOpen && !isLoopback(hostname)) {
+    console.error(`Refusing to listen on ${hostname} without COACH_TOKEN: anyone on the network could use your AI credit.`);
+    console.error("Start it with tools/coach/run-local.sh, which creates a token, or set HOST=127.0.0.1.");
+    Deno.exit(1);
+  }
   Deno.serve(
-    { port, hostname, onListen: (a) => console.log(`coach listening on http://${a.hostname}:${a.port} (${mode})`) },
+    { port, hostname, onListen: (a) => console.log(`coach listening on http://${a.hostname}:${a.port} (${mode}, ${access})`) },
     handler,
   );
 }

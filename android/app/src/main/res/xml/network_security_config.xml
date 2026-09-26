@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release and profile builds: https only, trusting only the phone's built-in certificate
+     authorities, so a certificate that a user or another app installs cannot read the coach
+     traffic. Debug builds replace this file with src/debug/res/xml/network_security_config.xml,
+     which allows plain http to a coach on this computer or the same Wi-Fi. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

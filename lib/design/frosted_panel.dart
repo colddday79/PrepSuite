@@ -4,9 +4,9 @@ import 'package:flutter/widgets.dart';
 
 import 'tokens.dart';
 
-/// The one piece of glass: a panel set over the lower edge of the presence. It blurs the light
-/// behind it, lifts the blurred copy so thin gold rings still read as light rather than smudge,
-/// then tints it. Use it only where the presence actually sits behind.
+/// The one piece of glass: a panel set just below the presence, in the light it spills. It blurs
+/// that light, lifts the blurred copy so it still reads as light rather than smudge, then tints it.
+/// Never place it over the presence itself.
 class FrostedPanel extends StatelessWidget {
   const FrostedPanel({super.key, required this.child, this.padding = const EdgeInsets.fromLTRB(Space.xxl, Space.xxl, Space.xxl, Space.m)});
 

@@ -9,10 +9,15 @@ current state, what's done, and what's next. `HANDOFF-GPT.md` is a second assist
 ## Run
 
     cd ~/Documents/PrepSuite
-    tools/coach/run-local.sh &                    # the AI coach server (mock mode until a key is added)
-    flutter run                                   # the app (emulator or a plugged-in phone)
+    tools/coach/run-local.sh &                    # the AI coach server; prints its access token
+    flutter run --dart-define=COACH_TOKEN=<token> # the app on the emulator (use the printed line)
     flutter run --dart-define=COACH_FAKE=true     # built-in sample coach, no server needed
-    flutter run --dart-define=COACH_URL=http://<your-mac-ip>:8787/coach   # a real phone: see below
+    tools/run-phone.sh -d <phone-id>              # a real phone on the same Wi-Fi: see below
+
+The coach spends your AI credit, so it only answers an app that sends its access token. The first
+`run-local.sh` creates one in `supabase/functions/.env` (never committed) and prints the exact
+`flutter run` line to copy; `tools/run-phone.sh` passes the token for you. See
+[`SECURITY.md`](SECURITY.md) for everything else that keeps the app and the coach safe.
 
 The coach server defaults to `http://10.0.2.2:8787/coach` on the Android emulator and
 `http://localhost:8787/coach` on the iOS simulator. Plain http is allowed only in debug builds.
@@ -36,9 +41,14 @@ Add a Claude key as described in `tools/coach/README.md`.
        ipconfig getifaddr en0                 # e.g. 192.168.45.212 (this Mac, 25 Sep 2026)
        flutter devices                        # copy the phone's id from the second column
 
-4. Run the app on the phone (a debug build; it can use plain http to the Mac):
+4. Run the app on the phone (a debug build; it can use plain http to the Mac). `tools/run-phone.sh`
+   finds the Mac's address, starts the coach if it isn't running, and passes the address and the
+   access token:
 
-       flutter run -d <phone-id> --dart-define=COACH_URL=http://192.168.45.212:8787/coach
+       tools/run-phone.sh -d <phone-id>
+
+   It runs `flutter run -d <phone-id> --dart-define=COACH_URL=http://192.168.45.212:8787/coach
+   --dart-define=COACH_TOKEN=<token>`, with the token from `supabase/functions/.env`.
 
    Check the connection first with `http://192.168.45.212:8787/health` in the phone's browser; it
    should show `{"ok":true,...}`. If it doesn't load, make sure the macOS firewall lets Deno accept
@@ -68,4 +78,4 @@ offers typing.
     flutter analyze
     flutter test
 
-Mona Sans is licensed under the SIL Open Font License 1.1 (`assets/fonts/OFL.txt`).
+Bodoni Moda and Jost are licensed under the SIL Open Font License 1.1 (`assets/fonts/*-OFL.txt`).

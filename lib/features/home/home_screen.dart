@@ -108,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: Semantics(header: true, child: Text('PrepSuite', style: PrepType.wordmark)),
+                          child: Semantics(header: true, child: HeadingScale(child: Text('PrepSuite', style: PrepType.wordmark))),
                         ),
                         IconAction(PrepIcons.user, label: 'Profile', plain: true, onPressed: _openProfile),
                         IconAction(PrepIcons.sliders, label: 'Settings', plain: true, onPressed: () => showSettingsSheet(context)),
@@ -129,11 +129,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Semantics(
                           header: true,
-                          child: Text(
-                            "Tell me the job.\nLet's practise for it.",
-                            key: const ValueKey('home-headline'),
-                            style: PrepType.display,
-                            semanticsLabel: "Tell me the job. Let's practise for it.",
+                          child: HeadingScale(
+                            child: Text(
+                              "Tell me the job.\nLet's practise for it.",
+                              key: const ValueKey('home-headline'),
+                              style: PrepType.display,
+                              semanticsLabel: "Tell me the job. Let's practise for it.",
+                            ),
                           ),
                         ),
                         ValueListenableBuilder<Profile>(
@@ -267,6 +269,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
 
   Future<void> _deletePractice() async {
     final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+      scrollable: true,
       title: const Text('Delete this practice?'),
       content: const Text('Your answers, notes and history will be removed.'),
       actions: [

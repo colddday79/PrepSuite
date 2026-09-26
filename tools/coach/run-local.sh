@@ -8,6 +8,10 @@
 # Ollama model, or ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN (in the environment or
 # supabase/functions/.env) for Anthropic. COACH_MOCK=1 enables deterministic
 # sample answers explicitly.
+#
+# The coach spends your AI credit, so it only answers apps that send its access
+# token. The first run creates one in supabase/functions/.env (never committed)
+# and prints the flutter run command that passes it to the app.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -22,8 +26,15 @@ fi
 export PORT="${PORT:-8787}"
 export HOST="${HOST:-0.0.0.0}"
 
+if [[ -z "${COACH_TOKEN:-}" ]] && ! grep -q '^COACH_TOKEN=' "$ENV_FILE" 2>/dev/null; then
+  (umask 077 && echo "COACH_TOKEN=$(openssl rand -hex 24 2>/dev/null || od -An -N24 -tx1 /dev/urandom | tr -d ' \n')" >> "$ENV_FILE")
+  echo "Created an access token in supabase/functions/.env"
+fi
+TOKEN="${COACH_TOKEN:-$(grep '^COACH_TOKEN=' "$ENV_FILE" | tail -1 | cut -d= -f2-)}"
+
 args=(run --no-prompt --node-modules-dir=none --allow-net --allow-env)
 if [[ -f "$ENV_FILE" ]]; then
+  chmod 600 "$ENV_FILE"
   args+=("--env-file=$ENV_FILE")
   echo "Using supabase/functions/.env"
 fi
@@ -76,6 +87,13 @@ fi
 
 LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
 echo "Android emulator: http://10.0.2.2:$PORT  iOS simulator: http://localhost:$PORT${LAN_IP:+  phone on Wi-Fi: http://$LAN_IP:$PORT}"
+echo
+echo "Run the app against this coach:"
+echo "  Emulator: flutter run --dart-define=COACH_TOKEN=$TOKEN"
+if [[ -n "$LAN_IP" ]]; then
+  echo "  Phone:    tools/run-phone.sh -d <phone-id>   (passes the coach address and token)"
+fi
+echo
 
 cd "$ROOT/supabase/functions/coach"
 exec deno "${args[@]}" index.ts

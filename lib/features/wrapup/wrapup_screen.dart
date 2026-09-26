@@ -11,7 +11,6 @@ import '../common/coach_widgets.dart';
 import '../interview/read_aloud.dart';
 
 const double _presenceSize = 150;
-const double _panelOverlap = 44;
 const double _barHeight = 64;
 
 /// Step three: what to remember. The last-minute notes come first and largest, then tips and the
@@ -143,79 +142,82 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
           child: PresenceBackdrop(
             top: _barHeight,
             size: _presenceSize,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                CoachTopBar(
-                  status: '${widget.session.jobTitle} · $answered ${answered == 1 ? 'answer' : 'answers'}',
-                  onClose: _done,
-                ),
-                const SizedBox(height: _presenceSize - _panelOverlap),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-                  child: FrostedPanel(
-                    padding: const EdgeInsets.fromLTRB(Space.xxl, Space.xxl, Space.xxl, Space.xxl),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (wrapup?.mock ?? false) ...[
-                          Text('Sample notes', style: PrepType.label.copyWith(color: PrepColors.accent)),
-                          const SizedBox(height: Space.s),
-                        ],
-                        Semantics(header: true, child: Text('Before your interview', style: PrepType.headline)),
-                        if (wrapup != null && wrapup.lastMinuteNotes.isNotEmpty)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: ListenableBuilder(
-                              listenable: _reader!,
-                              builder: (context, _) => ReadAloudButton(
-                                label: 'Hear your notes',
-                                stopLabel: 'Stop reading your notes',
-                                speaking: _reader!.current == Spoken.notes,
-                                onPressed: () => _toggleNotes(wrapup),
+            child: Readable(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  CoachTopBar(
+                    status: '${widget.session.jobTitle} · $answered ${answered == 1 ? 'answer' : 'answers'}',
+                    onClose: _done,
+                  ),
+                  // The panel starts below the presence, in its light, and never covers it.
+                  const SizedBox(height: _presenceSize + Space.m),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
+                    child: FrostedPanel(
+                      padding: const EdgeInsets.fromLTRB(Space.xxl, Space.xxl, Space.xxl, Space.xxl),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (wrapup?.mock ?? false) ...[
+                            Text('Sample notes', style: PrepType.label.copyWith(color: PrepColors.accent)),
+                            const SizedBox(height: Space.s),
+                          ],
+                          Semantics(header: true, child: HeadingScale(child: Text('Before your interview', style: PrepType.headline))),
+                          if (wrapup != null && wrapup.lastMinuteNotes.isNotEmpty)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: ListenableBuilder(
+                                listenable: _reader!,
+                                builder: (context, _) => ReadAloudButton(
+                                  label: 'Hear your notes',
+                                  stopLabel: 'Stop reading your notes',
+                                  speaking: _reader!.current == Spoken.notes,
+                                  onPressed: () => _toggleNotes(wrapup),
+                                ),
                               ),
                             ),
-                          ),
-                        const SizedBox(height: Space.xxl),
-                        if (wrapup != null)
-                          ..._notes(wrapup.lastMinuteNotes)
-                        else if (_error != null) ...[
-                          ProblemNote(title: "Couldn't write your notes.", body: _error!.userMessage),
                           const SizedBox(height: Space.xxl),
-                          PrimaryButton('Try again', onPressed: _load),
-                        ] else if (_loading)
-                          const LoadingLine('Putting your notes together'),
-                      ],
+                          if (wrapup != null)
+                            ..._notes(wrapup.lastMinuteNotes)
+                          else if (_error != null) ...[
+                            ProblemNote(title: "Couldn't write your notes.", body: _error!.userMessage),
+                            const SizedBox(height: Space.xxl),
+                            PrimaryButton('Try again', onPressed: _load),
+                          ] else if (_loading)
+                            const LoadingLine('Putting your notes together'),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                if (wrapup != null) ...[
-                  _ListSection(title: 'Tips', items: wrapup.tips),
-                  _ListSection(title: 'Stories to use', items: wrapup.storiesToUse),
-                ],
-                ListenableBuilder(
-                  listenable: _services.sessions,
-                  builder: (context, _) => !_services.sessions.saveFailed
-                      ? const SizedBox.shrink()
-                      : Padding(
-                          padding: const EdgeInsets.all(Space.gutter),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const ProblemNote(title: 'Notes are not saved yet.', body: 'Try saving again.'),
-                              const SizedBox(height: Space.m),
-                              PrimaryButton('Save again', onPressed: () => _services.sessions.finished(widget.session)),
-                            ],
+                  if (wrapup != null) ...[
+                    _ListSection(title: 'Tips', items: wrapup.tips),
+                    _ListSection(title: 'Stories to use', items: wrapup.storiesToUse),
+                  ],
+                  ListenableBuilder(
+                    listenable: _services.sessions,
+                    builder: (context, _) => !_services.sessions.saveFailed
+                        ? const SizedBox.shrink()
+                        : Padding(
+                            padding: const EdgeInsets.all(Space.gutter),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const ProblemNote(title: 'Notes are not saved yet.', body: 'Try saving again.'),
+                                const SizedBox(height: Space.m),
+                                PrimaryButton('Save again', onPressed: () => _services.sessions.finished(widget.session)),
+                              ],
+                            ),
                           ),
-                        ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(Space.gutter, Space.x4, Space.gutter, Space.xxl),
-                  child: wrapup != null || _error != null
-                      ? PrimaryButton('Done', onPressed: _done)
-                      : const SizedBox.shrink(),
-                ),
-              ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.gutter, Space.x4, Space.gutter, Space.xxl),
+                    child: wrapup != null || _error != null
+                        ? PrimaryButton('Done', onPressed: _done)
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
