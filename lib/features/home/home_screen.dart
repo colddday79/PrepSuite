@@ -138,15 +138,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: Space.m),
-                        const _Fact(icon: PrepIcons.clock, text: 'Five questions, about ten minutes. Honest feedback on each.'),
                         ValueListenableBuilder<Profile>(
                           valueListenable: services.profile,
                           builder: (context, profile, _) {
                             final line = interviewCountdown(profile, DateTime.now());
                             if (line == null) return const SizedBox.shrink();
                             return Padding(
-                              padding: const EdgeInsets.only(top: Space.s),
+                              padding: const EdgeInsets.only(top: Space.m),
                               child: _Fact(icon: PrepIcons.calendar, text: line),
                             );
                           },
@@ -161,14 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             onTap: () => showConsentSheet(context, infoOnly: true),
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(minHeight: 48),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text('Recordings stay on this phone.', style: PrepType.meta.copyWith(color: PrepColors.text3)),
-                                  ),
-                                  Text('Privacy', style: PrepType.label),
-                                ],
-                              ),
+                              child: Center(child: Text('Privacy', style: PrepType.label.copyWith(color: PrepColors.text2))),
                             ),
                           ),
                         ),
@@ -187,9 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     return LinkRow(
                       icon: PrepIcons.write,
                       title: last != null && last.wrapup == null ? 'Finish your interview notes' : 'Last-minute notes',
-                      meta: last == null ? 'Finish a practice to keep your notes here.'
-                          : last.wrapup == null ? 'Your answers are saved. Tap to retry the notes for ${last.jobTitle}.'
-                          : 'Your notes for ${last.jobTitle}.',
+                      meta: last?.jobTitle ?? '',
                       onTap: last == null ? null : _openNotes,
                     );
                   },
@@ -198,14 +187,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 LinkRow(
                   icon: PrepIcons.keyboard,
                   title: 'Practise by typing',
-                  meta: "Answer in writing when you can't talk out loud.",
                   onTap: () => _start(typing: true),
                 ),
                 const Hairline(indent: Space.gutter + 24 + Space.l),
                 LinkRow(
                   icon: PrepIcons.user,
                   title: 'Profile and history',
-                  meta: 'Your interview date and past practices.',
                   onTap: _openProfile,
                 ),
                 SizedBox(height: Space.xxl + media.padding.bottom),
@@ -218,17 +205,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// "Your interview is in 5 days." for Home, or null when there is no upcoming date.
+/// "Interview in 5 days" for Home, or null when there is no upcoming date.
 String? interviewCountdown(Profile profile, DateTime now) {
   final days = profile.daysUntilInterview(now);
   if (days == null || days < 0) return null;
   final role = profile.targetRole.trim();
   final when = switch (days) {
-    0 => 'Your interview is today',
-    1 => 'Your interview is tomorrow',
-    _ => 'Your interview is in $days days',
+    0 => 'Interview today',
+    1 => 'Interview tomorrow',
+    _ => 'Interview in $days days',
   };
-  return role.isEmpty ? '$when.' : '$when, for $role.';
+  return role.isEmpty ? when : '$when · $role';
 }
 
 /// One quiet fact line under the headline: a hairline icon and a short sentence.
@@ -284,7 +271,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
     final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       scrollable: true,
       title: const Text('Delete this practice?'),
-      content: const Text('This removes your saved job, answers, feedback, interview notes and practice history from this device.'),
+      content: const Text('Your answers, notes and history will be removed.'),
       actions: [
         QuietButton('Cancel', onPressed: () => Navigator.pop(context, false)),
         QuietButton('Delete', color: PrepColors.danger, onPressed: () => Navigator.pop(context, true)),
@@ -336,7 +323,6 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           LinkRow(
             icon: PrepIcons.shield,
             title: 'Privacy',
-            meta: 'What stays on this phone and what is sent.',
             onTap: () => showConsentSheet(context, infoOnly: true),
           ),
           ListenableBuilder(
@@ -344,7 +330,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             builder: (context, _) => widget.services.sessions.last == null && widget.services.sessions.history.isEmpty && !widget.services.sessions.saveFailed
                 ? const SizedBox.shrink()
                 : LinkRow(icon: PrepIcons.write, title: 'Delete saved practice',
-                    meta: 'Remove your answers, feedback, notes and history from this device.', onTap: _deletePractice),
+                    onTap: _deletePractice),
           ),
           const SizedBox(height: Space.l),
           Padding(

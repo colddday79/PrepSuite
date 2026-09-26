@@ -231,7 +231,7 @@ void main() {
     expect(find.textContaining('s left'), findsOneWidget);
     await _tap(tester, _record());
     await _settle(tester, 300);
-    expect(find.text("Here's what we heard. Fix anything we got wrong."), findsOneWidget);
+    expect(find.byKey(const ValueKey('job-field')), findsOneWidget);
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.controller!.text, contains('barista'));
 
@@ -250,7 +250,7 @@ void main() {
         // Retry once: the question comes back ready to record.
         await _tap(tester, find.text('Try this one again'));
         await _settle(tester, 300);
-        expect(find.text('Tap to answer. Up to 2 minutes.'), findsOneWidget);
+        expect(find.text('Up to 2 minutes'), findsOneWidget);
         await _answerOutLoud(tester);
       }
       await _tap(tester, find.text(i == 5 ? 'See your notes' : 'Next question'));
@@ -268,7 +268,7 @@ void main() {
 
     // Home again, with the notes kept for this session.
     expect(find.text('Start practice'), findsOneWidget);
-    expect(find.textContaining('Your notes for'), findsOneWidget);
+    expect(find.text('Last-minute notes'), findsOneWidget);
   });
 
   testWidgets('silent answer: says so and lets you type instead', (tester) async {
@@ -509,7 +509,7 @@ void main() {
     expect(rig.speech.active, isFalse);
     expect(rig.speech.cancelCalls, greaterThanOrEqualTo(1));
     expect(rig.coach.jobs, isEmpty);
-    expect(find.text('Tap and talk. You have 10 seconds.'), findsOneWidget);
+    expect(find.text('10 seconds'), findsOneWidget); // back to ready to record
     expect(tester.takeException(), isNull);
   });
 

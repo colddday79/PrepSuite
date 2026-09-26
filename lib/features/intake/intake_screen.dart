@@ -334,11 +334,7 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
       case _Phase.recording:
         final recording = _phase == _Phase.recording;
         return [
-          Text(
-            'Say the role, where it is, and anything you know about it. Like “junior data analyst at a hospital, using SQL”.',
-            style: PrepType.body,
-          ),
-          const SizedBox(height: Space.x3),
+          const SizedBox(height: Space.xl),
           Center(
             child: RecordButton(recording: recording, countdown: true, progress: _progress, onPressed: recording ? _stop : _record),
           ),
@@ -349,10 +345,10 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
                     valueListenable: _progress,
                     builder: (context, p, _) {
                       final left = ((1 - p.clamp(0.0, 1.0)) * _maxJobRecording.inSeconds).ceil();
-                      return Text('$left s left. Tap to stop.', style: PrepType.meta);
+                      return Text('${left}s left', style: PrepType.meta);
                     },
                   )
-                : Text('Tap and talk. You have 10 seconds.', style: PrepType.meta),
+                : Text('10 seconds', style: PrepType.meta),
           ),
           const SizedBox(height: Space.m),
           if (recording)
@@ -388,17 +384,11 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
             ),
             const SizedBox(height: Space.xl),
           ],
-          Text(
-            _typing
-                ? 'Type the role and where it is. Add anything you know the job needs.'
-                : "Here's what we heard. Fix anything we got wrong.",
-            style: PrepType.body,
-          ),
-          const SizedBox(height: Space.m),
+          const SizedBox(height: Space.s),
           PrepTextField(
             fieldKey: const ValueKey('job-field'),
             controller: _job,
-            hint: 'For example: barista at a busy café',
+            hint: 'Junior data analyst at a hospital',
             minLines: 2,
             autofocus: _typing && _job.text.isEmpty,
             onChanged: (_) => setState(() {}),
@@ -419,7 +409,7 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
         return [
           const ProblemNote(
             title: "We couldn't hear that.",
-            body: 'Check that nothing is covering the microphone and speak a little louder. Or type the job instead.',
+            body: 'Speak up, or type it.',
           ),
           const SizedBox(height: Space.xxl),
           Center(child: RecordButton(recording: false, countdown: true, progress: _progress, onPressed: _record)),
@@ -431,10 +421,10 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
           ProblemNote(
             title: _micFailed ? "The microphone didn't start." : 'The microphone is off.',
             body: _micFailed
-                ? _speechError ?? 'Another app may be using it. Try again, or type the job instead.'
+                ? _speechError ?? 'Try again, or type it.'
                 : _micBlocked
-                    ? 'Allow the microphone for PrepSuite in Settings, or type the job instead.'
-                    : 'PrepSuite needs the microphone to hear you. You can allow it when you try again, or type the job instead.',
+                    ? 'Allow it in Settings, or type it.'
+                    : 'Allow it when you try again, or type it.',
           ),
           const SizedBox(height: Space.xxl),
           PrimaryButton('Type instead', onPressed: _typeInstead),

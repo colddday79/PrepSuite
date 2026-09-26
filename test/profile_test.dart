@@ -259,7 +259,6 @@ void main() {
     testWidgets('empty: says it is optional, shows no history and goes back to practise', (tester) async {
       await _openProfile(tester, _services());
       expect(find.text('Profile'), findsOneWidget);
-      expect(find.text('Everything here is optional and stays on this phone.'), findsOneWidget);
       expect(find.text(_emptyHistory), findsOneWidget);
       expect(find.text('Choose a date'), findsOneWidget);
       expect(tester.getSemantics(find.bySemanticsLabel('Back')), isSemantics(isButton: true, hasTapAction: true));
@@ -405,7 +404,7 @@ void main() {
   });
 }
 
-const _emptyHistory = 'Your practices will be listed here once you finish one.';
+const _emptyHistory = 'No practices yet.';
 
 AppServices _services({ProfileStore? profile, SessionStore? sessions}) => AppServices(
   coach: FakeCoachApi(latency: Duration.zero),

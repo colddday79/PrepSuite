@@ -331,7 +331,7 @@ void main() {
     expect(rig.mic.requests, 1);
     expect(rig.speech.durations.last, const Duration(seconds: 15));
     expect(rig.voice.speaking, isFalse); // recording cut the feedback off
-    expect(find.textContaining('s left. Tap to stop.'), findsOneWidget);
+    expect(find.textContaining('s left'), findsOneWidget);
     expect(find.textContaining('How long should'), findsOneWidget);
 
     await _tap(tester, _record()); // stop
@@ -397,6 +397,6 @@ void main() {
     expect(rig.speech.cancels, greaterThanOrEqualTo(1));
     expect(rig.coach.asks, isEmpty);
     expect(rig.voice.speaking, isFalse);
-    expect(find.text('Tap and ask. Up to 15 seconds.'), findsOneWidget);
+    expect(find.text('15 seconds'), findsOneWidget);
   });
 }

@@ -36,23 +36,18 @@ class _ConsentSheet extends StatelessWidget {
             header: true,
             child: HeadingScale(child: Text(infoOnly ? 'How your voice is used' : 'Before you start', style: PrepType.headline)),
           ),
-          const SizedBox(height: Space.s),
-          Text('Here is exactly what happens when you practise.', style: PrepType.body),
           const SizedBox(height: Space.xxl),
           const _Point(
             icon: PrepIcons.mic,
-            text: 'Your voice is turned into text on this phone.',
+            text: 'Your voice becomes text on this phone.',
           ),
           const _Point(
             icon: PrepIcons.arrowUpRight,
-            text: 'Only that text and simple voice measurements, like your pace, pauses and filler words, '
-                'are sent to the coach service and its AI provider to write your questions and feedback. '
-                'This can use a cloud AI service, even though speech recognition runs on your phone.',
+            text: 'Only that text and your pace go to the AI coach, which may run in the cloud.',
           ),
           const _Point(
             icon: PrepIcons.lock,
-            text: 'Audio is not uploaded. Temporary recordings are deleted after transcription. '
-                'Your latest practice and notes are saved on this device; you can delete them in Settings.',
+            text: 'Audio is never uploaded, and recordings are deleted after use.',
           ),
           const SizedBox(height: Space.l),
           if (infoOnly)
