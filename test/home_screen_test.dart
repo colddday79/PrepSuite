@@ -72,7 +72,7 @@ void main() {
   testWidgets('an upcoming interview date shows as one quiet line', (tester) async {
     final soon = DateTime.now().add(const Duration(days: 5));
     await _boot(tester, services: _services(profile: Profile(interviewDate: soon, targetRole: 'barista')));
-    expect(find.text('Your interview is in 5 days, for barista.'), findsOneWidget);
+    expect(find.text('Interview in 5 days · barista'), findsOneWidget);
   });
 
   testWidgets('no overflow with large text or on a small phone', (tester) async {
@@ -97,11 +97,11 @@ void main() {
     final now = DateTime(2026, 9, 25, 21);
     expect(interviewCountdown(const Profile(), now), isNull);
     expect(interviewCountdown(Profile(interviewDate: DateTime(2026, 9, 24)), now), isNull);
-    expect(interviewCountdown(Profile(interviewDate: DateTime(2026, 9, 25)), now), 'Your interview is today.');
-    expect(interviewCountdown(Profile(interviewDate: DateTime(2026, 9, 26)), now), 'Your interview is tomorrow.');
+    expect(interviewCountdown(Profile(interviewDate: DateTime(2026, 9, 25)), now), 'Interview today');
+    expect(interviewCountdown(Profile(interviewDate: DateTime(2026, 9, 26)), now), 'Interview tomorrow');
     expect(
       interviewCountdown(Profile(interviewDate: DateTime(2026, 10, 2), targetRole: 'junior analyst'), now),
-      'Your interview is in 7 days, for junior analyst.',
+      'Interview in 7 days · junior analyst',
     );
   });
 }

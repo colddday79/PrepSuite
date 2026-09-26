@@ -147,7 +147,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     LinkRow(
                       icon: PrepIcons.shield,
                       title: 'Privacy',
-                      meta: 'What stays on this phone and what is sent.',
                       onTap: () => showConsentSheet(context, infoOnly: true),
                     ),
                     const Hairline(indent: Space.gutter + 24 + Space.l),
@@ -167,10 +166,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-          child: Text('Everything here is optional and stays on this phone.', style: PrepType.body),
-        ),
         if (_profile.saveFailed)
           Padding(
             padding: const EdgeInsets.fromLTRB(Space.gutter, Space.s, Space.gutter, 0),

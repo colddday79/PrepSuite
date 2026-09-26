@@ -163,8 +163,6 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
                           const SizedBox(height: Space.s),
                         ],
                         Semantics(header: true, child: Text('Before your interview', style: PrepType.headline)),
-                        const SizedBox(height: Space.xs),
-                        Text('Read these last-minute notes just before you walk in.', style: PrepType.meta),
                         if (wrapup != null && wrapup.lastMinuteNotes.isNotEmpty)
                           Align(
                             alignment: Alignment.centerLeft,
@@ -204,7 +202,7 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const ProblemNote(title: 'Notes are not saved yet.', body: 'Keep this screen open and try saving again before closing the app.'),
+                              const ProblemNote(title: 'Notes are not saved yet.', body: 'Try saving again.'),
                               const SizedBox(height: Space.m),
                               PrimaryButton('Save again', onPressed: () => _services.sessions.finished(widget.session)),
                             ],
@@ -226,7 +224,7 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
   }
 
   List<Widget> _notes(List<String> notes) {
-    if (notes.isEmpty) return [Text('No notes this time. Look over the tips below.', style: PrepType.bodyL)];
+    if (notes.isEmpty) return [Text('No notes this time.', style: PrepType.bodyL)];
     return [
       for (var i = 0; i < notes.length; i++)
         Padding(

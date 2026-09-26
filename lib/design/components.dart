@@ -413,7 +413,7 @@ class PrepTextField extends StatelessWidget {
 /// A plain row with a hairline icon, a title, a meta line and a chevron. Screen readers hear the
 /// title and meta as one item, and it is a button only when [onTap] is set.
 class LinkRow extends StatelessWidget {
-  const LinkRow({super.key, required this.icon, required this.title, required this.meta, required this.onTap});
+  const LinkRow({super.key, required this.icon, required this.title, this.meta = '', required this.onTap});
 
   final PrepIcons icon;
   final String title;
@@ -444,8 +444,10 @@ class LinkRow extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(title, style: PrepType.bodyLMedium),
-                          const SizedBox(height: Space.xxs),
-                          Text(meta, style: PrepType.meta.copyWith(color: PrepColors.text3)),
+                          if (meta.isNotEmpty) ...[
+                            const SizedBox(height: Space.xxs),
+                            Text(meta, style: PrepType.meta.copyWith(color: PrepColors.text3)),
+                          ],
                         ],
                       ),
                     ),

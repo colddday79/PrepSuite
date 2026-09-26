@@ -320,8 +320,7 @@ class AskCoachPanel extends StatelessWidget {
       case AskStage.recording:
         final recording = c.stage == AskStage.recording;
         return [
-          Text('Ask about this question, your answer or the feedback.', style: PrepType.body),
-          const SizedBox(height: Space.l),
+          const SizedBox(height: Space.s),
           Center(
             child: RecordButton(recording: recording, countdown: true, progress: c.progress, onPressed: c.record),
           ),
@@ -332,10 +331,10 @@ class AskCoachPanel extends StatelessWidget {
                     valueListenable: c.progress,
                     builder: (context, p, _) {
                       final left = ((1 - p.clamp(0.0, 1.0)) * askMaxRecording.inSeconds).ceil();
-                      return Text('$left s left. Tap to stop.', style: PrepType.meta);
+                      return Text('${left}s left', style: PrepType.meta);
                     },
                   )
-                : Text('Tap and ask. Up to 15 seconds.', style: PrepType.meta),
+                : Text('15 seconds', style: PrepType.meta),
           ),
           const SizedBox(height: Space.s),
           if (recording)
@@ -358,7 +357,7 @@ class AskCoachPanel extends StatelessWidget {
         return [
           const ProblemNote(
             title: "We couldn't hear your question.",
-            body: 'Check that nothing is covering the microphone and speak up a little. Or type it instead.',
+            body: 'Speak up, or type it.',
           ),
           const SizedBox(height: Space.l),
           Center(child: RecordButton(recording: false, countdown: true, progress: c.progress, onPressed: c.record)),
@@ -370,10 +369,10 @@ class AskCoachPanel extends StatelessWidget {
           ProblemNote(
             title: c.micFailed ? "The microphone didn't start." : 'The microphone is off.',
             body: c.micFailed
-                ? c.speechError ?? 'Another app may be using it. Try again, or type your question instead.'
+                ? c.speechError ?? 'Try again, or type it.'
                 : c.micBlocked
-                    ? 'Allow the microphone for PrepSuite in Settings, or type your question instead.'
-                    : 'PrepSuite needs the microphone to hear you. You can allow it when you try again, or type instead.',
+                    ? 'Allow it in Settings, or type it.'
+                    : 'Allow it when you try again, or type it.',
           ),
           const SizedBox(height: Space.s),
           Wrap(

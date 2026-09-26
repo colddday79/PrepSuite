@@ -373,7 +373,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         builder: (context) => AlertDialog(
           backgroundColor: PrepColors.surface2,
           title: Text('End this practice?', style: PrepType.titleM),
-          content: Text('Your answers and feedback from this practice will be lost.', style: PrepType.body),
+          content: Text('Your answers will be lost.', style: PrepType.body),
           actions: [
             QuietButton('Keep going', onPressed: () => Navigator.of(context).pop(false)),
             QuietButton('End practice', color: PrepColors.danger, onPressed: () => Navigator.of(context).pop(true)),
@@ -480,21 +480,12 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
   }
 
   List<Widget> _answerContent() {
-    final focus = _current.focus.trim();
     return [
       if (_session.set.mock) ...[
         Text('Sample questions', style: PrepType.meta),
         const SizedBox(height: Space.s),
       ],
       RevealText(controller: _question, style: PrepType.question),
-      if (focus.isNotEmpty) ...[
-        const SizedBox(height: Space.s),
-        // Space is kept while the question is read out, so nothing below moves when it appears.
-        Visibility.maintain(
-          visible: _phase != _Phase.speaking,
-          child: Text('What they want to hear: $focus', style: PrepType.meta.copyWith(color: PrepColors.text3)),
-        ),
-      ],
       const SizedBox(height: Space.xxl),
       ..._phaseContent(),
     ];
@@ -519,11 +510,11 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
                       builder: (context, ms, _) => Text.rich(
                         TextSpan(children: [
                           TextSpan(text: clock(ms), style: PrepType.timer),
-                          TextSpan(text: '  of 2:00. Tap to stop.', style: PrepType.meta),
+                          TextSpan(text: '  / 2:00', style: PrepType.meta),
                         ]),
                       ),
                     )
-                  : Text('Tap to answer. Up to 2 minutes.', style: PrepType.meta),
+                  : Text('Up to 2 minutes', style: PrepType.meta),
             ),
           ),
           const SizedBox(height: Space.m),
@@ -547,8 +538,6 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         return const [LoadingLine('Preparing microphone')];
       case _Phase.review:
         return [
-          Text('Check your transcript before the coach reviews it.', style: PrepType.body),
-          const SizedBox(height: Space.m),
           PrepTextField(
             fieldKey: const ValueKey('answer-review-field'),
             controller: _typed,
@@ -557,13 +546,10 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
             maxLines: 10,
             onChanged: (_) => setState(() {}),
           ),
-          const SizedBox(height: Space.s),
-          Text(
-            _typed.text.trim() == _transcript
-                ? 'Feedback covers your answer and measured voice delivery.'
-                : 'You edited the text. Feedback will cover the words only; record again for voice delivery feedback.',
-            style: PrepType.meta,
-          ),
+          if (_typed.text.trim() != _transcript) ...[
+            const SizedBox(height: Space.s),
+            Text('Edited text gets no voice feedback.', style: PrepType.meta),
+          ],
           const SizedBox(height: Space.xxl),
           PrimaryButton('Get feedback', onPressed: _typed.text.trim().isEmpty ? null : _confirmTranscript),
           const SizedBox(height: Space.s),
@@ -573,7 +559,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         return [
           const ProblemNote(
             title: "We couldn't hear your answer.",
-            body: 'Check that nothing is covering the microphone and speak up a little. Or type your answer instead.',
+            body: 'Speak up, or type it.',
           ),
           const SizedBox(height: Space.xxl),
           Center(child: RecordButton(recording: false, progress: _progress, onPressed: _record)),
@@ -601,10 +587,10 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
           ProblemNote(
             title: _micFailed ? "The microphone didn't start." : 'The microphone is off.',
             body: _micFailed
-                ? _speechError ?? 'Another app may be using it. Try again, or type your answer instead.'
+                ? _speechError ?? 'Try again, or type it.'
                 : _micBlocked
-                    ? 'Allow the microphone for PrepSuite in Settings, or type your answer instead.'
-                    : 'PrepSuite needs the microphone to hear you. You can allow it when you try again, or type instead.',
+                    ? 'Allow it in Settings, or type it.'
+                    : 'Allow it when you try again, or type it.',
           ),
           const SizedBox(height: Space.xxl),
           PrimaryButton('Type instead', onPressed: _typeInstead),

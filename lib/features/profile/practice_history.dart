@@ -67,7 +67,7 @@ class _Empty extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Your practices will be listed here once you finish one.', style: PrepType.body),
+          Text('No practices yet.', style: PrepType.body),
           const SizedBox(height: Space.l),
           PrimaryButton('Start practising', onPressed: onStart),
         ],
