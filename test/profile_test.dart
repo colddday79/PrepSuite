@@ -9,6 +9,7 @@ import 'package:prepsuite/app/services.dart';
 import 'package:prepsuite/app/session.dart';
 import 'package:prepsuite/coach/coach_api.dart';
 import 'package:prepsuite/coach/fakes.dart';
+import 'package:prepsuite/design/assistant_avatar.dart';
 import 'package:prepsuite/design/hologram.dart';
 import 'package:prepsuite/design/icons.dart';
 import 'package:prepsuite/features/profile/profile_format.dart';
@@ -423,6 +424,7 @@ bool _fontLoaded = false;
 /// Boots the app on Home, as on a 1080 x 2340 phone, then opens the profile over it.
 Future<void> _openProfile(WidgetTester tester, AppServices services) async {
   HologramVideo.instance.enabled = false;
+  AssistantAvatar.live = false;
   if (!_fontLoaded) {
     // Real Mona Sans metrics, so overflow checks match the device.
     await tester.runAsync(() async {

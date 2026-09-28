@@ -7,6 +7,7 @@ import 'package:prepsuite/app/services.dart';
 import 'package:prepsuite/coach/coach_api.dart';
 import 'package:prepsuite/coach/fakes.dart';
 import 'package:prepsuite/design/components.dart';
+import 'package:prepsuite/design/assistant_avatar.dart';
 import 'package:prepsuite/design/hologram.dart';
 import 'package:prepsuite/features/home/home_screen.dart';
 import 'package:prepsuite/features/profile/profile_screen.dart';
@@ -26,6 +27,7 @@ AppServices _services({Profile profile = const Profile()}) => AppServices(
 
 Future<void> _boot(WidgetTester tester, {Size physical = const Size(1080, 2340), double ratio = 2.625, AppServices? services}) async {
   HologramVideo.instance.enabled = false;
+  AssistantAvatar.live = false;
   if (!_fontLoaded) {
     // Real Mona Sans metrics, so overflow checks match the device.
     await tester.runAsync(() async {

@@ -24,9 +24,12 @@ enum _Phase { settingUp, asking, ready, preparing, recording, transcribing, revi
 /// Step one: the interviewer asks for the job, the person says it (10 seconds at most), checks
 /// what we heard, and the coach writes questions for that role.
 class IntakeScreen extends StatefulWidget {
-  const IntakeScreen({super.key, this.preferTyping = false});
+  const IntakeScreen({super.key, this.preferTyping = false, this.questionCount = 5});
 
   final bool preferTyping;
+
+  /// How many questions to ask: 5 for a mock interview, 1 for a quick question.
+  final int questionCount;
 
   @override
   State<IntakeScreen> createState() => _IntakeScreenState();
@@ -247,7 +250,7 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
       _phase = _Phase.loading;
     });
     try {
-      final set = await _services.coach.questions(job: job, count: 5);
+      final set = await _services.coach.questions(job: job, count: widget.questionCount);
       if (!mounted) return;
       // Typing the job alone doesn't switch answers to typing; "Practise by typing" does, and so
       // does a phone where voice is not available.

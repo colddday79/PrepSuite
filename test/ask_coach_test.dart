@@ -9,6 +9,7 @@ import 'package:prepsuite/app/session.dart';
 import 'package:prepsuite/coach/coach_api.dart';
 import 'package:prepsuite/coach/contracts.dart';
 import 'package:prepsuite/coach/fakes.dart';
+import 'package:prepsuite/design/assistant_avatar.dart';
 import 'package:prepsuite/design/hologram.dart';
 import 'package:prepsuite/features/interview/interview_screen.dart';
 import 'package:prepsuite/features/interview/read_aloud.dart';
@@ -150,6 +151,7 @@ bool _fontLoaded = false;
 
 Future<void> _open(WidgetTester tester, _Rig rig, {double textScale = 1}) async {
   HologramVideo.instance.enabled = false;
+  AssistantAvatar.live = false;
   if (!_fontLoaded) {
     // Real Mona Sans metrics, so overflow checks match the device.
     await tester.runAsync(() async {
