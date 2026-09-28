@@ -17,17 +17,25 @@ enum ExperienceLevel {
 /// required to start practising, and it stays on this phone.
 @immutable
 class Profile {
-  const Profile({this.name = '', this.targetRole = '', this.interviewDate, this.experience});
+  const Profile({this.name = '', this.targetRole = '', this.interviewDate, this.experience, this.about = ''});
 
   final String name;
   final String targetRole;
+
+  /// The person describing themselves in their own words: studies, work, strengths, what they want.
+  /// The coach uses it to pitch questions and feedback.
+  final String about;
 
   /// The day of the interview (the time of day is ignored).
   final DateTime? interviewDate;
   final ExperienceLevel? experience;
 
   bool get isEmpty =>
-      name.trim().isEmpty && targetRole.trim().isEmpty && interviewDate == null && experience == null;
+      name.trim().isEmpty &&
+      targetRole.trim().isEmpty &&
+      interviewDate == null &&
+      experience == null &&
+      about.trim().isEmpty;
 
   /// Calendar days from [now] to the interview: 0 on the day, negative once it has passed, null
   /// when no date is set. Counted on UTC dates so a daylight-saving change can't lose a day.
@@ -46,8 +54,10 @@ class Profile {
     bool clearInterviewDate = false,
     ExperienceLevel? experience,
     bool clearExperience = false,
+    String? about,
   }) {
     return Profile(
+      about: about ?? this.about,
       name: name ?? this.name,
       targetRole: targetRole ?? this.targetRole,
       interviewDate: clearInterviewDate ? null : interviewDate ?? this.interviewDate,
@@ -64,6 +74,7 @@ class Profile {
               '${interviewDate!.month.toString().padLeft(2, '0')}-'
               '${interviewDate!.day.toString().padLeft(2, '0')}',
     'experience': experience?.name,
+    'about': about,
   };
 
   factory Profile.fromJson(Map<String, dynamic> json) {
@@ -78,6 +89,7 @@ class Profile {
       experience: level is String
           ? ExperienceLevel.values.where((l) => l.name == level).firstOrNull
           : null,
+      about: json['about'] is String ? (json['about'] as String).trim() : '',
     );
   }
 
@@ -87,10 +99,11 @@ class Profile {
       other.name == name &&
       other.targetRole == targetRole &&
       other.interviewDate == interviewDate &&
-      other.experience == experience;
+      other.experience == experience &&
+      other.about == about;
 
   @override
-  int get hashCode => Object.hash(name, targetRole, interviewDate, experience);
+  int get hashCode => Object.hash(name, targetRole, interviewDate, experience, about);
 }
 
 /// Holds the [Profile], saved to this phone when [persist] is on (tests keep it in memory).
