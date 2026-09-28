@@ -189,7 +189,7 @@ Future<void> _openInterview(WidgetTester tester, _Rig rig) async {
 
 Future<void> _finishTypedPractice(WidgetTester tester, _Rig rig) async {
   await _boot(tester, rig);
-  await _tap(tester, find.text('Practise by typing'));
+  await _tap(tester, find.text('Typing'));
   await _settle(tester, 600);
   await tester.enterText(find.byKey(const ValueKey('job-field')), 'Barista at a busy cafe');
   await tester.pump();
@@ -268,7 +268,7 @@ void main() {
 
     // Home again, with the notes kept for this session.
     expect(find.text('Start practice'), findsOneWidget);
-    expect(find.text('Last-minute notes'), findsOneWidget);
+    expect(find.text('Notes'), findsOneWidget);
   });
 
   testWidgets('silent answer: says so and lets you type instead', (tester) async {
@@ -495,7 +495,7 @@ void main() {
 
     await _tap(tester, find.text('Done'));
     await _settle(tester, 700);
-    await _tap(tester, find.text('Finish your interview notes'));
+    await _tap(tester, find.text('Finish notes'));
     await _settle(tester, 1000);
     expect(rig.coach.wrapupCalls, hasLength(2));
     expect(rig.coach.wrapupCalls.last.map((a) => a.transcript), originals);
