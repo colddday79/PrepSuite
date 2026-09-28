@@ -7,6 +7,7 @@ import 'package:prepsuite_speech/prepsuite_speech.dart'
     show NormanVoice, OfflineSpeechCapture, WavReplayRecorder;
 
 import 'app/app.dart';
+import 'app/assistant.dart';
 import 'app/profile.dart';
 import 'app/services.dart';
 import 'app/session.dart';
@@ -75,6 +76,7 @@ AppServices createServices() {
       consent: PrefsConsentStore(),
       sessions: SessionStore(persist: true),
       profile: ProfileStore(persist: true),
+      assistant: AssistantStore(persist: true),
       mic: PluginMicPermission(),
       coachLabel: coachLabel,
       speechLabel:
@@ -107,6 +109,7 @@ AppServices createServices() {
     consent: PrefsConsentStore(),
     sessions: SessionStore(persist: true),
     profile: ProfileStore(persist: true),
+    assistant: AssistantStore(persist: true),
     mic: PluginMicPermission(),
     speechSetup: setup,
     coachLabel: coachLabel,

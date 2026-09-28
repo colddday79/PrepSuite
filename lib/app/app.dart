@@ -22,6 +22,7 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
     super.initState();
     unawaited(widget.services.sessions.restore());
     unawaited(widget.services.profile.restore());
+    unawaited(widget.services.assistant.restore());
   }
 
   @override

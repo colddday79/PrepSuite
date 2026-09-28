@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../coach/coach_api.dart';
 import '../coach/contracts.dart';
 import '../coach/speech_adapter.dart';
+import 'assistant.dart';
 import 'profile.dart';
 import 'session.dart';
 
@@ -20,9 +21,11 @@ class AppServices {
     required this.speechLabel,
     SessionStore? sessions,
     ProfileStore? profile,
+    AssistantStore? assistant,
     SpeechSetup? speechSetup,
   }) : sessions = sessions ?? SessionStore(),
        profile = profile ?? ProfileStore(),
+       assistant = assistant ?? AssistantStore(),
        speechSetup = speechSetup ?? SpeechSetup.ready();
 
   final CoachApi coach;
@@ -41,6 +44,9 @@ class AppServices {
 
   /// What the person chose to tell the app about themselves (optional, on this phone only).
   final ProfileStore profile;
+
+  /// Which assistant the person chose, and whether first-run onboarding is done.
+  final AssistantStore assistant;
 
   /// Offline speech preparation (model copy on first launch, then loading), started at launch.
   final SpeechSetup speechSetup;

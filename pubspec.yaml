@@ -29,6 +29,7 @@ flutter:
   assets:
     - assets/video/presence_loop.mp4
     - assets/images/presence_poster.jpg
+    - assets/assistant/
     - assets/fonts/OFL.txt
   fonts:
     - family: MonaSans
