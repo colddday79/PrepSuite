@@ -68,6 +68,7 @@ def parse_args():
     p.add_argument("--look", default="None")
     p.add_argument("--exposure", type=float, default=-0.15)
     p.add_argument("--tag", default="")
+    p.add_argument("--wave", action="store_true")
     return p.parse_args(argv)
 
 
@@ -418,9 +419,29 @@ def capsule(name, start, end, radius):
     return [cyl] + caps
 
 
-def build_arms(m, pose):
-    """Two-part arms with a soft elbow bend, mitten hands with a thumb, and accent cuffs."""
+def _pivot(name, location, parent=None):
+    empty = bpy.data.objects.new(name, None)
+    link(empty)
+    empty.location = location
+    if parent is not None:
+        empty.parent = parent
+        bpy.context.view_layer.update()
+        empty.matrix_parent_inverse = parent.matrix_world.inverted()
+    return empty
+
+
+def _attach(objs, pivot):
+    bpy.context.view_layer.update()
+    for o in objs:
+        o.parent = pivot
+        o.matrix_parent_inverse = pivot.matrix_world.inverted()
+
+
+def build_arms(m, pose, rig=False):
+    """Two-part arms with a soft elbow bend, mitten hands with a thumb, and accent cuffs.
+    With rig=True the screen-right arm hangs from shoulder and elbow pivots for the wave."""
     parts = []
+    pivots = None
     for side in (-1, 1):
         shoulder = Vector((side * 0.58, -0.06, BODY_C.z + 0.28))
         joint = ellipsoid(f"Shoulder{side}", (0.105, 0.105, 0.105), shoulder, segments=48, rings=24)
@@ -433,9 +454,9 @@ def build_arms(m, pose):
             fore = Vector((side * 0.18, -0.5, -0.85)).normalized()
         elbow = shoulder + upper * 0.3
         wrist = elbow + fore * 0.24
-        segments = capsule(f"Upper{side}", shoulder + upper * 0.08, elbow, 0.08)
-        segments += capsule(f"Fore{side}", elbow, wrist, 0.074)
-        for a in segments:
+        upper_parts = capsule(f"Upper{side}", shoulder + upper * 0.08, elbow, 0.08)
+        fore_parts = capsule(f"Fore{side}", elbow, wrist, 0.074)
+        for a in upper_parts + fore_parts:
             a.data.materials.append(m.shell)
         cuff = torus(f"Cuff{side}", 0.08, 0.024)
         cuff.location = wrist
@@ -449,19 +470,53 @@ def build_arms(m, pose):
         thumb.location = wrist + fore * 0.08 + Vector((-side * 0.085, -0.07, 0.0))
         aim(thumb, (fore + Vector((-side * 0.6, -0.3, 0))).normalized())
         thumb.data.materials.append(m.shell)
-        parts += [joint, cuff, hand, thumb] + segments
-    return parts
+        parts += [joint, cuff, hand, thumb] + upper_parts + fore_parts
+        if rig and side == 1:
+            sp = _pivot("ShoulderPivot", shoulder)
+            ep = _pivot("ElbowPivot", elbow, sp)
+            _attach(upper_parts, sp)
+            _attach(fore_parts + [cuff, hand, thumb], ep)
+            pivots = (sp, ep)
+    return parts, pivots
 
 
-def build(pose):
+def animate_wave(pivots, frames=40):
+    """Raise the arm to the side, wave the forearm two and a half times, lower it. Smooth keys."""
+    sp, ep = pivots
+    raise_y = math.radians(-107.5)
+    up = math.radians(-60.5)
+    keys = [
+        (1, 0.0, 0.0),
+        (9, raise_y, up),
+        (13, raise_y, up - math.radians(20)),
+        (17, raise_y, up + math.radians(20)),
+        (21, raise_y, up - math.radians(20)),
+        (25, raise_y, up + math.radians(20)),
+        (29, raise_y, up - math.radians(8)),
+        (33, raise_y, up),
+        (frames, 0.0, 0.0),
+    ]
+    for f, s_rot, e_rot in keys:
+        sp.rotation_euler = (0, s_rot, 0)
+        ep.rotation_euler = (0, e_rot, 0)
+        sp.keyframe_insert("rotation_euler", frame=f)
+        ep.keyframe_insert("rotation_euler", frame=f)
+    scene = bpy.context.scene
+    scene.frame_start = 1
+    scene.frame_end = frames
+    scene.render.fps = 24
+
+
+def build(pose, rig=False):
     m = Materials()
     head, visor = build_head(m)
     parts = [head, visor]
     parts += build_headset(m)
     parts += build_body(m)
     parts += build_core(m)
-    parts += build_arms(m, pose)
-    return m, visor
+    arms, pivots = build_arms(m, pose, rig)
+    parts += arms
+    return m, visor, pivots
 
 
 # ---------------------------------------------------------------------------
@@ -645,7 +700,7 @@ def restore(undo):
         slot.material = mat
 
 
-def render_pass(scene, m, lights, hdri, name, path):
+def render_pass(scene, m, lights, hdri, name, path, animate=False):
     rim_lights = (lights["rim_l"], lights["rim_r"])
     if name == "body":
         scene.render.film_transparent = True
@@ -672,8 +727,12 @@ def render_pass(scene, m, lights, hdri, name, path):
     for light in rim_lights:
         light.hide_render = False
     scene.render.image_settings.color_mode = "RGBA" if scene.render.film_transparent else "RGB"
-    scene.render.filepath = path
-    bpy.ops.render.render(write_still=True)
+    if animate:
+        scene.render.filepath = path.replace(".png", "_")
+        bpy.ops.render.render(animation=True)
+    else:
+        scene.render.filepath = path
+        bpy.ops.render.render(write_still=True)
     restore(undo)
     print("WROTE", path)
 
@@ -706,7 +765,9 @@ def main():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
     scene = bpy.context.scene
-    m, visor = build(a.pose)
+    m, visor, pivots = build(a.pose, rig=a.wave)
+    if a.wave:
+        animate_wave(pivots)
     hdri = setup_world(scene)
     lights = setup_lights()
     cam = setup_camera(scene)
@@ -725,8 +786,10 @@ def main():
         for light in (lights["rim_l"], lights["rim_r"]):
             light.data.color = v["rim"]
         suffix = "" if a.pose == "idle" else f"_{a.pose}"
+        if a.wave:
+            suffix = "_wave"
         for p in a.passes.split(","):
-            render_pass(scene, m, lights, hdri, p, os.path.join(a.out, f"{name}{suffix}{a.tag}_{p}.png"))
+            render_pass(scene, m, lights, hdri, p, os.path.join(a.out, f"{name}{suffix}{a.tag}_{p}.png"), animate=a.wave)
 
 
 main()
