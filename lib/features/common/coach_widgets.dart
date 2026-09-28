@@ -4,12 +4,15 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../app/assistant.dart';
+import '../../app/services.dart';
+import '../../design/assistant_avatar.dart';
 import '../../design/components.dart';
-import '../../design/hologram.dart';
 import '../../design/tokens.dart';
 
-/// Shared frame for the coach screens: top bar, the presence (smaller when the keyboard is up),
-/// then [body] scrolling beneath it.
+/// Shared frame for the coach screens: top bar, the assistant (smaller when the keyboard is up),
+/// then [body] scrolling beneath it. [mood] sets the assistant's face; [level] moves its mouth
+/// while it speaks and its sound wave while it listens.
 class CoachScaffold extends StatelessWidget {
   const CoachScaffold({
     super.key,
@@ -18,6 +21,7 @@ class CoachScaffold extends StatelessWidget {
     this.status,
     this.presenceSize = 160,
     this.level,
+    this.mood = AssistantMood.idle,
   });
 
   final VoidCallback onClose;
@@ -25,33 +29,37 @@ class CoachScaffold extends StatelessWidget {
   final String? status;
   final double presenceSize;
   final ValueListenable<double>? level;
+  final AssistantMood mood;
 
   @override
   Widget build(BuildContext context) {
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
     final target = keyboard ? presenceSize * 0.55 : presenceSize;
-    const barHeight = 64.0;
+    final assistant = AppScope.of(context).assistant;
     return Scaffold(
       backgroundColor: PrepColors.bg,
       body: SafeArea(
-        // The presence grows while the interviewer talks and steps back for typing and reading.
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(end: target),
-          duration: Motion.enter,
-          curve: Motion.standard,
-          builder: (context, size, _) => PresenceBackdrop(
-            top: barHeight,
-            size: size,
-            level: level,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                CoachTopBar(onClose: onClose, status: status),
-                SizedBox(height: size),
-                Expanded(child: body),
-              ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CoachTopBar(onClose: onClose, status: status),
+            // The assistant grows while it talks and listens, and steps back for typing and reading.
+            TweenAnimationBuilder<double>(
+              tween: Tween(end: target),
+              duration: Motion.enter,
+              curve: Motion.standard,
+              builder: (context, size, _) => SizedBox(
+                height: size,
+                child: Center(
+                  child: ValueListenableBuilder<AssistantLook>(
+                    valueListenable: assistant,
+                    builder: (context, look, _) => AssistantAvatar(look: look, size: size, mood: mood, level: level),
+                  ),
+                ),
+              ),
             ),
-          ),
+            Expanded(child: body),
+          ],
         ),
       ),
     );

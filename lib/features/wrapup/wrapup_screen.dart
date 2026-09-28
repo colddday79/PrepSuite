@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../app/services.dart';
 import '../../app/session.dart';
 import '../../coach/coach_api.dart';
+import '../../app/assistant.dart';
+import '../../design/assistant_avatar.dart';
 import '../../design/components.dart';
 import '../../design/frosted_panel.dart';
 import '../../design/hologram.dart';
@@ -10,9 +12,7 @@ import '../../design/tokens.dart';
 import '../common/coach_widgets.dart';
 import '../interview/read_aloud.dart';
 
-const double _presenceSize = 150;
-const double _panelOverlap = 44;
-const double _barHeight = 64;
+const double _presenceSize = 176;
 
 /// Step three: what to remember. The last-minute notes come first and largest, then tips and the
 /// stories worth telling. [review] opens notes that were already written (from Home).
@@ -29,6 +29,8 @@ class WrapupScreen extends StatefulWidget {
 class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver {
   late AppServices _services;
   ReadAloud? _reader;
+  final _voiceLevel = LevelMix();
+  bool _listening = false;
   bool _loading = false;
   CoachException? _error;
   bool _started = false;
@@ -45,6 +47,7 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _voiceLevel.dispose();
     final reader = _reader;
     if (reader != null) {
       reader.hush();
@@ -75,6 +78,10 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
     super.didChangeDependencies();
     _services = AppScope.of(context);
     _reader ??= ReadAloud(_services.voice);
+    if (!_listening) {
+      _listening = true;
+      _voiceLevel.listenTo(_services.voice.level);
+    }
     if (!_started) {
       _started = true;
       if (_wrapup == null) {
@@ -120,6 +127,12 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
     }
   }
 
+  AssistantMood get _mood {
+    if (_reader?.current != null) return AssistantMood.speaking;
+    if (_loading) return AssistantMood.thinking;
+    return _wrapup != null ? AssistantMood.happy : AssistantMood.idle;
+  }
+
   void _done() {
     _reader?.hush();
     final navigator = Navigator.of(context);
@@ -140,17 +153,28 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
       backgroundColor: PrepColors.bg,
       body: SafeArea(
         child: SingleChildScrollView(
-          child: PresenceBackdrop(
-            top: _barHeight,
-            size: _presenceSize,
-            child: Column(
+          child: Builder(
+            builder: (context) => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 CoachTopBar(
                   status: '${widget.session.jobTitle} · $answered ${answered == 1 ? 'answer' : 'answers'}',
                   onClose: _done,
                 ),
-                const SizedBox(height: _presenceSize - _panelOverlap),
+                SizedBox(
+                  height: _presenceSize,
+                  child: Center(
+                    child: ValueListenableBuilder<AssistantLook>(
+                      valueListenable: _services.assistant,
+                      builder: (context, look, _) => ListenableBuilder(
+                        listenable: _reader!,
+                        builder: (context, _) =>
+                            AssistantAvatar(look: look, size: _presenceSize, mood: _mood, level: _voiceLevel),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: Space.l),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
                   child: FrostedPanel(

@@ -9,6 +9,7 @@ import '../../app/session.dart';
 import '../../coach/coach_api.dart';
 import '../../coach/contracts.dart';
 import '../../coach/speech_adapter.dart';
+import '../../design/assistant_avatar.dart';
 import '../../design/components.dart';
 import '../../design/hologram.dart';
 import '../../design/icons.dart';
@@ -308,12 +309,20 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
     return math.min(screen.width * 0.92, screen.height * 0.38).clamp(200.0, 420.0);
   }
 
+  AssistantMood get _mood => switch (_phase) {
+        _Phase.asking => AssistantMood.speaking,
+        _Phase.recording => AssistantMood.listening,
+        _Phase.settingUp || _Phase.transcribing || _Phase.loading => AssistantMood.thinking,
+        _ => AssistantMood.idle,
+      };
+
   @override
   Widget build(BuildContext context) {
     return CoachScaffold(
       status: 'Your job',
       presenceSize: _presenceSize(context),
       level: _level,
+      mood: _mood,
       onClose: () => Navigator.of(context).maybePop(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, Space.xxl),

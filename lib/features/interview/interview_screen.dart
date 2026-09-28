@@ -8,6 +8,7 @@ import '../../app/session.dart';
 import '../../coach/coach_api.dart';
 import '../../coach/contracts.dart';
 import '../../coach/speech_adapter.dart';
+import '../../design/assistant_avatar.dart';
 import '../../design/components.dart';
 import '../../design/hologram.dart';
 import '../../design/icons.dart';
@@ -408,6 +409,19 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     }
   }
 
+  AssistantMood get _mood {
+    if (_asker.stage == AskStage.thinking) return AssistantMood.thinking;
+    if (_asker.usingMic) return AssistantMood.listening;
+    if (_read.current != null) return AssistantMood.speaking;
+    return switch (_phase) {
+      _Phase.speaking => AssistantMood.speaking,
+      _Phase.recording => AssistantMood.listening,
+      _Phase.transcribing || _Phase.checking => AssistantMood.thinking,
+      _Phase.feedback => AssistantMood.happy,
+      _ => AssistantMood.idle,
+    };
+  }
+
   /// Larger while the interviewer asks and listens; smaller once there is text to read or edit.
   double _presenceSize(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
@@ -430,6 +444,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       child: CoachScaffold(
         status: 'Question ${_index + 1} of $total · ${_session.jobTitle}',
         presenceSize: _presenceSize(context),
+        mood: _mood,
         level: _level,
         onClose: _close,
         body: SingleChildScrollView(

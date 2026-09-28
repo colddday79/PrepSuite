@@ -73,6 +73,8 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
   final _clock = _FaceClock();
   _Layers? _layers;
   int _requested = 0;
+  int _bucket = 0;
+  AssistantLook? _loaded;
 
   @override
   void initState() {
@@ -96,6 +98,7 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
       widget.level?.addListener(_onLevel);
     }
     if (old.look != widget.look || old.size != widget.size) _load();
+
     if (old.mood != widget.mood) _clock.moodChanged(widget.mood);
     _syncTicker();
   }
@@ -130,6 +133,10 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
     if (!look.isRobot) return;
     final ratio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.0;
     final px = _AssetCache.bucket(widget.size * ratio);
+    // While a size animates, keep the sharpest layers already decoded for this look.
+    if (look == _loaded && px <= _bucket) return;
+    _loaded = look;
+    _bucket = px;
     final ticket = ++_requested;
     _Layers.load(look, px).then((layers) {
       if (mounted && ticket == _requested) setState(() => _layers = layers);
