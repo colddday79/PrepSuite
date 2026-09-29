@@ -313,8 +313,11 @@ class _TalkScreenState extends State<TalkScreen> with WidgetsBindingObserver {
       builder: (context, look, _) {
         final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
         final media = MediaQuery.sizeOf(context);
-        // Large, but never so tall that a small phone or the keyboard squeezes the conversation out.
-        final baseSize = math.min(media.width * 0.4, media.height * 0.22).clamp(120.0, 180.0);
+        // Big while there is nothing to read yet; smaller once the conversation needs the room.
+        final empty = _turns.isEmpty;
+        final baseSize = empty
+            ? math.min(media.width * 0.78, media.height * 0.36).clamp(150.0, 360.0)
+            : math.min(media.width * 0.4, media.height * 0.2).clamp(110.0, 170.0);
         return Scaffold(
           backgroundColor: PrepColors.bg,
           body: SafeArea(
