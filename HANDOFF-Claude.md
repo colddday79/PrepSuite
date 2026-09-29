@@ -425,7 +425,7 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
   - `PrepColors.accent` is now the chosen assistant's colour. It is set via `PrepColors.useAccent`, and the app root listens to `AssistantStore` and rebuilds everything on change;
   - `accentTint` and `focus` derive from it;
   - `PrimaryButton` is filled with the accent; the cream fill is gone.
-- **Home:** the "Ways to practise" row is two cards side by side instead of a sideways-scrolling carousel. The Orb look is clipped to a circle, so it no longer shows a dark square.
+- **Home:** the "Ways to practise" row is two cards side by side instead of a sideways-scrolling carousel. The Orb look is now a plain black round lens (`PresenceLoop` in hologram.dart) at 80% of its box. The old screen-blended "room" (`HologramStage`) leaked a lighter square past round clips under Impeller, so don't put `HologramStage` inside clips.
 - **Feedback:** typed answers show "Typed, so no voice feedback." instead of a two-line note.
 
 **State:** 139 Flutter tests pass and analyze is clean. Pushed to `colddday79/PrepSuite` main. Verified on the emulator after a clean install: onboarding through to Home, then a mock interview with real AI questions and feedback.
