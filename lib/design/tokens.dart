@@ -1,46 +1,55 @@
 import 'package:flutter/animation.dart';
 import 'package:flutter/painting.dart';
 
-/// A warm near-black room lit by the gold presence, with gold as the one accent.
+/// A clean, cool near-black with neutral slate greys, and one accent: the colour of the assistant
+/// the person chose (blue by default). The accent follows the assistant through [useAccent].
 ///
 /// WCAG contrast of every text colour (asserted in test/design_test.dart):
 ///
 /// |           | bg    | surface1 | surface2 |
 /// |-----------|-------|----------|----------|
-/// | text      | 17.1  | 16.1     | 14.7     |
-/// | text2     |  9.4  |  8.9     |  8.1     |
-/// | text3     |  6.2  |  5.8     |  5.3     |
-/// | accent    | 10.2  |  9.6     |  8.8     |
-/// | danger    |  8.6  |  8.1     |  7.4     |
+/// | text      | 18.2  | 16.6     | 14.9     |
+/// | text2     | 10.4  |  9.5     |  8.5     |
+/// | text3     |  6.5  |  5.9     |  5.3     |
+/// | danger    |  8.3  |  7.6     |  6.8     |
 ///
-/// [bg] on [text] (the primary button label) is 17.1:1 and [bg] on [accent] is 10.2:1.
-/// Hairlines are decorative: [line] is 1.4:1 on bg, [lineStrong] 1.9:1. Controls whose outline is
-/// their only boundary (checkbox, radio, switch) use [text3] instead, which clears 3:1 everywhere.
+/// Every assistant accent clears 7:1 on bg, and [bg] text on an accent fill (the primary button)
+/// clears 7:1 too. Hairlines are decorative; controls whose outline is their only boundary use
+/// [text3], which clears 3:1 everywhere.
 abstract final class PrepColors {
-  static const bg = Color(0xFF0E0C0A);
-  static const surface1 = Color(0xFF171410);
-  static const surface2 = Color(0xFF211D18);
-  static const line = Color(0xFF302A24);
-  static const lineStrong = Color(0xFF463E35);
-  static const text = Color(0xFFF5EFE6);
-  static const text2 = Color(0xFFBDB3A5);
-  static const text3 = Color(0xFF9A8F81);
-  static const accent = Color(0xFFE6B35E);
-  static const accentTint = Color(0xFF2B2114);
-  static const danger = Color(0xFFF2937F);
-  static const recording = Color(0xFFF0725E);
+  static const bg = Color(0xFF0B0D12);
+  static const surface1 = Color(0xFF141821);
+  static const surface2 = Color(0xFF1C2130);
+  static const line = Color(0xFF262C3A);
+  static const lineStrong = Color(0xFF363E50);
+  static const text = Color(0xFFF2F5FA);
+  static const text2 = Color(0xFFB3BBCA);
+  static const text3 = Color(0xFF8C95A7);
+  static const danger = Color(0xFFFF8A7A);
+  static const recording = Color(0xFFFF6B5B);
   static const glassBorder = Color(0x1FFFFFFF);
-  static const glassBg = Color(0x801C1814);
-  static const cardHighlight = Color(0x2EFFF4E0);
+  static const glassBg = Color(0x80141821);
+  static const cardHighlight = Color(0x24FFFFFF);
 
-  /// Warm mid-grey press tint. It reads on the light primary fill and on the dark surfaces alike.
-  static const press = Color(0xFF8C8276);
-
-  /// Keyboard, D-pad and switch-access focus ring.
-  static const focus = accent;
+  /// Cool mid-grey press tint. It reads on the accent fill and on the dark surfaces alike.
+  static const press = Color(0xFF7F8796);
 
   /// Behind dialogs and sheets.
   static const scrim = Color(0xB3000000);
+
+  static Color _accent = const Color(0xFF45D0FF);
+
+  /// The chosen assistant's colour: buttons, selection, focus and progress.
+  static Color get accent => _accent;
+
+  /// The accent at low strength over [bg], for tinted discs and selected rows.
+  static Color get accentTint => Color.alphaBlend(_accent.withValues(alpha: 0.16), bg);
+
+  /// Keyboard, D-pad and switch-access focus ring.
+  static Color get focus => _accent;
+
+  /// Switches the accent to [colour]; the app root rebuilds everything after calling it.
+  static void useAccent(Color colour) => _accent = colour;
 }
 
 /// 4/8 spacing scale.

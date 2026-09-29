@@ -259,8 +259,8 @@ class LoadingLine extends StatelessWidget {
         children: [
           Text(text, style: PrepType.bodyLMedium),
           const SizedBox(height: Space.m),
-          const ClipRRect(
-            borderRadius: BorderRadius.all(Radius.circular(2)),
+          ClipRRect(
+            borderRadius: const BorderRadius.all(Radius.circular(2)),
             child: LinearProgressIndicator(minHeight: 2, color: PrepColors.accent, backgroundColor: PrepColors.line),
           ),
         ],

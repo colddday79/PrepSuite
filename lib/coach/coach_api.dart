@@ -541,7 +541,7 @@ class FakeCoachApi implements CoachApi {
     await Future<void>.delayed(latency);
     if (fail) throw const CoachException(CoachErrorKind.offline);
     return QuestionSet(
-      jobTitle: _jobTitleFrom(job),
+      jobTitle: jobTitleFrom(job),
       questions: List.unmodifiable(
         _fakeQuestions.take(count.clamp(1, _fakeQuestions.length)),
       ),
@@ -702,8 +702,10 @@ const List<CoachQuestion> _fakeQuestions = [
   ),
 ];
 
-/// First non-empty line of the job text, capitalised, at most 60 characters.
-String _jobTitleFrom(String job) {
+/// A short job title from how someone described the job ("I'm applying for a junior data analyst
+/// job at a hospital..." becomes "Junior data analyst job"): the role, capitalised, at most 60
+/// characters.
+String jobTitleFrom(String job) {
   final line = job
       .split('\n')
       .map((l) => l.replaceAll(RegExp(r'\s+'), ' ').trim())

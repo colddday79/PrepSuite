@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../design/tokens.dart';
+import 'assistant.dart';
 import '../features/root/root_gate.dart';
 import 'services.dart';
 
@@ -17,12 +18,41 @@ class PrepSuiteApp extends StatefulWidget {
 }
 
 class _PrepSuiteAppState extends State<PrepSuiteApp> {
+  AssistantKind? _kind;
+
   @override
   void initState() {
     super.initState();
     unawaited(widget.services.sessions.restore());
     unawaited(widget.services.profile.restore());
     unawaited(widget.services.assistant.restore());
+    widget.services.assistant.addListener(_onAssistant);
+    _applyAccent();
+  }
+
+  @override
+  void dispose() {
+    widget.services.assistant.removeListener(_onAssistant);
+    super.dispose();
+  }
+
+  void _applyAccent() {
+    final look = widget.services.assistant.value;
+    _kind = look.kind;
+    PrepColors.useAccent(look.glow);
+  }
+
+  /// A new assistant means a new accent everywhere: rebuild the whole tree once.
+  void _onAssistant() {
+    if (widget.services.assistant.value.kind == _kind) return;
+    _applyAccent();
+    setState(() {});
+    void rebuild(Element element) {
+      element.markNeedsBuild();
+      element.visitChildren(rebuild);
+    }
+
+    (context as Element).visitChildren(rebuild);
   }
 
   @override
@@ -33,6 +63,11 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
     }
     if (widget.services.profile != oldWidget.services.profile) {
       unawaited(widget.services.profile.restore());
+    }
+    if (widget.services.assistant != oldWidget.services.assistant) {
+      oldWidget.services.assistant.removeListener(_onAssistant);
+      widget.services.assistant.addListener(_onAssistant);
+      _applyAccent();
     }
   }
 
@@ -136,7 +171,7 @@ ThemeData prepTheme() {
     fontFamily: 'MonaSans',
     scaffoldBackgroundColor: PrepColors.bg,
     canvasColor: PrepColors.bg,
-    colorScheme: const ColorScheme(
+    colorScheme: ColorScheme(
       brightness: Brightness.dark,
       primary: PrepColors.accent,
       onPrimary: PrepColors.bg,
@@ -275,7 +310,7 @@ ThemeData prepTheme() {
       dayOverlayColor: cellOverlay,
       todayForegroundColor: selectable(selected: PrepColors.bg, rest: PrepColors.accent),
       todayBackgroundColor: cellFill,
-      todayBorder: const BorderSide(color: PrepColors.accent),
+      todayBorder: BorderSide(color: PrepColors.accent),
       yearStyle: PrepType.bodyL,
       yearForegroundColor: selectable(selected: PrepColors.bg, rest: PrepColors.text2),
       yearBackgroundColor: cellFill,
@@ -378,7 +413,7 @@ ThemeData prepTheme() {
       mainAxisMargin: Space.xs,
       minThumbLength: 40,
     ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
+    progressIndicatorTheme: ProgressIndicatorThemeData(
       color: PrepColors.accent,
       linearTrackColor: PrepColors.line,
       circularTrackColor: PrepColors.line,

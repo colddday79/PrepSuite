@@ -12,6 +12,7 @@ import 'package:prepsuite/coach/fakes.dart';
 import 'package:prepsuite/coach/speech_adapter.dart';
 import 'package:prepsuite/design/assistant_avatar.dart';
 import 'package:prepsuite/design/hologram.dart';
+import 'package:prepsuite/features/home/home_screen.dart';
 import 'package:prepsuite/features/intake/intake_screen.dart';
 
 class _FeedbackCall {
@@ -191,7 +192,9 @@ Future<void> _openInterview(WidgetTester tester, _Rig rig) async {
 
 Future<void> _finishTypedPractice(WidgetTester tester, _Rig rig) async {
   await _boot(tester, rig);
-  await _tap(tester, find.byKey(const ValueKey('practise-typing')));
+  await _tap(tester, find.text('Practice').last);
+  await _settle(tester, 400);
+  await _tap(tester, find.byKey(const ValueKey('mode-typing')));
   await _settle(tester, 600);
   await tester.enterText(find.byKey(const ValueKey('job-field')), 'Barista at a busy cafe');
   await tester.pump();
@@ -496,6 +499,13 @@ void main() {
 
     await _tap(tester, find.text('Done'));
     await _settle(tester, 700);
+    await _tap(tester, find.text('Home').last);
+    await _settle(tester, 400);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('recent-card')),
+      300,
+      scrollable: find.descendant(of: find.byType(HomeScreen), matching: find.byType(Scrollable)).first,
+    );
     await _tap(tester, find.byKey(const ValueKey('recent-card')));
     await _settle(tester, 1000);
     expect(rig.coach.wrapupCalls, hasLength(2));

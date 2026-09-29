@@ -71,7 +71,7 @@ Color? _labelColor(WidgetTester tester, String label) => tester.widget<Text>(fin
 void main() {
   group('contrast', () {
     const surfaces = {'bg': PrepColors.bg, 'surface1': PrepColors.surface1, 'surface2': PrepColors.surface2};
-    const texts = {
+    final texts = {
       'text': PrepColors.text,
       'text2': PrepColors.text2,
       'text3': PrepColors.text3,
@@ -106,9 +106,9 @@ void main() {
   });
 
   group('PrimaryButton', () {
-    testWidgets('enabled: solid light fill, dark label, 56 dp', (tester) async {
+    testWidgets('enabled: solid accent fill, dark label, 56 dp', (tester) async {
       await _pump(tester, PrimaryButton('Start practice', onPressed: () {}));
-      expect(_fill(tester), PrepColors.text);
+      expect(_fill(tester), PrepColors.accent);
       expect(_labelColor(tester, 'Start practice'), PrepColors.bg);
       expect(tester.getSize(find.byType(PrimaryButton)).height, greaterThanOrEqualTo(56));
       expect(_scale(tester), 1);
@@ -131,13 +131,13 @@ void main() {
       await tester.pump();
       await tester.pump(Motion.press);
       expect(_scale(tester), Motion.pressScale);
-      expect(_fill(tester), const Color(0xFFDED8D0));
+      expect(_fill(tester), Color.lerp(PrepColors.accent, PrepColors.bg, 0.14));
 
       await gesture.up();
       await tester.pump();
       await tester.pump(Motion.fade);
       expect(_scale(tester), 1);
-      expect(_fill(tester), PrepColors.text);
+      expect(_fill(tester), PrepColors.accent);
       expect(taps, 1);
     });
 

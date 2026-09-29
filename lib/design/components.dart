@@ -106,8 +106,6 @@ class PrimaryButton extends StatefulWidget {
 }
 
 class _PrimaryButtonState extends State<PrimaryButton> {
-  // PrepColors.text 10% of the way to bg: a visible dip that keeps the label at 13:1.
-  static const _pressedFill = Color(0xFFDED8D0);
   static const _shape = RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(Radii.control)));
   static const _disabledShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.all(Radius.circular(Radii.control)),
@@ -128,7 +126,10 @@ class _PrimaryButtonState extends State<PrimaryButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    final fill = !enabled ? PrepColors.surface2 : (_pressed ? _pressedFill : PrepColors.text);
+    // The assistant's colour, dipped a little toward the page while pressed.
+    final fill = !enabled
+        ? PrepColors.surface2
+        : (_pressed ? Color.lerp(PrepColors.accent, PrepColors.bg, 0.14)! : PrepColors.accent);
     final ink = enabled ? PrepColors.bg : PrepColors.text3;
     final duration = _pressed ? Motion.press : Motion.fade;
     return Semantics(

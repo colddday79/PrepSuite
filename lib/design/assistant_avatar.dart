@@ -153,7 +153,8 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
         image: true,
         child: SizedBox.square(
           dimension: widget.size,
-          child: HologramStage(size: widget.size * 0.86, level: widget.level),
+          // The hologram paints its own dark room: keep it a round lens, not a square.
+          child: ClipOval(child: HologramStage(size: widget.size * 0.86, level: widget.level)),
         ),
       );
     }

@@ -164,35 +164,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(height: Space.x3),
                 _SectionTitle('Ways to practise'),
                 const SizedBox(height: Space.m),
-                SizedBox(
-                  height: 200,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
+                  child: Row(
                     children: [
-                      _ModeCard(
-                        key: const ValueKey('quick-question'),
-                        look: look,
-                        mood: AssistantMood.thinking,
-                        title: 'Quick question',
-                        meta: '1 question',
-                        onTap: () => _startPractice(questionCount: 1),
+                      Expanded(
+                        child: _ModeCard(
+                          key: const ValueKey('quick-question'),
+                          look: look,
+                          mood: AssistantMood.thinking,
+                          title: 'Quick question',
+                          meta: '1 question',
+                          onTap: () => _startPractice(questionCount: 1),
+                        ),
                       ),
-                      _ModeCard(
-                        key: const ValueKey('talk-to-assistant'),
-                        look: look,
-                        mood: AssistantMood.speaking,
-                        title: 'Talk to ${look.name}',
-                        meta: 'Ask anything',
-                        onTap: _openTalk,
-                      ),
-                      _ModeCard(
-                        key: const ValueKey('practise-typing'),
-                        look: look,
-                        mood: AssistantMood.idle,
-                        title: 'Type answers',
-                        meta: 'No microphone',
-                        onTap: () => _startPractice(typing: true),
+                      const SizedBox(width: Space.m),
+                      Expanded(
+                        child: _ModeCard(
+                          key: const ValueKey('talk-to-assistant'),
+                          look: look,
+                          mood: AssistantMood.speaking,
+                          title: 'Talk to ${look.name}',
+                          meta: 'Ask anything',
+                          onTap: _openTalk,
+                        ),
                       ),
                     ],
                   ),
@@ -455,7 +450,7 @@ class _ModeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: Space.m),
+      padding: EdgeInsets.zero,
       child: Semantics(
         button: true,
         label: '$title, $meta',
@@ -470,7 +465,7 @@ class _ModeCard extends StatelessWidget {
             child: InkWell(
               onTap: onTap,
               child: SizedBox(
-                width: 156,
+                width: double.infinity,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -486,7 +481,7 @@ class _ModeCard extends StatelessWidget {
                       child: Text(title, style: PrepType.bodyLMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(Space.l, Space.xxs, Space.l, 0),
+                      padding: const EdgeInsets.fromLTRB(Space.l, Space.xxs, Space.l, Space.l),
                       child: Text(meta, style: PrepType.meta, maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
                   ],
