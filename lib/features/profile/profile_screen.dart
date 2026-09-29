@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../../app/assistant.dart';
 import '../../app/profile.dart';
 import '../../app/services.dart';
-import '../../app/session.dart';
+import '../../coach/coach_api.dart';
+import '../../design/assistant_avatar.dart';
+import '../../design/assistant_picker.dart';
 import '../../design/components.dart';
 import '../../design/icons.dart';
 import '../../design/tokens.dart';
 import '../consent/consent_sheet.dart';
-import '../wrapup/wrapup_screen.dart';
-import 'practice_history.dart';
+import 'about_me_card.dart';
 import 'profile_format.dart';
 
-/// What the person chose to tell the app, their past practices, and their data. Everything is
-/// optional, every edit is saved at once, and it all stays on this phone.
+/// The Profile tab: the chosen assistant and the person's name, the "About me" card at its
+/// centre, their details, their assistant, and account-level settings. Everything here is
+/// optional and saved at once; it stays on this phone. This is a tab body (the app shell owns
+/// navigation), so there is no back button and it keeps its own top [SafeArea].
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -21,47 +25,30 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _name = TextEditingController();
-  final _role = TextEditingController();
-  ProfileStore? _store;
+  Future<CoachHealth>? _health;
 
-  ProfileStore get _profile => _store!;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final store = AppScope.of(context).profile;
-    if (identical(store, _store)) return;
-    _store?.removeListener(_syncFields);
-    _store = store..addListener(_syncFields);
-    _syncFields();
+  Future<void> _editNameJob(AppServices services) async {
+    final profile = services.profile.value;
+    final result = await showModalBottomSheet<(String, String)>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: PrepColors.surface1,
+      barrierColor: PrepColors.scrim,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.sheet))),
+      builder: (context) => _NameJobSheet(initialName: profile.name, initialJob: profile.targetRole),
+    );
+    if (result != null) {
+      final p = services.profile;
+      p.save(p.value.copyWith(name: result.$1, targetRole: result.$2));
+    }
   }
 
-  /// Shows stored values that changed elsewhere (a late restore, or deleting everything)
-  /// without disturbing what the person is typing.
-  void _syncFields() {
-    final profile = _profile.value;
-    if (_name.text.trim() != profile.name) _name.text = profile.name;
-    if (_role.text.trim() != profile.targetRole) _role.text = profile.targetRole;
-  }
-
-  @override
-  void dispose() {
-    _store?.removeListener(_syncFields);
-    _name.dispose();
-    _role.dispose();
-    super.dispose();
-  }
-
-  void _save(Profile profile) {
-    if (profile != _profile.value) _profile.save(profile);
-  }
-
-  Future<void> _pickDate() async {
+  Future<void> _pickDate(AppServices services) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final lastDay = DateTime(today.year + 2, today.month, today.day);
-    final current = _profile.value.interviewDate;
+    final current = services.profile.value.interviewDate;
     var initial = current == null ? today : DateTime(current.year, current.month, current.day);
     if (initial.isBefore(today)) initial = today;
     if (initial.isAfter(lastDay)) initial = lastDay;
@@ -79,21 +66,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       switchToCalendarEntryModeIcon: const _HairlineIcon(PrepIcons.calendar),
     );
     if (picked == null || !mounted) return;
-    _save(_profile.value.copyWith(interviewDate: DateTime(picked.year, picked.month, picked.day)));
+    final p = services.profile;
+    p.save(p.value.copyWith(interviewDate: DateTime(picked.year, picked.month, picked.day)));
   }
 
-  void _openNotes(PracticeSession session) {
-    FocusScope.of(context).unfocus();
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => WrapupScreen(session: session, review: true)));
+  void _chooseExperience(AppServices services, ExperienceLevel level) {
+    final current = services.profile.value;
+    // Tapping the chosen answer again takes it back: every detail here is optional.
+    services.profile.save(
+      current.experience == level ? current.copyWith(clearExperience: true) : current.copyWith(experience: level),
+    );
   }
 
-  void _backToPractice() {
-    FocusScope.of(context).unfocus();
-    Navigator.of(context).popUntil((route) => route.isFirst);
-  }
-
-  Future<void> _deleteEverything() async {
-    final services = AppScope.of(context);
+  Future<void> _deleteEverything(AppServices services) async {
     final confirmed = await showDialog<bool>(
       context: context,
       barrierColor: PrepColors.scrim,
@@ -122,131 +107,219 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final services = AppScope.of(context);
+    _health ??= services.coach.health();
     return Scaffold(
       backgroundColor: PrepColors.bg,
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _TopBar(onBack: () => Navigator.of(context).maybePop()),
-            Expanded(
-              child: SingleChildScrollView(
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.only(bottom: Space.x4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const _SectionHeader('About you', first: true),
-                    ValueListenableBuilder<Profile>(
-                      valueListenable: services.profile,
-                      builder: (context, profile, _) => _aboutYou(profile),
+        child: ValueListenableBuilder<Profile>(
+          valueListenable: services.profile,
+          builder: (context, profile, _) {
+            final now = DateTime.now();
+            return SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: Space.xxl + MediaQuery.paddingOf(context).bottom),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: Space.l),
+                  _Header(profile: profile, onEdit: () => _editNameJob(services)),
+                  const SizedBox(height: Space.xxl),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
+                    child: AboutMeCard(
+                      about: profile.about,
+                      onEdit: () => showEditAboutSheet(context),
+                      onSayIt: () => showSayItSheet(context),
                     ),
-                    const _SectionHeader('Practice history'),
-                    PracticeHistory(sessions: services.sessions, onOpen: _openNotes, onStart: _backToPractice),
-                    const _SectionHeader('Your data'),
-                    LinkRow(
-                      icon: PrepIcons.shield,
-                      title: 'Privacy',
-                      onTap: () => showConsentSheet(context, infoOnly: true),
+                  ),
+                  const _SectionHeader('Details'),
+                  LinkRow(
+                    icon: PrepIcons.user,
+                    title: 'Name',
+                    meta: profile.name,
+                    onTap: () => _editNameJob(services),
+                  ),
+                  const Hairline(indent: Space.gutter + 24 + Space.l),
+                  LinkRow(
+                    icon: PrepIcons.target,
+                    title: "Job you're preparing for",
+                    meta: profile.targetRole,
+                    onTap: () => _editNameJob(services),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // The control says "Interview date" itself, so the label isn't read twice.
+                        ExcludeSemantics(child: Text('Interview date', style: _labelStyle)),
+                        const SizedBox(height: Space.s),
+                        _DateField(
+                          text: interviewDateLine(profile, now),
+                          spoken: spokenInterviewDate(profile, now),
+                          onPick: () => _pickDate(services),
+                          onClear: () => services.profile.save(profile.copyWith(clearInterviewDate: true)),
+                        ),
+                      ],
                     ),
-                    const Hairline(indent: Space.gutter + 24 + Space.l),
-                    _DeleteRow(onTap: _deleteEverything),
-                  ],
-                ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Space.gutter, Space.xl, Space.gutter, Space.xs),
+                    child: Text('Experience', style: _labelStyle),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
+                    child: _ExperienceControl(
+                      selected: profile.experience,
+                      onSelected: (level) => _chooseExperience(services, level),
+                    ),
+                  ),
+                  const _SectionHeader('Your assistant'),
+                  ValueListenableBuilder<AssistantLook>(
+                    valueListenable: services.assistant,
+                    builder: (context, look, _) => AssistantPicker(
+                      selected: look.kind,
+                      onSelected: (kind) => services.assistant.choose(kind),
+                    ),
+                  ),
+                  const _SectionHeader('Settings'),
+                  FutureBuilder<CoachHealth>(
+                    future: _health,
+                    builder: (context, snap) =>
+                        LinkRow(icon: PrepIcons.compass, title: 'Coach', meta: _coachStatus(snap), onTap: null),
+                  ),
+                  const Hairline(indent: Space.gutter + 24 + Space.l),
+                  LinkRow(
+                    icon: PrepIcons.replay,
+                    title: 'See the introduction again',
+                    onTap: () => services.assistant.resetOnboarding(),
+                  ),
+                  const Hairline(indent: Space.gutter + 24 + Space.l),
+                  LinkRow(icon: PrepIcons.shield, title: 'Privacy', onTap: () => showConsentSheet(context, infoOnly: true)),
+                  const Hairline(indent: Space.gutter + 24 + Space.l),
+                  _DeleteRow(onTap: () => _deleteEverything(services)),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
+}
 
-  Widget _aboutYou(Profile profile) {
-    final now = DateTime.now();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (_profile.saveFailed)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Space.gutter, Space.s, Space.gutter, 0),
-            child: Semantics(
-              liveRegion: true,
-              child: Text(
-                "Couldn't save that on this phone. Try the change again.",
-                style: PrepType.meta.copyWith(color: PrepColors.danger),
-              ),
-            ),
-          ),
-        const SizedBox(height: Space.xl),
-        _Spaced(
-          // One screen-reader item: the label names the field.
-          child: MergeSemantics(
-            child: PrepTextField(
-              fieldKey: const ValueKey('profile-name'),
-              label: 'What should the coach call you?',
-              controller: _name,
-              hint: 'Your first name',
-              maxLines: 1,
-              textInputAction: TextInputAction.next,
-              onChanged: (text) => _save(_profile.value.copyWith(name: text.trim())),
-            ),
-          ),
-        ),
-        _Spaced(
-          child: MergeSemantics(
-            child: PrepTextField(
-              fieldKey: const ValueKey('profile-role'),
-              label: "Job you're preparing for",
-              controller: _role,
-              hint: 'For example, junior barista',
-              maxLines: 1,
-              textInputAction: TextInputAction.done,
-              onChanged: (text) => _save(_profile.value.copyWith(targetRole: text.trim())),
-            ),
-          ),
-        ),
-        _Spaced(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // The control says "Interview date" itself, so the label isn't read twice.
-              ExcludeSemantics(child: Text('Interview date', style: _labelStyle)),
-              const SizedBox(height: Space.s),
-              _DateField(
-                text: interviewDateLine(profile, now),
-                spoken: spokenInterviewDate(profile, now),
-                onPick: _pickDate,
-                onClear: () => _save(_profile.value.copyWith(clearInterviewDate: true)),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Space.gutter, 0, Space.gutter, Space.xs),
-          child: Text('Experience', style: _labelStyle),
-        ),
-        for (final level in ExperienceLevel.values) ...[
-          if (level.index > 0) const Hairline(indent: Space.gutter),
-          _ChoiceRow(
-            key: ValueKey('experience-${level.name}'),
-            label: level.label,
-            selected: profile.experience == level,
-            onTap: () {
-              final current = _profile.value;
-              // Tapping the chosen answer again takes it back: every detail here is optional.
-              _save(current.experience == level
-                  ? current.copyWith(clearExperience: true)
-                  : current.copyWith(experience: level));
-            },
-          ),
-        ],
-      ],
-    );
-  }
+String _coachStatus(AsyncSnapshot<CoachHealth> snap) {
+  if (snap.connectionState != ConnectionState.done) return 'Checking';
+  final health = snap.data;
+  if (health == null || !health.ok) return 'Not reachable';
+  return health.mock ? 'Sample answers' : 'Connected';
 }
 
 /// Matches PrepTextField's label, for the controls that aren't text fields.
 final _labelStyle = PrepType.label.copyWith(color: PrepColors.text2);
+
+class _Header extends StatelessWidget {
+  const _Header({required this.profile, required this.onEdit});
+
+  final Profile profile;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final services = AppScope.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ValueListenableBuilder<AssistantLook>(
+            valueListenable: services.assistant,
+            builder: (context, look, _) => AssistantAvatar(look: look, size: 72, hud: false),
+          ),
+          const SizedBox(width: Space.l),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Semantics(
+                  header: true,
+                  child: Text(profile.name.isEmpty ? 'Your profile' : profile.name, style: PrepType.display),
+                ),
+                if (profile.targetRole.isNotEmpty) ...[
+                  const SizedBox(height: Space.xxs),
+                  Text(profile.targetRole, style: PrepType.body),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: Space.s),
+          IconAction(PrepIcons.edit, label: 'Edit name and job', plain: true, onPressed: onEdit),
+        ],
+      ),
+    );
+  }
+}
+
+/// Owns its own controllers so they are disposed only once this sheet itself leaves the tree
+/// (after its closing animation), never by the caller that awaited it.
+class _NameJobSheet extends StatefulWidget {
+  const _NameJobSheet({required this.initialName, required this.initialJob});
+
+  final String initialName;
+  final String initialJob;
+
+  @override
+  State<_NameJobSheet> createState() => _NameJobSheetState();
+}
+
+class _NameJobSheetState extends State<_NameJobSheet> {
+  late final _name = TextEditingController(text: widget.initialName);
+  late final _job = TextEditingController(text: widget.initialJob);
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _job.dispose();
+    super.dispose();
+  }
+
+  void _save() => Navigator.of(context).pop((_name.text.trim(), _job.text.trim()));
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(Space.xxl, Space.x3, Space.xxl, Space.l),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(header: true, child: Text('Name and job', style: PrepType.headline)),
+          const SizedBox(height: Space.xxl),
+          PrepTextField(
+            fieldKey: const ValueKey('profile-name'),
+            label: 'Name',
+            controller: _name,
+            hint: 'Your name',
+            maxLines: 1,
+            autofocus: true,
+            textInputAction: TextInputAction.next,
+          ),
+          const SizedBox(height: Space.xl),
+          PrepTextField(
+            fieldKey: const ValueKey('profile-role'),
+            label: "Job you're preparing for",
+            controller: _job,
+            hint: 'For example, junior barista',
+            maxLines: 1,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: Space.xl),
+          PrimaryButton('Save', onPressed: _save),
+        ],
+      ),
+    );
+  }
+}
 
 /// An [Icon] that paints one of the app's hairline icons, for Material widgets such as the date
 /// picker that only take an [Icon]. Colour and size come from the surrounding [IconTheme].
@@ -259,56 +332,6 @@ class _HairlineIcon extends Icon {
   Widget build(BuildContext context) {
     final theme = IconTheme.of(context);
     return PrepIcon(glyph, color: theme.color ?? PrepColors.text2, size: theme.size ?? 24);
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  const _TopBar({required this.onBack});
-
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 64),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(Space.xs, Space.s, Space.gutter, Space.s),
-        child: Row(
-          children: [
-            IconAction(PrepIcons.back, label: 'Back', plain: true, onPressed: onBack),
-            const SizedBox(width: Space.xs),
-            Expanded(child: Semantics(header: true, child: Text('Profile', style: PrepType.titleM))),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title, {this.first = false});
-
-  final String title;
-  final bool first;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(Space.gutter, first ? Space.s : Space.x4, Space.gutter, Space.s),
-      child: Semantics(header: true, child: Text(title, style: PrepType.titleM)),
-    );
-  }
-}
-
-/// One form control inside the page gutters, with the space that follows it.
-class _Spaced extends StatelessWidget {
-  const _Spaced({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(padding: const EdgeInsets.fromLTRB(Space.gutter, 0, Space.gutter, Space.xl), child: child);
   }
 }
 
@@ -380,52 +403,98 @@ class _DateField extends StatelessWidget {
   }
 }
 
-/// One answer in a single-choice list: a plain row, with a check on the chosen one.
-class _ChoiceRow extends StatelessWidget {
-  const _ChoiceRow({super.key, required this.label, required this.selected, required this.onTap});
+/// First job / some experience / changing careers, as one control. Tapping the chosen segment
+/// again clears it: every detail here is optional.
+class _ExperienceControl extends StatelessWidget {
+  const _ExperienceControl({required this.selected, required this.onSelected});
 
-  final String label;
+  final ExperienceLevel? selected;
+  final ValueChanged<ExperienceLevel> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: PrepColors.surface1,
+        borderRadius: BorderRadius.circular(Radii.control),
+        border: Border.all(color: PrepColors.lineStrong),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(Space.xs),
+        child: Row(
+          children: [
+            for (final level in ExperienceLevel.values)
+              Expanded(
+                child: _Segment(level: level, selected: selected == level, onTap: () => onSelected(level)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Segment extends StatelessWidget {
+  const _Segment({required this.level, required this.selected, required this.onTap});
+
+  final ExperienceLevel level;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      container: true,
+      button: true,
       inMutuallyExclusiveGroup: true,
       checked: selected,
-      label: label,
+      label: level.label,
       onTap: onTap,
       onTapHint: selected ? 'clear your answer' : null,
       excludeSemantics: true,
       child: FocusRing(
+        radius: Radii.chip,
         gap: -Space.xs,
-        child: InkWell(
-          onTap: onTap,
-          focusColor: Colors.transparent,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 52),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Space.gutter, vertical: Space.m),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: selected ? PrepType.bodyLMedium : PrepType.bodyL.copyWith(color: PrepColors.text2),
-                    ),
+        child: Material(
+          color: selected ? PrepColors.surface2 : Colors.transparent,
+          borderRadius: BorderRadius.circular(Radii.chip),
+          animationDuration: Motion.fade,
+          child: InkWell(
+            key: ValueKey('experience-${level.name}'),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(Radii.chip),
+            focusColor: Colors.transparent,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Space.s, vertical: Space.s),
+                child: Center(
+                  child: Text(
+                    level.label,
+                    textAlign: TextAlign.center,
+                    style: selected
+                        ? PrepType.label.copyWith(color: PrepColors.text)
+                        : PrepType.label.copyWith(color: PrepColors.text2),
                   ),
-                  const SizedBox(width: Space.m),
-                  SizedBox.square(
-                    dimension: 22,
-                    child: selected ? const PrepIcon(PrepIcons.check, color: PrepColors.accent, size: 22) : null,
-                  ),
-                ],
+                ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.gutter, Space.x4, Space.gutter, Space.s),
+      child: Semantics(header: true, child: Text(title, style: PrepType.titleM)),
     );
   }
 }

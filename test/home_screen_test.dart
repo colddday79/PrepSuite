@@ -6,16 +6,17 @@ import 'package:prepsuite/app/profile.dart';
 import 'package:prepsuite/app/services.dart';
 import 'package:prepsuite/coach/coach_api.dart';
 import 'package:prepsuite/coach/fakes.dart';
-import 'package:prepsuite/design/components.dart';
 import 'package:prepsuite/design/assistant_avatar.dart';
 import 'package:prepsuite/design/hologram.dart';
 import 'package:prepsuite/features/home/home_screen.dart';
+import 'package:prepsuite/features/intake/intake_screen.dart';
+import 'package:prepsuite/features/practice/practice_screen.dart';
 import 'package:prepsuite/features/profile/profile_screen.dart';
 
 bool _fontLoaded = false;
 
 AppServices _services({Profile profile = const Profile()}) => AppServices(
-  coach: FakeCoachApi(),
+  coach: FakeCoachApi(latency: Duration.zero),
   speech: FakeSpeechCapture(),
   voice: FakeInterviewerVoice(),
   consent: MemoryConsentStore(value: true),
@@ -29,7 +30,6 @@ Future<void> _boot(WidgetTester tester, {Size physical = const Size(1080, 2340),
   HologramVideo.instance.enabled = false;
   AssistantAvatar.live = false;
   if (!_fontLoaded) {
-    // Real Mona Sans metrics, so overflow checks match the device.
     await tester.runAsync(() async {
       final loader = FontLoader('MonaSans')..addFont(rootBundle.load('assets/fonts/MonaSans.ttf'));
       await loader.load();
@@ -40,7 +40,7 @@ Future<void> _boot(WidgetTester tester, {Size physical = const Size(1080, 2340),
   tester.view.devicePixelRatio = ratio;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(PrepSuiteApp(services: services ?? _services()));
-  await tester.pump();
+  await _settle(tester, 300);
 }
 
 Future<void> _settle(WidgetTester tester, [int ms = 600]) async {
@@ -50,31 +50,46 @@ Future<void> _settle(WidgetTester tester, [int ms = 600]) async {
 }
 
 void main() {
-  testWidgets('the presence takes about half the screen and nothing covers it', (tester) async {
-    await _boot(tester);
-    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
-    final presence = tester.getRect(find.byKey(const ValueKey('home-presence')));
-    final headline = tester.getRect(find.byKey(const ValueKey('home-headline')));
-    final start = tester.getRect(find.byKey(const ValueKey('start-practice')));
-
-    // The spacer reserves the presence box below the bar; the box itself starts 16 dp higher.
-    expect(presence.height + 16, greaterThanOrEqualTo(screen.height * 0.45));
-    expect(headline.top, greaterThanOrEqualTo(presence.bottom));
-    expect(start.bottom, lessThanOrEqualTo(screen.height));
+  testWidgets('home greets by name and leads with the assistant and Start practice', (tester) async {
+    await _boot(tester, services: _services(profile: const Profile(name: 'Alex')));
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.text('Hi, Alex'), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-assistant')), findsOneWidget);
+    expect(find.byKey(const ValueKey('start-practice')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the profile control opens the profile', (tester) async {
-    await _boot(tester);
-    await tester.tap(find.byWidgetPredicate((w) => w is IconAction && w.label == 'Profile'));
-    await _settle(tester);
-    expect(find.byType(ProfileScreen), findsOneWidget);
-  });
-
-  testWidgets('an upcoming interview date shows as one quiet line', (tester) async {
+  testWidgets('without a name it says hi there, and shows the interview countdown when set', (tester) async {
     final soon = DateTime.now().add(const Duration(days: 5));
     await _boot(tester, services: _services(profile: Profile(interviewDate: soon, targetRole: 'barista')));
+    expect(find.text('Hi there'), findsOneWidget);
     expect(find.text('Interview in 5 days · barista'), findsOneWidget);
+  });
+
+  testWidgets('Start practice opens the job intake for five questions', (tester) async {
+    await _boot(tester);
+    await tester.tap(find.byKey(const ValueKey('start-practice')));
+    await _settle(tester);
+    final intake = tester.widget<IntakeScreen>(find.byType(IntakeScreen));
+    expect(intake.questionCount, 5);
+  });
+
+  testWidgets('Quick question opens the intake for one question', (tester) async {
+    await _boot(tester);
+    await tester.ensureVisible(find.byKey(const ValueKey('quick-question')));
+    await tester.tap(find.byKey(const ValueKey('quick-question')));
+    await _settle(tester);
+    expect(tester.widget<IntakeScreen>(find.byType(IntakeScreen)).questionCount, 1);
+  });
+
+  testWidgets('the bottom bar switches tabs', (tester) async {
+    await _boot(tester);
+    await tester.tap(find.text('Practice').last);
+    await _settle(tester, 400);
+    expect(find.byType(PracticeScreen), findsOneWidget);
+    await tester.tap(find.text('Profile').last);
+    await _settle(tester, 400);
+    expect(find.byType(ProfileScreen), findsOneWidget);
   });
 
   testWidgets('no overflow with large text or on a small phone', (tester) async {
@@ -83,16 +98,7 @@ void main() {
     await _boot(tester);
     expect(tester.takeException(), isNull);
     await _boot(tester, physical: const Size(720, 1280), ratio: 2);
-    await _settle(tester, 200);
     expect(tester.takeException(), isNull);
-  });
-
-  test('presence size follows the screen', () {
-    final phone = homePresenceSize(const Size(411, 891), EdgeInsets.zero);
-    expect(phone, greaterThan(411));
-    expect(phone / 891, greaterThanOrEqualTo(0.5));
-    expect(homePresenceSize(const Size(360, 640), EdgeInsets.zero), lessThanOrEqualTo(640 * 0.55));
-    expect(homePresenceSize(const Size(1024, 1366), EdgeInsets.zero), 640);
   });
 
   test('interview countdown wording', () {
@@ -105,5 +111,10 @@ void main() {
       interviewCountdown(Profile(interviewDate: DateTime(2026, 10, 2), targetRole: 'junior analyst'), now),
       'Interview in 7 days · junior analyst',
     );
+  });
+
+  test('the fake coach still answers', () async {
+    final set = await FakeCoachApi(latency: Duration.zero).questions(job: 'barista');
+    expect(set.questions, isNotEmpty);
   });
 }

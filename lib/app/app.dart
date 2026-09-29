@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../design/tokens.dart';
-import '../features/home/home_screen.dart';
+import '../features/root/root_gate.dart';
 import 'services.dart';
 
 class PrepSuiteApp extends StatefulWidget {
@@ -55,7 +55,7 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
           themeMode: ThemeMode.dark,
           darkTheme: prepTheme(),
           theme: prepTheme(),
-          home: const HomeScreen(),
+          home: const RootGate(),
         ),
       ),
     );

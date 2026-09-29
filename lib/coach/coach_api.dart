@@ -225,33 +225,41 @@ String _serverUserMessage(String raw) {
 
 abstract class CoachApi {
   /// Interview questions for [job] (the raw text the person typed or pasted).
-  Future<QuestionSet> questions({required String job, int count = 5});
+  /// [about] is how the person described themselves, if they chose to; it
+  /// may be used to tailor the questions, never to invent facts.
+  Future<QuestionSet> questions({required String job, int count = 5, String about = ''});
 
   /// Feedback on one answer. Pass [delivery] for spoken answers and null for
-  /// typed ones.
+  /// typed ones. [about] is how the person described themselves, if they
+  /// chose to.
   Future<AnswerFeedback> feedback({
     required String job,
     required String question,
     required String transcript,
     DeliveryMetrics? delivery,
+    String about = '',
   });
 
-  /// End-of-session tips built from every answer.
+  /// End-of-session tips built from every answer. [about] is how the person
+  /// described themselves, if they chose to.
   Future<Wrapup> wrapup({
     required String job,
     required List<AnswerSummary> answers,
+    String about = '',
   });
 
   /// Answers the person's own question ("How long should this answer be?").
   /// [question] is the interview question on screen, [answer] their latest
   /// answer to it and [feedback] what the coach said about it; each is
-  /// optional context.
+  /// optional context. [about] is how the person described themselves, if
+  /// they chose to.
   Future<CoachReply> ask({
     required String job,
     required String userQuestion,
     String question = '',
     String answer = '',
     AnswerFeedback? feedback,
+    String about = '',
   });
 
   /// Never throws: returns `ok: false` when the coach can't be reached.
@@ -278,11 +286,12 @@ class HttpCoachApi implements CoachApi {
   final bool _ownsClient;
 
   @override
-  Future<QuestionSet> questions({required String job, int count = 5}) async {
+  Future<QuestionSet> questions({required String job, int count = 5, String about = ''}) async {
     final json = await _post({
       'action': 'questions',
       'job': job,
       'count': count,
+      if (about.isNotEmpty) 'about': about,
     });
     final set = QuestionSet.fromJson(json);
     if (set.questions.isEmpty) {
@@ -301,6 +310,7 @@ class HttpCoachApi implements CoachApi {
     required String question,
     required String transcript,
     DeliveryMetrics? delivery,
+    String about = '',
   }) async {
     final json = await _post({
       'action': 'feedback',
@@ -309,6 +319,7 @@ class HttpCoachApi implements CoachApi {
       'transcript': transcript,
       'delivery': delivery == null ? null : _jsonSafe(delivery.toJson()),
       if (delivery == null) 'typed': true,
+      if (about.isNotEmpty) 'about': about,
     });
     final fb = AnswerFeedback.fromJson(json);
     if ([fb.headline, fb.problem, fb.fix].any((t) => t.isEmpty)) {
@@ -325,11 +336,13 @@ class HttpCoachApi implements CoachApi {
   Future<Wrapup> wrapup({
     required String job,
     required List<AnswerSummary> answers,
+    String about = '',
   }) async {
     final json = await _post({
       'action': 'wrapup',
       'job': job,
       'answers': [for (final a in answers) a.toJson()],
+      if (about.isNotEmpty) 'about': about,
     });
     final notes = Wrapup.fromJson(json);
     if (notes.tips.isEmpty || notes.lastMinuteNotes.isEmpty) {
@@ -345,6 +358,7 @@ class HttpCoachApi implements CoachApi {
     String question = '',
     String answer = '',
     AnswerFeedback? feedback,
+    String about = '',
   }) async {
     final json = await _post({
       'action': 'ask',
@@ -358,6 +372,7 @@ class HttpCoachApi implements CoachApi {
           'problem': feedback.problem,
           'fix': feedback.fix,
         },
+      if (about.isNotEmpty) 'about': about,
     });
     final reply = CoachReply.fromJson(json);
     if (reply.answer.isEmpty) {
@@ -520,7 +535,7 @@ class FakeCoachApi implements CoachApi {
   int _questionCalls = 0;
 
   @override
-  Future<QuestionSet> questions({required String job, int count = 5}) async {
+  Future<QuestionSet> questions({required String job, int count = 5, String about = ''}) async {
     _questionCalls++;
     final fail = _questionCalls <= failuresBeforeSuccess;
     await Future<void>.delayed(latency);
@@ -540,6 +555,7 @@ class FakeCoachApi implements CoachApi {
     required String question,
     required String transcript,
     DeliveryMetrics? delivery,
+    String about = '',
   }) async {
     await Future<void>.delayed(latency);
     final words = transcript
@@ -607,6 +623,7 @@ class FakeCoachApi implements CoachApi {
   Future<Wrapup> wrapup({
     required String job,
     required List<AnswerSummary> answers,
+    String about = '',
   }) async {
     await Future<void>.delayed(latency);
     return const Wrapup(
@@ -635,6 +652,7 @@ class FakeCoachApi implements CoachApi {
     String question = '',
     String answer = '',
     AnswerFeedback? feedback,
+    String about = '',
   }) async {
     await Future<void>.delayed(latency);
     final asked = userQuestion.toLowerCase();

@@ -39,6 +39,7 @@ import {
 
 export const LIMITS = {
   job: 300,
+  about: 1200, // optional free-text "about me" from the profile
   question: 400,
   transcript: 6000,
   answers: 10,
@@ -193,12 +194,14 @@ function parseQuestions(body: Record<string, unknown>): QuestionsInput {
   if (typeof c !== "number" || !Number.isInteger(c) || c < LIMITS.count.min || c > LIMITS.count.max) {
     bad(`"count" must be a whole number from ${LIMITS.count.min} to ${LIMITS.count.max}.`);
   }
-  return { job, count: c };
+  const about = text(body, "about", LIMITS.about, { required: false, allowEmpty: true, label: "about" });
+  return { job, count: c, about };
 }
 
 function parseFeedback(body: Record<string, unknown>): FeedbackInput {
   return {
     job: text(body, "job", LIMITS.job, { required: false, allowEmpty: true }),
+    about: text(body, "about", LIMITS.about, { required: false, allowEmpty: true, label: "about" }),
     question: text(body, "question", LIMITS.question),
     transcript: text(body, "transcript", LIMITS.transcript, { allowEmpty: true }),
     delivery: parseDelivery(body.delivery),
@@ -211,6 +214,7 @@ function parseWrapup(body: Record<string, unknown>): WrapupInput {
   if (answers.length < 1 || answers.length > LIMITS.answers) bad(`"answers" must have 1 to ${LIMITS.answers} items.`);
   return {
     job: text(body, "job", LIMITS.job, { required: false, allowEmpty: true }),
+    about: text(body, "about", LIMITS.about, { required: false, allowEmpty: true, label: "about" }),
     answers: answers.map((a: unknown, i: number): WrapupAnswer => {
       if (!isRecord(a)) bad(`"answers[${i}]" must be an object.`);
       const optional = (key: string) =>
@@ -239,6 +243,7 @@ function parseAsk(body: Record<string, unknown>): AskInput {
   }
   return {
     job: text(body, "job", LIMITS.job, { required: false, allowEmpty: true }),
+    about: text(body, "about", LIMITS.about, { required: false, allowEmpty: true, label: "about" }),
     user_question: userQuestion,
     question: text(body, "question", LIMITS.question, { required: false, allowEmpty: true }),
     answer: text(body, "answer", LIMITS.transcript, { required: false, allowEmpty: true }),
@@ -261,7 +266,9 @@ function wordCount(s: string): number {
 }
 
 function questionsPrompt(i: QuestionsInput): string {
-  return `Write ${i.count} question${i.count === 1 ? "" : "s"}.\n\n<job>\n${data(i.job)}\n</job>`;
+  return `Write ${i.count} question${i.count === 1 ? "" : "s"}.\n\n<job>\n${data(i.job)}\n</job>\n\n<candidate>\n${
+    data(i.about) || "(not given)"
+  }\n</candidate>`;
 }
 
 function feedbackPrompt(i: FeedbackInput): string {
@@ -274,6 +281,7 @@ function feedbackPrompt(i: FeedbackInput): string {
   }
   return [
     `<job>\n${data(i.job) || "(not given)"}\n</job>`,
+    `<candidate>\n${data(i.about) || "(not given)"}\n</candidate>`,
     `<question>\n${data(i.question)}\n</question>`,
     `<transcript>\n${data(i.transcript) || "(empty)"}\n</transcript>`,
     `<delivery_metrics>\n${metrics}\n</delivery_metrics>`,
@@ -293,7 +301,9 @@ function wrapupPrompt(i: WrapupInput): string {
       `</answer>`,
     ].join("\n")
   );
-  return `<job>\n${data(i.job) || "(not given)"}\n</job>\n\n<answers>\n${answers.join("\n\n")}\n</answers>`;
+  return `<job>\n${data(i.job) || "(not given)"}\n</job>\n\n<candidate>\n${
+    data(i.about) || "(not given)"
+  }\n</candidate>\n\n<answers>\n${answers.join("\n\n")}\n</answers>`;
 }
 
 function askPrompt(i: AskInput): string {
@@ -306,6 +316,7 @@ function askPrompt(i: AskInput): string {
   // Context first; the question to answer comes last.
   return [
     `<job>\n${data(i.job) || "(not given)"}\n</job>`,
+    `<candidate>\n${data(i.about) || "(not given)"}\n</candidate>`,
     `<interview_question>\n${data(i.question) || "(none)"}\n</interview_question>`,
     `<their_answer>\n${data(i.answer) || "(none)"}\n</their_answer>`,
     `<feedback_given>\n${feedback}\n</feedback_given>`,

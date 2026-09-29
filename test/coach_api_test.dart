@@ -272,6 +272,38 @@ void main() {
         },
       });
     });
+
+    test('about is sent only when it is non-empty, for every action', () async {
+      final q = harness((_) => jsonResponse(questionsBody));
+      await q.api.questions(job: 'Barista');
+      expect(bodyOf(q.requests.single).containsKey('about'), isFalse);
+      await q.api.questions(job: 'Barista', about: 'I studied hospitality.');
+      expect(bodyOf(q.requests.last)['about'], 'I studied hospitality.');
+
+      final fb = harness((_) => jsonResponse(feedbackBody));
+      await fb.api.feedback(job: 'x', question: 'q', transcript: 't');
+      expect(bodyOf(fb.requests.single).containsKey('about'), isFalse);
+      await fb.api.feedback(job: 'x', question: 'q', transcript: 't', about: 'Second year physics student.');
+      expect(bodyOf(fb.requests.last)['about'], 'Second year physics student.');
+
+      final w = harness(
+        (_) => jsonResponse({
+          'tips': ['One'],
+          'last_minute_notes': ['Breathe.'],
+          'stories_to_use': [],
+        }),
+      );
+      await w.api.wrapup(job: 'x', answers: const []);
+      expect(bodyOf(w.requests.single).containsKey('about'), isFalse);
+      await w.api.wrapup(job: 'x', answers: const [], about: 'Keen cyclist.');
+      expect(bodyOf(w.requests.last)['about'], 'Keen cyclist.');
+
+      final a = harness((_) => jsonResponse({'answer': 'Aim for a minute.', 'mock': false}));
+      await a.api.ask(job: 'x', userQuestion: 'q');
+      expect(bodyOf(a.requests.single).containsKey('about'), isFalse);
+      await a.api.ask(job: 'x', userQuestion: 'q', about: 'Volunteers at a food bank.');
+      expect(bodyOf(a.requests.last)['about'], 'Volunteers at a food bank.');
+    });
   });
 
   group('parsing', () {

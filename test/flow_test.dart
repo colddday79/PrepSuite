@@ -34,13 +34,13 @@ class _CoachSpy extends FakeCoachApi {
   final wrapupCalls = <List<AnswerSummary>>[];
 
   @override
-  Future<QuestionSet> questions({required String job, int count = 5}) {
+  Future<QuestionSet> questions({String about = '', required String job, int count = 5}) {
     jobs.add(job);
     return super.questions(job: job, count: count);
   }
 
   @override
-  Future<AnswerFeedback> feedback({required String job, required String question, required String transcript, DeliveryMetrics? delivery}) async {
+  Future<AnswerFeedback> feedback({String about = '', required String job, required String question, required String transcript, DeliveryMetrics? delivery}) async {
     feedbackCalls.add(_FeedbackCall(job, question, transcript, delivery));
     if (feedbackFailures > 0) {
       feedbackFailures--;
@@ -51,7 +51,7 @@ class _CoachSpy extends FakeCoachApi {
   }
 
   @override
-  Future<Wrapup> wrapup({required String job, required List<AnswerSummary> answers}) async {
+  Future<Wrapup> wrapup({String about = '', required String job, required List<AnswerSummary> answers}) async {
     wrapupCalls.add(List.of(answers));
     if (wrapupFailures > 0) {
       wrapupFailures--;
@@ -191,7 +191,7 @@ Future<void> _openInterview(WidgetTester tester, _Rig rig) async {
 
 Future<void> _finishTypedPractice(WidgetTester tester, _Rig rig) async {
   await _boot(tester, rig);
-  await _tap(tester, find.text('Practise by typing'));
+  await _tap(tester, find.byKey(const ValueKey('practise-typing')));
   await _settle(tester, 600);
   await tester.enterText(find.byKey(const ValueKey('job-field')), 'Barista at a busy cafe');
   await tester.pump();
@@ -212,17 +212,14 @@ void main() {
     final rig = _Rig();
     await _boot(tester, rig);
 
-    // First-run consent sheet.
+    // Home, then the consent sheet before the first practice.
+    expect(find.text('Start practice'), findsOneWidget);
+    await _tap(tester, find.text('Start practice'));
     await _settle(tester, 600);
     expect(find.text('Before you start'), findsOneWidget);
     await _tap(tester, find.text('Accept'));
-    await _settle(tester, 600);
-    expect(rig.consent.value, isTrue);
-
-    // Home.
-    expect(find.text('Start practice'), findsOneWidget);
-    await _tap(tester, find.text('Start practice'));
     await _settle(tester, 800);
+    expect(rig.consent.value, isTrue);
 
     // Intake: the interviewer asks, we record the job, then check what we heard.
     expect(find.text('What job are you preparing for?', findRichText: true), findsOneWidget);
@@ -268,9 +265,9 @@ void main() {
     await _tap(tester, find.text('Done'));
     await _settle(tester, 800);
 
-    // Home again, with the notes kept for this session.
+    // Home again, with this practice kept as the last one.
     expect(find.text('Start practice'), findsOneWidget);
-    expect(find.text('Last-minute notes'), findsOneWidget);
+    expect(find.byKey(const ValueKey('recent-card')), findsOneWidget);
   });
 
   testWidgets('silent answer: says so and lets you type instead', (tester) async {
@@ -325,10 +322,12 @@ void main() {
   testWidgets('Not now keeps you on Home; microphone off offers typing', (tester) async {
     final rig = _Rig(mic: MicAccess.blocked);
     await _boot(tester, rig);
+    await _tap(tester, find.text('Start practice'));
     await _settle(tester, 600);
     await _tap(tester, find.text('Not now'));
     await _settle(tester, 600);
     expect(rig.consent.value, isFalse);
+    expect(find.text('Start practice'), findsOneWidget);
 
     await _tap(tester, find.text('Start practice'));
     await _settle(tester, 600);
@@ -497,7 +496,7 @@ void main() {
 
     await _tap(tester, find.text('Done'));
     await _settle(tester, 700);
-    await _tap(tester, find.text('Finish your interview notes'));
+    await _tap(tester, find.byKey(const ValueKey('recent-card')));
     await _settle(tester, 1000);
     expect(rig.coach.wrapupCalls, hasLength(2));
     expect(rig.coach.wrapupCalls.last.map((a) => a.transcript), originals);

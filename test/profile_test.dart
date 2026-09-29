@@ -4,17 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:prepsuite/app/app.dart';
+import 'package:prepsuite/app/assistant.dart';
 import 'package:prepsuite/app/profile.dart';
 import 'package:prepsuite/app/services.dart';
 import 'package:prepsuite/app/session.dart';
 import 'package:prepsuite/coach/coach_api.dart';
 import 'package:prepsuite/coach/fakes.dart';
 import 'package:prepsuite/design/assistant_avatar.dart';
+import 'package:prepsuite/design/components.dart';
 import 'package:prepsuite/design/hologram.dart';
 import 'package:prepsuite/design/icons.dart';
+import 'package:prepsuite/features/profile/practice_history.dart';
 import 'package:prepsuite/features/profile/profile_format.dart';
 import 'package:prepsuite/features/profile/profile_screen.dart';
-import 'package:prepsuite/features/wrapup/wrapup_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _questions = [
@@ -83,6 +85,7 @@ void main() {
         targetRole: 'Junior barista',
         interviewDate: DateTime(2026, 10, 2),
         experience: ExperienceLevel.careerChange,
+        about: 'I love coffee and have volunteered at two community cafes.',
       );
       final back = Profile.fromJson(jsonDecode(jsonEncode(profile.toJson())) as Map<String, dynamic>);
       expect(back, profile);
@@ -92,7 +95,13 @@ void main() {
     test('parsing tolerates missing, wrong and unknown values', () {
       expect(Profile.fromJson({}), const Profile());
       expect(
-        Profile.fromJson({'name': 42, 'target_role': ['x'], 'interview_date': 'soon', 'experience': 'astronaut'}),
+        Profile.fromJson({
+          'name': 42,
+          'target_role': ['x'],
+          'interview_date': 'soon',
+          'experience': 'astronaut',
+          'about': 7,
+        }),
         const Profile(),
       );
       final parsed = Profile.fromJson({
@@ -100,11 +109,19 @@ void main() {
         'target_role': ' Nurse ',
         'interview_date': '2026-10-02T15:30:00Z',
         'experience': 'firstJob',
+        'about': '  Loves solving problems.  ',
       });
       expect(parsed.name, 'Alex');
       expect(parsed.targetRole, 'Nurse');
       expect(parsed.interviewDate, DateTime(2026, 10, 2));
       expect(parsed.experience, ExperienceLevel.firstJob);
+      expect(parsed.about, 'Loves solving problems.');
+    });
+
+    test('about counts towards isEmpty like every other field', () {
+      expect(const Profile().isEmpty, isTrue);
+      expect(const Profile(about: '  ').isEmpty, isTrue);
+      expect(const Profile(about: 'Keen baker.').isEmpty, isFalse);
     });
 
     test('days until the interview count calendar days across daylight saving changes', () {
@@ -136,7 +153,12 @@ void main() {
   group('ProfileStore', () {
     test('saves to the phone, restores and clears', () async {
       SharedPreferences.setMockInitialValues({});
-      final profile = Profile(name: 'Alex', interviewDate: DateTime(2026, 10, 2), experience: ExperienceLevel.firstJob);
+      final profile = Profile(
+        name: 'Alex',
+        interviewDate: DateTime(2026, 10, 2),
+        experience: ExperienceLevel.firstJob,
+        about: 'Keen baker.',
+      );
       final store = ProfileStore(persist: true);
       await store.save(profile);
       expect(store.saveFailed, isFalse);
@@ -257,29 +279,83 @@ void main() {
   });
 
   group('ProfileScreen', () {
-    testWidgets('empty: says it is optional, shows no history and goes back to practise', (tester) async {
+    testWidgets('empty: header, about card and settings, no back button, no history', (tester) async {
       await _openProfile(tester, _services());
-      expect(find.text('Profile'), findsOneWidget);
-      expect(find.text(_emptyHistory), findsOneWidget);
-      expect(find.text('Choose a date'), findsOneWidget);
-      expect(tester.getSemantics(find.bySemanticsLabel('Back')), isSemantics(isButton: true, hasTapAction: true));
-
-      await _tap(tester, find.text('Start practising'));
-      await _settle(tester);
-      expect(find.byType(ProfileScreen), findsNothing);
-      expect(find.text('Start practice'), findsOneWidget);
+      expect(find.bySemanticsLabel('Back'), findsNothing);
+      expect(find.text('Your profile'), findsOneWidget);
+      expect(find.text('Describe yourself in a few sentences.'), findsOneWidget);
+      expect(find.text('Edit'), findsOneWidget);
+      expect(find.text('Say it'), findsOneWidget);
+      expect(find.text('Sample answers'), findsOneWidget);
+      expect(find.text('Privacy'), findsOneWidget);
+      expect(find.text('Delete everything on this phone'), findsOneWidget);
+      expect(find.byType(PracticeHistory), findsNothing);
+      expect(find.text('No practices yet.'), findsNothing);
     });
 
-    testWidgets('edits save at once: name, job, experience and date', (tester) async {
+    testWidgets('about: typing and saving shows the text and clears the empty state', (tester) async {
       final services = _services();
       await _openProfile(tester, services);
 
-      await tester.enterText(find.byKey(const ValueKey('profile-name')), 'Alex ');
+      await _tap(tester, find.text('Edit'));
+      await _settle(tester, 300);
+      await tester.enterText(
+        find.byKey(const ValueKey('about-field')),
+        'I study computer science and volunteer at a shelter.',
+      );
       await tester.pump();
-      expect(services.profile.value.name, 'Alex');
+      await _tap(tester, find.text('Save'));
+      await _settle(tester, 300);
+
+      expect(services.profile.value.about, 'I study computer science and volunteer at a shelter.');
+      expect(find.text('I study computer science and volunteer at a shelter.'), findsOneWidget);
+      expect(find.text('Describe yourself in a few sentences.'), findsNothing);
+    });
+
+    testWidgets('about: saying it replaces empty text, then appends on the next recording', (tester) async {
+      final services = _services();
+      await _openProfile(tester, services);
+
+      await _tap(tester, find.widgetWithText(QuietButton, 'Say it'));
+      await _settle(tester, 300);
+      final record = find.byKey(const ValueKey('record-button'));
+      expect(record, findsOneWidget);
+      await _tap(tester, record);
+      await _settle(tester, 500);
+      await _tap(tester, record);
+      await _settle(tester, 300);
+
+      final first = services.profile.value.about;
+      expect(first, isNotEmpty);
+
+      await _tap(tester, find.widgetWithText(QuietButton, 'Say it'));
+      await _settle(tester, 300);
+      await _tap(tester, record);
+      await _settle(tester, 500);
+      await _tap(tester, record);
+      await _settle(tester, 300);
+
+      final second = services.profile.value.about;
+      expect(second, startsWith(first));
+      expect(second.length, greaterThan(first.length));
+    });
+
+    testWidgets('details: name, job, date and experience save at once', (tester) async {
+      final services = _services();
+      await _openProfile(tester, services);
+
+      await _tap(tester, find.text('Name'));
+      await _settle(tester, 300);
+      await tester.enterText(find.byKey(const ValueKey('profile-name')), 'Alex');
+      await tester.pump();
       await tester.enterText(find.byKey(const ValueKey('profile-role')), 'Junior barista');
       await tester.pump();
+      await _tap(tester, find.text('Save'));
+      await _settle(tester, 300);
+      expect(services.profile.value.name, 'Alex');
       expect(services.profile.value.targetRole, 'Junior barista');
+      expect(find.text('Alex'), findsWidgets);
+      expect(find.text('Junior barista'), findsWidgets);
 
       await _tap(tester, find.text('Some experience'));
       expect(services.profile.value.experience, ExperienceLevel.someExperience);
@@ -321,42 +397,49 @@ void main() {
       expect(services.profile.value.name, 'Alex');
     });
 
-    testWidgets('history opens the latest notes; delete everything only after confirming', (tester) async {
+    testWidgets('choosing an assistant calls the store', (tester) async {
+      final services = _services();
+      await _openProfile(tester, services);
+      expect(services.assistant.value.kind, AssistantKind.nova);
+      await _tap(tester, find.byKey(const ValueKey('assistant-sol')));
+      await _settle(tester, 300);
+      expect(services.assistant.value.kind, AssistantKind.sol);
+    });
+
+    testWidgets('see the introduction again resets onboarding', (tester) async {
+      final services = _services();
+      await _openProfile(tester, services);
+      expect(services.assistant.onboarded, isTrue);
+      await _tap(tester, find.text('See the introduction again'));
+      await _settle(tester, 300);
+      expect(services.assistant.onboarded, isFalse);
+    });
+
+    testWidgets('privacy opens the info-only consent sheet', (tester) async {
+      await _openProfile(tester, _services());
+      await _tap(tester, find.text('Privacy'));
+      await _settle(tester, 300);
+      expect(find.text('How your voice is used'), findsOneWidget);
+      expect(find.text('Close'), findsOneWidget);
+    });
+
+    testWidgets('delete everything only after confirming', (tester) async {
       final sessions = SessionStore();
       await sessions.finished(_session(title: 'Nurse', startedAt: DateTime(2026, 9, 20, 10), notes: true));
-      await sessions.finished(_session(title: 'Barista', startedAt: DateTime(2026, 9, 24, 18), answered: 1, notes: true));
-      final profile = ProfileStore(initial: const Profile(name: 'Alex', experience: ExperienceLevel.firstJob));
+      final profile = ProfileStore(
+        initial: const Profile(name: 'Alex', experience: ExperienceLevel.firstJob, about: 'I love coffee.'),
+      );
       final services = _services(profile: profile, sessions: sessions);
       await _openProfile(tester, services);
 
-      expect(find.text('Barista'), findsOneWidget);
-      expect(find.text('Nurse'), findsOneWidget);
-      expect(find.textContaining('1 of 2 answered · Notes ready'), findsOneWidget);
-      expect(find.textContaining('2 of 2 answered · Notes written'), findsOneWidget);
-      expect(find.text('Only your latest practice keeps its notes.'), findsOneWidget);
-      expect(tester.widget<TextField>(find.byKey(const ValueKey('profile-name'))).controller!.text, 'Alex');
-
-      await _tap(tester, find.text('Barista'));
-      await _settle(tester);
-      final notes = tester.widget<WrapupScreen>(find.byType(WrapupScreen));
-      expect((notes.session, notes.review), (sessions.last, true));
-      expect(find.text('Before your interview'), findsOneWidget);
-      await tester.binding.handlePopRoute();
-      await _settle(tester);
-      expect(find.byType(ProfileScreen), findsOneWidget);
-
-      // The older practice is a summary: tapping it opens nothing.
-      await _tap(tester, find.text('Nurse'));
-      await _settle(tester, 300);
-      expect(find.byType(WrapupScreen), findsNothing);
-
+      expect(find.text('Alex'), findsWidgets);
       await _tap(tester, find.text('Delete everything on this phone'));
       await _settle(tester, 300);
       expect(find.text('Delete everything on this phone?'), findsOneWidget);
       await _tap(tester, find.text('Cancel'));
       await _settle(tester, 300);
       expect(profile.value.name, 'Alex');
-      expect(sessions.history, hasLength(2));
+      expect(sessions.history, hasLength(1));
 
       await _tap(tester, find.text('Delete everything on this phone'));
       await _settle(tester, 300);
@@ -365,47 +448,45 @@ void main() {
       expect(profile.value, const Profile());
       expect(sessions.last, isNull);
       expect(sessions.history, isEmpty);
-      expect(find.text(_emptyHistory), findsOneWidget);
       expect(find.text('Your details and practices are deleted.'), findsOneWidget);
-      expect(tester.widget<TextField>(find.byKey(const ValueKey('profile-name'))).controller!.text, isEmpty);
+      expect(find.text('Your profile'), findsOneWidget);
+      expect(find.text('Describe yourself in a few sentences.'), findsOneWidget);
     });
 
-    testWidgets('no overflow at 1.3x text, full or empty', (tester) async {
+    testWidgets('no overflow at 1.3x text, a full profile', (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 1.3;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      final sessions = SessionStore();
-      for (var i = 0; i < 4; i++) {
-        await sessions.finished(_session(
-          title: i == 0 ? 'Graduate civil engineer designing bridges for a regional council' : 'Barista $i',
-          startedAt: DateTime(2025, 12, 28 + i, 9),
-          notes: i.isEven,
-        ));
-      }
       final profile = ProfileStore(
         initial: Profile(
           name: 'Alexandra',
           targetRole: 'Graduate civil engineer designing bridges',
           interviewDate: DateTime(DateTime.now().year + 1, 9, 30),
           experience: ExperienceLevel.careerChange,
+          about:
+              'I studied structural engineering and spent two summers volunteering on community '
+              'rebuilding projects after storms.',
         ),
       );
-      await _openProfile(tester, _services(profile: profile, sessions: sessions));
+      await _openProfile(tester, _services(profile: profile));
       expect(tester.takeException(), isNull);
-      await tester.drag(find.byType(SingleChildScrollView).last, const Offset(0, -3000));
+      await tester.drag(find.byType(SingleChildScrollView).first, const Offset(0, -3000));
       await _settle(tester, 300);
       expect(find.text('Delete everything on this phone'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
 
-      await sessions.clearAll();
-      await profile.clear();
+    testWidgets('no overflow at 360x640 dp and 1.3x text, an empty profile', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _openProfile(tester, _services(), physicalSize: const Size(360, 640), devicePixelRatio: 1);
+      expect(tester.takeException(), isNull);
+      await tester.drag(find.byType(SingleChildScrollView).first, const Offset(0, -3000));
       await _settle(tester, 300);
-      expect(find.text(_emptyHistory), findsOneWidget);
+      expect(find.text('Delete everything on this phone'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
 }
-
-const _emptyHistory = 'No practices yet.';
 
 AppServices _services({ProfileStore? profile, SessionStore? sessions}) => AppServices(
   coach: FakeCoachApi(latency: Duration.zero),
@@ -421,8 +502,14 @@ AppServices _services({ProfileStore? profile, SessionStore? sessions}) => AppSer
 
 bool _fontLoaded = false;
 
-/// Boots the app on Home, as on a 1080 x 2340 phone, then opens the profile over it.
-Future<void> _openProfile(WidgetTester tester, AppServices services) async {
+/// Mounts [ProfileScreen] as a tab body would see it: under the app's own theme and [AppScope],
+/// with no navigator route around it (there is no back button to test around).
+Future<void> _openProfile(
+  WidgetTester tester,
+  AppServices services, {
+  Size physicalSize = const Size(1080, 2340),
+  double devicePixelRatio = 2.625,
+}) async {
   HologramVideo.instance.enabled = false;
   AssistantAvatar.live = false;
   if (!_fontLoaded) {
@@ -433,13 +520,20 @@ Future<void> _openProfile(WidgetTester tester, AppServices services) async {
     });
     _fontLoaded = true;
   }
-  tester.view.physicalSize = const Size(1080, 2340);
-  tester.view.devicePixelRatio = 2.625;
+  tester.view.physicalSize = physicalSize;
+  tester.view.devicePixelRatio = devicePixelRatio;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(PrepSuiteApp(services: services));
-  await tester.pump();
-  tester.state<NavigatorState>(find.byType(Navigator).first).push(
-    MaterialPageRoute<void>(builder: (_) => const ProfileScreen()),
+  await tester.pumpWidget(
+    AppScope(
+      services: services,
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        themeMode: ThemeMode.dark,
+        darkTheme: prepTheme(),
+        theme: prepTheme(),
+        home: const ProfileScreen(),
+      ),
+    ),
   );
   await _settle(tester);
 }

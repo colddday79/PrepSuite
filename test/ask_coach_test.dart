@@ -77,7 +77,7 @@ class _Coach extends FakeCoachApi {
   final asks = <_AskCall>[];
 
   @override
-  Future<CoachReply> ask({required String job, required String userQuestion, String question = '', String answer = '', AnswerFeedback? feedback}) async {
+  Future<CoachReply> ask({String about = '', required String job, required String userQuestion, String question = '', String answer = '', AnswerFeedback? feedback}) async {
     asks.add(_AskCall(job, userQuestion, question, answer, feedback));
     if (askFailures > 0) {
       askFailures--;

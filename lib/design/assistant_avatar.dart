@@ -338,25 +338,14 @@ class _AssistantPainter extends CustomPainter {
     final smoothing = Paint()..filterQuality = FilterQuality.medium;
     _drawImage(canvas, layers.body, box, smoothing);
     _paintFace(canvas, s);
-    // Light-only layers rendered on black: black becomes transparent, then they add light.
-    _drawImage(canvas, layers.glass, box, Paint()
-      ..filterQuality = FilterQuality.medium
-      ..colorFilter = _lightOnly
-      ..blendMode = BlendMode.plus);
+    // Light layers carry their own transparency (baked from renders on black), so they are
+    // drawn normally: they add light and leave the page untouched everywhere else.
+    _drawImage(canvas, layers.glass, box, Paint()..filterQuality = FilterQuality.medium);
     _drawImage(canvas, layers.glow, box, Paint()
       ..filterQuality = FilterQuality.medium
-      ..colorFilter = _lightOnly
-      ..blendMode = BlendMode.plus
       ..color = Color.fromRGBO(255, 255, 255, _energy.clamp(0.0, 1.0)));
     canvas.restore();
   }
-
-  static const _lightOnly = ColorFilter.matrix(<double>[
-    1, 0, 0, 0, 0, //
-    0, 1, 0, 0, 0, //
-    0, 0, 1, 0, 0, //
-    0.6, 0.9, 0.9, 0, 0, //
-  ]);
 
   void _drawImage(Canvas canvas, ui.Image image, Rect dst, Paint paint) {
     final src = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
