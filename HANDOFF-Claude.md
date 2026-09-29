@@ -346,3 +346,61 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 - Push them to `/data/local/tmp/prepsuite/` (chmod 755 on the dir, 644 on the files).
 - Run with `--dart-define=SPEECH_TEST_WAVS=/data/local/tmp/prepsuite/job.wav,...`; each recording consumes the next file.
 - `flutter run --pid-file F` then `kill -USR1 $(cat F)` hot-reloads and `-USR2` hot-restarts.
+
+---
+
+## Session 7 (2026-09-28 to 09-29): the assistant character and a real app
+
+**Owner's asks:**
+- Replace the gold globe with a real AI assistant character that has eyes and a mouth that moves when it talks. Cute but not childish, keeping the Jarvis feel. Built in Blender.
+- Let people choose their assistant.
+- Make it look like a real, friendly app:
+  - an intro/tutorial;
+  - a bottom navigation bar (their reference: Dribbble-style bottom bars);
+  - more than one page;
+  - a Profile about describing yourself;
+  - far fewer words.
+- The owner complained that "nothing changes" after Claude or Codex finish. Cause: agent work sat in `.claude/worktrees/` and never reached `~/Documents/PrepSuite`, and hot reloads are not written into the installed APK. **Rule from now on: work only in `~/Documents/PrepSuite`, do not use worktree isolation, and finish with a full `flutter run` or install so the emulator/phone runs the committed code.**
+
+**The assistant:**
+- `tools/blender/models/assistant.py` builds the robot procedurally. It is a white glossy shell, a dark glass visor (made with booleans), a headset with glowing ear rings, an arc-reactor chest core, and a floating egg body with elbow-bent arms and thumbed hands.
+- It renders four looks (nova blue, sol gold, iris violet, mint), each as three layers: `body` (RGBA), `glass` (visor reflections) and `glow` (lights with bloom). They use the Standard view transform, exposure −0.15, 1152 px and 160 samples; the whole render takes about 3 minutes.
+- The glass and glow layers were converted to luminance-alpha RGBA WebP (a smoothstep fade near zero). Impeller's `BlendMode.plus` with opaque black left a visible square, so they are now drawn with normal source-over.
+- `--wave` rigs the right arm (shoulder and elbow pivots) and renders a 40-frame hello wave of the body pass. It is **not yet used in the app**.
+- `lib/design/assistant_avatar.dart` (`AssistantAvatar(look:, size:, mood:, level:, hud:)`) stacks the layers and draws the face live on the visor. The visor rect is `kAssistantVisor`, from `tools/blender/models/assistant_face.json`. The moods are:
+  - idle: blinks and gazes;
+  - listening: a sound-wave mouth;
+  - speaking: the mouth opens with `level`;
+  - thinking: eyes up, with dots;
+  - happy: ^ ^ eyes.
+  It also has the Jarvis HUD (halo arcs, ticks and a floor ring) and a float/sway. Set `AssistantAvatar.live = false` in tests.
+- `lib/app/assistant.dart` has `AssistantKind`/`AssistantLook` (plus `orb` = the old gold globe) and `AssistantStore` (the chosen look plus `onboarded`, persisted). `lib/design/assistant_picker.dart` is the picker. `lib/dev/assistant_preview.dart` previews every mood (`flutter run -t lib/dev/assistant_preview.dart`).
+
+**The app now:**
+- `RootGate` shows `OnboardingFlow` first (welcome said aloud, a 3-step tutorial, choose assistant, about you, privacy), then `AppShell`.
+- **AppShell:** a bottom bar with Home, Practice, History and Profile, plus a raised mic button that starts a mock interview.
+- **Home** (`lib/features/home/home_screen.dart`):
+  - a greeting;
+  - the assistant on a lit stage with a speech bubble (tap it and it says hello, then opens Talk);
+  - a Start practice pill in the assistant's colour;
+  - "Ways to practise" cards with mini assistants;
+  - a days-to-interview card;
+  - the last practice with a progress bar;
+  - a daily tip.
+- **Practice:** a featured mock interview card and a 2×2 mode grid.
+- **Talk** (`lib/features/talk/`): a voice/typed Q&A with the assistant through `coach.ask`, answered aloud.
+- **History:** past practices.
+- **Profile:** About me (typed or spoken), details, the assistant picker, settings.
+- The coach's `questions`, `feedback`, `wrapup` and `ask` accept an optional `about` (a `<candidate>` block in the prompts). The intake and interview do **not** pass it yet.
+- The coach screens (intake, interview, notes) show the assistant with moods instead of the globe.
+- The other assistant's uncommitted home/history work from 09-28 is preserved on branch `wip/gpt-home-history-2026-09-28`.
+
+**State:**
+- 141 Flutter tests and 34 Deno tests pass, and analyze is clean. Everything is pushed to `colddday79/PrepSuite` main.
+- The coach runs on 8787 with Ollama `gemma4:31b-cloud` (the Mac's LAN IP changed to 192.168.68.54; `tools/run-phone.sh` handles that).
+
+**Next:**
+- Pass `profile.about` into intake and interview coach calls.
+- Play the wave (render the frames, encode them as an animated WebP, and play it in `AssistantAvatar` for greetings).
+- History could show simple progress over time.
+- Test on the Galaxy S26.
