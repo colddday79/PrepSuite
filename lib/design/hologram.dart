@@ -144,6 +144,15 @@ class HologramStage extends StatelessWidget {
   }
 }
 
+/// Just the looping hologram (on its own black), with no room or light around it. Put it on
+/// black, for example inside a round lens.
+class PresenceLoop extends StatelessWidget {
+  const PresenceLoop({super.key});
+
+  @override
+  Widget build(BuildContext context) => const _PresenceVideo();
+}
+
 class _PresenceVideo extends StatelessWidget {
   const _PresenceVideo();
 

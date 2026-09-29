@@ -153,8 +153,23 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
         image: true,
         child: SizedBox.square(
           dimension: widget.size,
-          // The hologram paints its own dark room: keep it a round lens, not a square.
-          child: ClipOval(child: HologramStage(size: widget.size * 0.86, level: widget.level)),
+          // A round black lens with the hologram inside, about as big as a robot looks in the same
+          // box. The loop is rendered on black, so no blending is needed (a blended "room" leaks past
+          // round clips on Android's renderer).
+          child: Center(
+            child: SizedBox.square(
+              dimension: widget.size * 0.8,
+              child: ClipOval(
+                child: ColoredBox(
+                  color: const Color(0xFF000000),
+                  child: Padding(
+                    padding: EdgeInsets.all(widget.size * 0.04),
+                    child: _Pulse(level: widget.level, child: const PresenceLoop()),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       );
     }
@@ -175,6 +190,25 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Swells a little with the voice level.
+class _Pulse extends StatelessWidget {
+  const _Pulse({required this.level, required this.child});
+
+  final ValueListenable<double>? level;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final level = this.level;
+    if (level == null) return child;
+    return ValueListenableBuilder<double>(
+      valueListenable: level,
+      builder: (context, v, child) => Transform.scale(scale: 1 + 0.05 * v.clamp(0.0, 1.0), child: child),
+      child: child,
     );
   }
 }
