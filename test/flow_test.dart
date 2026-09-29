@@ -300,7 +300,7 @@ void main() {
     await _tap(tester, find.text('Send answer'));
     await _settle(tester, 600);
     expect(find.text('Next question'), findsOneWidget);
-    expect(find.textContaining('typed'), findsWidgets);
+    expect(find.textContaining('Typed'), findsWidgets);
   });
 
   testWidgets('coach unreachable: honest error, then retry works', (tester) async {
@@ -410,7 +410,7 @@ void main() {
 
     expect(rig.coach.feedbackCalls.single.transcript, corrected);
     expect(rig.coach.feedbackCalls.single.delivery, isNull);
-    expect(find.textContaining('typed'), findsWidgets);
+    expect(find.textContaining('Typed'), findsWidgets);
     expect(find.textContaining('words a minute'), findsNothing);
   });
 
