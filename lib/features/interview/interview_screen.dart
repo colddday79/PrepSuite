@@ -284,6 +284,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         question: _current.text,
         transcript: _transcript,
         delivery: _metrics,
+        about: _services.profile.value.about,
       );
       if (!mounted || operation != _operation) return;
       _session.answers[_index] = AnswerRecord(transcript: _transcript, metrics: _metrics, feedback: feedback, typed: _wasTyped);

@@ -400,7 +400,7 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 - The coach runs on 8787 with Ollama `gemma4:31b-cloud` (the Mac's LAN IP changed to 192.168.68.54; `tools/run-phone.sh` handles that).
 
 **Next:**
-- Pass `profile.about` into intake and interview coach calls.
+- (Done: `profile.about` now goes with every coach request, so questions and feedback draw on it.)
 - Play the wave (render the frames, encode them as an animated WebP, and play it in `AssistantAvatar` for greetings).
 - History could show simple progress over time.
 - Test on the Galaxy S26.

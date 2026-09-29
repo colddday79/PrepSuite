@@ -101,7 +101,11 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
       _error = null;
     });
     try {
-      final wrapup = await _services.coach.wrapup(job: widget.session.job, answers: widget.session.summaries());
+      final wrapup = await _services.coach.wrapup(
+        job: widget.session.job,
+        answers: widget.session.summaries(),
+        about: _services.profile.value.about,
+      );
       widget.session.wrapup = wrapup;
       // Finish an in-flight save after leaving this page, but never replace a
       // newer practice or restore notes the person has explicitly deleted.

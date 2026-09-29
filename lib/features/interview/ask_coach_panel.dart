@@ -219,6 +219,7 @@ class AskCoachController extends ChangeNotifier {
         question: topic.question,
         answer: topic.answer,
         feedback: topic.feedback,
+        about: _services.profile.value.about,
       );
       if (operation != _operation) return;
       reply = answer;

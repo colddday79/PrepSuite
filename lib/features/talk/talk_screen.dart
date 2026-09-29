@@ -264,7 +264,11 @@ class _TalkScreenState extends State<TalkScreen> with WidgetsBindingObserver {
     });
     try {
       final profile = _services.profile.value;
-      final reply = await _services.coach.ask(job: profile.targetRole, userQuestion: turn.question);
+      final reply = await _services.coach.ask(
+        job: profile.targetRole,
+        userQuestion: turn.question,
+        about: profile.about,
+      );
       if (!mounted || operation != _operation) return;
       setState(() {
         turn.answer = reply.answer;

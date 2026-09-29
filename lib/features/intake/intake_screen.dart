@@ -251,7 +251,11 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
       _phase = _Phase.loading;
     });
     try {
-      final set = await _services.coach.questions(job: job, count: widget.questionCount);
+      final set = await _services.coach.questions(
+        job: job,
+        count: widget.questionCount,
+        about: _services.profile.value.about,
+      );
       if (!mounted) return;
       // Typing the job alone doesn't switch answers to typing; "Practise by typing" does, and so
       // does a phone where voice is not available.
