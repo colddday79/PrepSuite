@@ -53,11 +53,10 @@ class FeedbackView extends StatelessWidget {
             child: Text('“${_unquote(evidence)}”', style: PrepType.quote.copyWith(color: PrepColors.text2)),
           ),
         if (fix.isNotEmpty) _Section(label: 'Fix it', child: Text(fix, style: PrepType.bodyL)),
-        if (delivery.isNotEmpty || typed)
-          _Section(
-            label: typed ? 'Voice delivery not assessed' : 'How it sounded',
-            child: Text(typed ? 'This answer was typed or edited. Voice delivery was not assessed.' : delivery, style: PrepType.body),
-          ),
+        if (typed)
+          _Section(label: 'How it sounded', child: Text('Typed, so no voice feedback.', style: PrepType.body))
+        else if (delivery.isNotEmpty)
+          _Section(label: 'How it sounded', child: Text(delivery, style: PrepType.body)),
         if (strength.isNotEmpty) _Section(label: 'What worked', child: Text(strength, style: PrepType.body)),
       ],
     );
