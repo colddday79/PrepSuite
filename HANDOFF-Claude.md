@@ -404,3 +404,28 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 - Play the wave (render the frames, encode them as an animated WebP, and play it in `AssistantAvatar` for greetings).
 - History could show simple progress over time.
 - Test on the Galaxy S26.
+
+---
+
+## Session 7b (2026-09-29 evening): onboarding as a conversation, cool palette
+
+**Owner's feedback:**
+- The tutorial pages ("Tell me the job", "Answer out loud", "Get honest feedback") had only a Next button, so there was nothing to actually tell the app.
+- The picker's cards were clipped at the screen edge.
+- The warm brown/grey colours looked bad and vibecoded.
+
+**What changed:**
+- **Onboarding** (`lib/features/onboarding/onboarding_flow.dart`) is now a chat.
+  - You pick your coach from a grid that always fits: `AssistantPicker` is a `Wrap`, three across on a phone.
+  - The coach then asks your name, the job and "tell me about yourself" out loud, with chat bubbles. You answer in a chat bar by typing or tapping the mic (10 s, or 45 s for about me).
+  - Answers save to the profile as you go. A long spoken job answer is saved as a short title via `jobTitleFrom` (now public in coach_api.dart).
+  - Privacy is one line with "Sounds good" / "Not now", then "Let's go". Skip at the top leaves at any point.
+- **Palette** (`lib/design/tokens.dart`):
+  - a cool near-black `#0B0D12` with slate surfaces `#141821` / `#1C2130` and cool greys for text;
+  - `PrepColors.accent` is now the chosen assistant's colour. It is set via `PrepColors.useAccent`, and the app root listens to `AssistantStore` and rebuilds everything on change;
+  - `accentTint` and `focus` derive from it;
+  - `PrimaryButton` is filled with the accent; the cream fill is gone.
+- **Home:** the "Ways to practise" row is two cards side by side instead of a sideways-scrolling carousel. The Orb look is clipped to a circle, so it no longer shows a dark square.
+- **Feedback:** typed answers show "Typed, so no voice feedback." instead of a two-line note.
+
+**State:** 139 Flutter tests pass and analyze is clean. Pushed to `colddday79/PrepSuite` main. Verified on the emulator after a clean install: onboarding through to Home, then a mock interview with real AI questions and feedback.
