@@ -55,7 +55,15 @@ VARIANTS = {
     "sol": dict(accent=(0.69, 0.52, 0.26), glow=(1.0, 0.50, 0.10), rim=(1.0, 0.72, 0.42)),
     "iris": dict(accent=(0.37, 0.31, 0.55), glow=(0.52, 0.30, 1.0), rim=(0.62, 0.48, 1.0)),
     "mint": dict(accent=(0.27, 0.48, 0.37), glow=(0.06, 1.0, 0.66), rim=(0.40, 1.0, 0.80)),
+    # The dark one: glossy black ceramic, brushed-titanium trim, soft white lights, and a graphite gasket
+    # so the visor and the waist seam still read against the black.
+    "onyx": dict(accent=(0.56, 0.58, 0.62), glow=(0.82, 0.88, 1.0), rim=(0.85, 0.9, 1.0),
+                 shell=(0.016, 0.017, 0.02), gasket=(0.075, 0.08, 0.09), rim_gain=2.2),
 }
+
+RIM_ENERGY = 900
+WHITE = (0.74, 0.725, 0.69)            # the default warm off-white shell
+TRIM = (0.010, 0.011, 0.014)           # the default near-black gasket
 
 EMIT_BODY = 1.6      # lights in the body pass: on, but not blooming
 EMIT_GLOW = 9.0      # lights in the glow pass
@@ -277,6 +285,15 @@ class Materials:
         set_input(self.accent, "Metallic", 1.0)
         set_input(self.accent, "Roughness", 0.35)
         set_input(self.accent, "Coat Weight", 0.0)
+        shell = v.get("shell", WHITE)
+        set_input(self.shell, "Base Color", (*shell, 1.0))
+        set_input(self.satin, "Base Color", (*shell, 1.0))
+        dark = shell != WHITE
+        # A black shell needs a stronger clear coat to show its form through reflections.
+        set_input(self.shell, "Coat Weight", 1.0 if dark else 0.5)
+        set_input(self.satin, "Roughness", 0.32 if dark else 0.45)
+        set_input(self.satin, "Coat Weight", 0.35 if dark else 0.0)
+        set_input(self.gasket, "Base Color", (*v.get("gasket", TRIM), 1.0))
         glow = v["glow"]
         set_input(self.light, "Emission Color", (*glow, 1.0))
         hot = tuple(min(1.0, 0.55 + 0.45 * c) for c in glow)
@@ -556,8 +573,8 @@ def setup_lights():
         "key": area("Key", (-3.4, -4.2, 4.4), target, 4.0, 430, (1.0, 0.975, 0.95)),
         "fill": area("Fill", (3.8, -3.6, 1.2), target, 3.5, 40, (0.93, 0.96, 1.0)),
         "top": area("Top", (0.0, 0.8, 5.5), target, 3.0, 110),
-        "rim_l": area("RimL", (-3.2, 3.0, 2.6), target, 1.6, 900),
-        "rim_r": area("RimR", (3.2, 3.0, 2.2), target, 1.6, 900),
+        "rim_l": area("RimL", (-3.2, 3.0, 2.6), target, 1.6, RIM_ENERGY),
+        "rim_r": area("RimR", (3.2, 3.0, 2.2), target, 1.6, RIM_ENERGY),
         "strip": area("Strip", (-1.5, -3.6, 3.4), (0, 0, 1.6), 2.6, 220, (1, 1, 1), size_y=0.22),
         "under": area("Under", (0.0, -2.5, -2.0), target, 2.0, 25),
     }
@@ -836,6 +853,8 @@ def main():
         m.variant(v)
         for light in (lights["rim_l"], lights["rim_r"]):
             light.data.color = rim_colour(v)
+            # A black robot on a near-black page needs twice the rim light to keep its silhouette.
+            light.data.energy = RIM_ENERGY * v.get("rim_gain", 1.0)
         lights["under"].data.color = tuple(0.6 + 0.4 * c for c in v["glow"])
         suffix = "" if a.pose == "idle" else f"_{a.pose}"
         if a.wave:
