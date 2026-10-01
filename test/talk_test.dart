@@ -188,10 +188,10 @@ void main() {
   testWidgets('greets once, then a typed question shows the answer and speaks it', (tester) async {
     final rig = _Rig();
     await _open(tester, rig);
-    expect(find.text('Talk to Nova'), findsOneWidget);
+    expect(find.text('Talk to Alex'), findsOneWidget);
 
     await _settle(tester, 1300); // the brief happy look, then the greeting plays out
-    expect(rig.voice.spoken, ["Hi, I'm Nova. Ask me anything about your interview."]);
+    expect(rig.voice.spoken, ["Hi, I'm Alex. Ask me anything about your interview."]);
 
     await _tap(tester, find.text('Type instead'));
     await tester.enterText(find.byKey(const ValueKey('talk-field')), 'How long should my answer be?');

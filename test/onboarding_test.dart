@@ -147,7 +147,7 @@ void main() {
     await _tap(tester, find.byKey(const ValueKey('assistant-mint')));
     await _settle(tester, 300);
     expect(rig.assistant.value.kind, AssistantKind.mint);
-    expect(find.text('Continue with Mint'), findsOneWidget);
+    expect(find.text('Continue with Jordan'), findsOneWidget);
   });
 
   testWidgets('the coach asks out loud, once per question', (tester) async {

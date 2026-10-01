@@ -12,7 +12,7 @@ class AssistantLook {
 
   final AssistantKind kind;
 
-  /// What the assistant is called in the app ("Nova").
+  /// What the assistant is called in the app ("Alex").
   final String name;
 
   /// The colour, said plainly for the picker and screen readers ("Blue").
@@ -27,11 +27,11 @@ class AssistantLook {
   String get glassAsset => 'assets/assistant/${kind.name}_glass.webp';
   String get glowAsset => 'assets/assistant/${kind.name}_glow.webp';
 
-  static const nova = AssistantLook._(AssistantKind.nova, 'Nova', 'Blue', Color(0xFF45D0FF));
-  static const sol = AssistantLook._(AssistantKind.sol, 'Sol', 'Gold', Color(0xFFFFBB59));
-  static const iris = AssistantLook._(AssistantKind.iris, 'Iris', 'Violet', Color(0xFFC09CFF));
-  static const mint = AssistantLook._(AssistantKind.mint, 'Mint', 'Mint', Color(0xFF4DF7CF));
-  static const orb = AssistantLook._(AssistantKind.orb, 'Orb', 'Gold hologram', Color(0xFFE6B35E));
+  static const nova = AssistantLook._(AssistantKind.nova, 'Alex', 'Blue', Color(0xFF45D0FF));
+  static const sol = AssistantLook._(AssistantKind.sol, 'Sam', 'Gold', Color(0xFFFFBB59));
+  static const iris = AssistantLook._(AssistantKind.iris, 'Riley', 'Violet', Color(0xFFC09CFF));
+  static const mint = AssistantLook._(AssistantKind.mint, 'Jordan', 'Mint', Color(0xFF4DF7CF));
+  static const orb = AssistantLook._(AssistantKind.orb, 'Atlas', 'Gold hologram', Color(0xFFE6B35E));
 
   static const all = [nova, sol, iris, mint, orb];
 
