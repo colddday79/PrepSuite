@@ -159,7 +159,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(height: Space.l),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-                  child: _StartButton(glow: look.glow, onPressed: () => _startPractice()),
+                  child: _StartButton(glow: look.tone, onPressed: () => _startPractice()),
                 ),
                 const SizedBox(height: Space.x3),
                 _SectionTitle('Ways to practise'),
@@ -195,19 +195,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(height: Space.x3),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-                  child: _InterviewCard(profile: profile, glow: look.glow, onSet: () => _goTo(ShellTab.profile)),
+                  child: _InterviewCard(profile: profile, glow: look.tone, onSet: () => _goTo(ShellTab.profile)),
                 ),
                 if (last != null) ...[
                   const SizedBox(height: Space.l),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-                    child: _RecentCard(session: last, glow: look.glow, onTap: () => _openRecent(last)),
+                    child: _RecentCard(session: last, glow: look.tone, onTap: () => _openRecent(last)),
                   ),
                 ],
                 const SizedBox(height: Space.l),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-                  child: _TipCard(glow: look.glow),
+                  child: _TipCard(glow: look.tone),
                 ),
               ],
             );
@@ -270,7 +270,7 @@ class _Stage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final glow = look.glow;
+    final glow = look.tone;
     return Semantics(
       button: true,
       label: 'Talk with ${look.name}',
@@ -472,7 +472,7 @@ class _ModeCard extends StatelessWidget {
                     Container(
                       height: 118,
                       width: double.infinity,
-                      color: look.glow.withValues(alpha: 0.08),
+                      color: look.tone.withValues(alpha: 0.08),
                       alignment: Alignment.bottomCenter,
                       child: AssistantAvatar(look: look, size: 112, mood: mood, hud: false),
                     ),

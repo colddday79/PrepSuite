@@ -39,7 +39,7 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
   void _applyAccent() {
     final look = widget.services.assistant.value;
     _kind = look.kind;
-    PrepColors.useAccent(look.glow);
+    PrepColors.useAccent(look.tone);
   }
 
   /// A new assistant means a new accent everywhere: rebuild the whole tree once.

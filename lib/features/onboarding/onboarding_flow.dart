@@ -315,19 +315,34 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
   }
 
   Widget _pickView(AssistantLook look) {
-    final screen = MediaQuery.sizeOf(context);
-    final preview = math.min(screen.width * 0.62, screen.height * 0.3);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(Space.gutter, Space.s, Space.gutter, Space.xxl),
-      children: [
-        Center(child: AssistantAvatar(look: look, size: preview, mood: AssistantMood.happy)),
-        const SizedBox(height: Space.l),
-        Text('Choose your coach', style: PrepType.display, textAlign: TextAlign.center),
-        const SizedBox(height: Space.xl),
-        AssistantPicker(selected: look.kind, onSelected: _services.assistant.choose),
-        const SizedBox(height: Space.xxl),
-        PrimaryButton('Continue with ${look.name}', key: const ValueKey('onboarding-continue'), onPressed: _begin),
-      ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, Space.xxl),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Choose your coach', style: PrepType.display),
+          const SizedBox(height: Space.xs),
+          Text('Same voice, different look. Change it any time.', style: PrepType.body),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final size = math.max(96.0, math.min(box.maxWidth, box.maxHeight - 64)).clamp(96.0, 420.0);
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AssistantAvatar(look: look, size: size, mood: AssistantMood.happy),
+                    Text(look.name, style: PrepType.titleL),
+                    Text(look.colour, style: PrepType.caption),
+                  ],
+                );
+              },
+            ),
+          ),
+          AssistantPicker(selected: look.kind, onSelected: _services.assistant.choose),
+          const SizedBox(height: Space.xl),
+          PrimaryButton('Continue', key: const ValueKey('onboarding-continue'), onPressed: _begin),
+        ],
+      ),
     );
   }
 

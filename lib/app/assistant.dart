@@ -12,7 +12,7 @@ class AssistantLook {
 
   final AssistantKind kind;
 
-  /// What the assistant is called in the app ("Pilot").
+  /// What the assistant is called in the app ("Tide").
   final String name;
 
   /// The colour, said plainly for the picker and screen readers ("Blue").
@@ -21,13 +21,20 @@ class AssistantLook {
   /// The face and lights colour, matched to the render's emission colour.
   final Color glow;
 
+  /// The colour for buttons, selection and progress: the render's [glow] with its neon taken out, so
+  /// the app chrome stays calm and only the robot itself glows.
+  Color get tone {
+    final hsl = HSLColor.fromColor(glow);
+    return hsl.withSaturation(hsl.saturation.clamp(0.0, 0.40)).withLightness(0.72).toColor();
+  }
+
   bool get isRobot => kind != AssistantKind.orb;
 
   String get bodyAsset => 'assets/assistant/${kind.name}_body.webp';
   String get glassAsset => 'assets/assistant/${kind.name}_glass.webp';
   String get glowAsset => 'assets/assistant/${kind.name}_glow.webp';
 
-  static const nova = AssistantLook._(AssistantKind.nova, 'Pilot', 'Blue', Color(0xFF45D0FF));
+  static const nova = AssistantLook._(AssistantKind.nova, 'Tide', 'Blue', Color(0xFF45D0FF));
   static const sol = AssistantLook._(AssistantKind.sol, 'Ember', 'Gold', Color(0xFFFFBB59));
   static const iris = AssistantLook._(AssistantKind.iris, 'Echo', 'Violet', Color(0xFFC09CFF));
   static const mint = AssistantLook._(AssistantKind.mint, 'Sprout', 'Mint', Color(0xFF4DF7CF));

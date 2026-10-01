@@ -59,7 +59,7 @@ class _AppShellState extends State<AppShell> {
       child: ListenableBuilder(
         listenable: services.assistant,
         builder: (context, _) {
-          final glow = services.assistant.value.glow;
+          final glow = services.assistant.value.tone;
           return Scaffold(
             backgroundColor: PrepColors.bg,
             body: IndexedStack(

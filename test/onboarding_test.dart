@@ -110,7 +110,6 @@ Future<void> _answer(WidgetTester tester, String text) async {
 
 /// Picks the default coach and goes into the conversation.
 Future<void> _start(WidgetTester tester) async {
-  await tester.scrollUntilVisible(find.byKey(const ValueKey('onboarding-continue')), 200);
   await _tap(tester, find.byKey(const ValueKey('onboarding-continue')));
   await _settle(tester, 1500);
 }
@@ -147,7 +146,7 @@ void main() {
     await _tap(tester, find.byKey(const ValueKey('assistant-mint')));
     await _settle(tester, 300);
     expect(rig.assistant.value.kind, AssistantKind.mint);
-    expect(find.text('Continue with Sprout'), findsOneWidget);
+    expect(find.text('Continue'), findsOneWidget);
   });
 
   testWidgets('the coach asks out loud, once per question', (tester) async {

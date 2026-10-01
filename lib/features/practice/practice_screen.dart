@@ -132,7 +132,7 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 ],
               ),
               const SizedBox(height: Space.xl),
-              _TipCard(text: dailyTip(DateTime.now()), glow: look.glow),
+              _TipCard(text: dailyTip(DateTime.now()), glow: look.tone),
             ],
           ),
         ),
@@ -150,7 +150,7 @@ class _FeaturedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final glow = look.glow;
+    final glow = look.tone;
     return Semantics(
       button: true,
       label: 'Mock interview, 5 questions, 10 minutes',
@@ -239,7 +239,7 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final glow = look.glow;
+    final glow = look.tone;
     return Semantics(
       button: true,
       label: '$title, $meta',

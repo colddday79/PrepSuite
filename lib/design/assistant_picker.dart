@@ -5,36 +5,23 @@ import 'assistant_avatar.dart';
 import 'components.dart';
 import 'tokens.dart';
 
-/// The five assistant looks as a grid that always fits the width (three across on a phone), so no
-/// card is ever cut off at the edge. The chosen one smiles and is outlined in its own colour.
+/// The five assistant looks in one row that always fits the width, so no card is cut off at the
+/// edge and none is left alone on a second line. The chosen one smiles and is outlined.
 class AssistantPicker extends StatelessWidget {
-  const AssistantPicker({super.key, required this.selected, required this.onSelected, this.itemSize = 104});
+  const AssistantPicker({super.key, required this.selected, required this.onSelected});
 
   final AssistantKind selected;
   final ValueChanged<AssistantKind> onSelected;
 
-  /// The largest a card may be; on a phone the width decides.
-  final double itemSize;
-
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = Space.m;
-        final columns = constraints.maxWidth >= 560 ? 5 : 3;
-        final width = ((constraints.maxWidth - gap * (columns - 1)) / columns).clamp(0.0, itemSize + 24);
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final look in AssistantLook.all)
-              SizedBox(
-                width: width,
-                child: _Choice(look: look, chosen: look.kind == selected, onTap: () => onSelected(look.kind)),
-              ),
-          ],
-        );
-      },
+    return Row(
+      children: [
+        for (final look in AssistantLook.all) ...[
+          if (look != AssistantLook.all.first) const SizedBox(width: Space.s),
+          Expanded(child: _Choice(look: look, chosen: look.kind == selected, onTap: () => onSelected(look.kind))),
+        ],
+      ],
     );
   }
 }
@@ -55,19 +42,19 @@ class _Choice extends StatelessWidget {
       excludeSemantics: true,
       onTap: onTap,
       child: FocusRing(
-        radius: Radii.card,
+        radius: Radii.control,
         child: Material(
-          color: chosen ? Color.alphaBlend(look.glow.withValues(alpha: 0.10), PrepColors.surface1) : PrepColors.surface1,
+          color: chosen ? Color.alphaBlend(look.tone.withValues(alpha: 0.08), PrepColors.surface1) : PrepColors.surface1,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(Radii.card),
-            side: BorderSide(color: chosen ? look.glow : PrepColors.line, width: chosen ? 2 : 1),
+            borderRadius: BorderRadius.circular(Radii.control),
+            side: BorderSide(color: chosen ? look.tone : PrepColors.line, width: chosen ? 1.5 : 1),
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             key: ValueKey('assistant-${look.kind.name}'),
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(Space.s, Space.s, Space.s, Space.m),
+              padding: const EdgeInsets.fromLTRB(Space.xs, Space.s, Space.xs, Space.s),
               child: Column(
                 children: [
                   AspectRatio(
@@ -84,7 +71,7 @@ class _Choice extends StatelessWidget {
                   const SizedBox(height: Space.xs),
                   Text(
                     look.name,
-                    style: PrepType.label.copyWith(color: chosen ? PrepColors.text : PrepColors.text2),
+                    style: PrepType.caption.copyWith(color: chosen ? PrepColors.text : PrepColors.text2),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
