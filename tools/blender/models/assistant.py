@@ -1,16 +1,23 @@
-"""PrepSuite assistant: a friendly robot with a glass face screen, a headset and an arc-reactor heart.
+"""PrepSuite assistant: a friendly robot with a glass face screen and a headset.
+
+Design: a glossy ceramic head and a satin body (two finishes, warm off-white), a deep black visor with
+one soft reflection, a slim egg body with a shadow-gap parting line, one-piece flipper arms, and muted
+anodised accents. The ear rings are the only lights.
 
 The face (eyes and mouth) is NOT rendered here. The app draws it live on the visor so the mouth moves with the
 voice and the eyes blink, look and react. This script renders the parts that stay still, per colour variant:
 
   <variant>_body.png   the robot, lights dimmed, visor matte dark (RGBA, transparent background)
-  <variant>_glass.png  only the visor's reflections, on black (the app adds it over the face with Plus/Screen)
-  <variant>_glow.png   only the lights (ear rings, heart, seams) with bloom, on black (added, pulsing with state)
+  <variant>_glass.png  only the visor's reflections, on black (the app draws it over the face)
+  <variant>_glow.png   only the lights (the ear rings), on black, no bloom
   <variant>_beauty.png everything together for previews (visor reflective, lights on)
   face.json            the visor outline in normalised image coordinates, for clipping the live face
 
-Run headless:
-    Blender -b --factory-startup --python-exit-code 1 --python assistant.py -- [options]
+Then export_assistant.py turns them into the app's WebP layers in assets/assistant/.
+
+Run headless (1536 px, 128 samples takes about 20 minutes for all four on an M3):
+    Blender -b --factory-startup --python-exit-code 1 --python assistant.py -- --res 1536 --samples 128
+    python3 export_assistant.py <out dir>
 
 Options: --out DIR  --res PX  --samples N  --variants nova,sol,iris,mint  --passes body,glass,glow,beauty
          --pose idle|wave  --no-render
@@ -38,15 +45,16 @@ VISOR_W, VISOR_H, VISOR_N = 0.76, 0.50, 3.1      # superellipse half-width, half
 VISOR_ZC = HEAD_C.z - 0.03
 RECESS = 0.955                                    # recess floor, as a scale of the head
 VISOR_S = 0.982                                   # visor surface, as a scale of the head
-BODY_C = Vector((0.0, 0.0, 0.03))
-BODY_R = (0.66, 0.60, 0.70)
+BODY_C = Vector((0.0, 0.0, -0.02))
+BODY_R = (0.61, 0.56, 0.72)                        # a slim upright egg, not a ball
 
-# Linear-light colours per variant: accent (plastic or metal), glow (emission), rim light tint.
+# Linear-light colours per variant: accent (satin anodised metal, kept muted: slate blue, champagne,
+# lavender grey, sage), glow (the only emissive colour: the ear rings and the live face), rim tint.
 VARIANTS = {
-    "nova": dict(accent=(0.018, 0.23, 1.0), metal=0.0, glow=(0.05, 0.62, 1.0), rim=(0.35, 0.65, 1.0)),
-    "sol": dict(accent=(1.0, 0.62, 0.22), metal=1.0, glow=(1.0, 0.50, 0.10), rim=(1.0, 0.72, 0.42)),
-    "iris": dict(accent=(0.22, 0.10, 1.0), metal=0.0, glow=(0.52, 0.30, 1.0), rim=(0.62, 0.48, 1.0)),
-    "mint": dict(accent=(0.0, 0.52, 0.34), metal=0.0, glow=(0.06, 1.0, 0.66), rim=(0.40, 1.0, 0.80)),
+    "nova": dict(accent=(0.16, 0.27, 0.48), glow=(0.05, 0.62, 1.0), rim=(0.35, 0.65, 1.0)),
+    "sol": dict(accent=(0.69, 0.52, 0.26), glow=(1.0, 0.50, 0.10), rim=(1.0, 0.72, 0.42)),
+    "iris": dict(accent=(0.37, 0.31, 0.55), glow=(0.52, 0.30, 1.0), rim=(0.62, 0.48, 1.0)),
+    "mint": dict(accent=(0.27, 0.48, 0.37), glow=(0.06, 1.0, 0.66), rim=(0.40, 1.0, 0.80)),
 }
 
 EMIT_BODY = 1.6      # lights in the body pass: on, but not blooming
@@ -64,9 +72,9 @@ def parse_args():
     p.add_argument("--passes", default="body,glass,glow")
     p.add_argument("--pose", default="idle")
     p.add_argument("--no-render", action="store_true")
-    p.add_argument("--view", default="Standard")
-    p.add_argument("--look", default="None")
-    p.add_argument("--exposure", type=float, default=-0.15)
+    p.add_argument("--view", default="AgX")
+    p.add_argument("--look", default="AgX - Medium High Contrast")
+    p.add_argument("--exposure", type=float, default=-0.3)
     p.add_argument("--tag", default="")
     p.add_argument("--wave", action="store_true")
     return p.parse_args(argv)
@@ -244,10 +252,16 @@ def set_input(mat, name, value):
 
 class Materials:
     def __init__(self):
-        self.shell = principled("Shell", (0.84, 0.86, 0.89), roughness=0.34, coat=0.5, coat_rough=0.07,
-                                subsurface=0.06)
+        # Lacquered ceramic: a soft white base under a glossy clear coat, kept below 0.8 so the key light
+        # shapes it instead of clipping it to flat white.
+        # Two finishes, like a designed product: a glossy ceramic head and a satin body. Warm off-white
+        # (about #ECEAE4), kept below 0.8 so the light shapes it instead of clipping it flat.
+        self.shell = principled("Shell", (0.74, 0.725, 0.69), roughness=0.2, coat=0.5, coat_rough=0.04,
+                                subsurface=0.04)
+        self.satin = principled("Satin", (0.74, 0.725, 0.69), roughness=0.45, subsurface=0.05)
         self.accent = principled("Accent", (0.02, 0.23, 1.0), roughness=0.3, coat=0.15)
-        self.gasket = principled("Gasket", (0.028, 0.031, 0.038), roughness=0.38, metallic=0.55)
+        # Dark trim: the visor gasket, the neck and the shadow gap at the waist.
+        self.gasket = principled("Gasket", (0.010, 0.011, 0.014), roughness=0.55)
         self.visor = principled("Visor", (0.006, 0.008, 0.016), roughness=0.05, coat=1.0, coat_rough=0.015,
                                 specular=0.8)
         self.visor_matte = principled("VisorMatte", (0.004, 0.005, 0.010), roughness=0.9, specular=0.0)
@@ -258,9 +272,11 @@ class Materials:
         self.black = principled("Black", (0.0, 0.0, 0.0), roughness=1.0, specular=0.0)
 
     def variant(self, v):
+        # Satin anodised metal: it catches the light softly instead of reading as toy plastic or bling.
         set_input(self.accent, "Base Color", (*v["accent"], 1.0))
-        set_input(self.accent, "Metallic", v["metal"])
-        set_input(self.accent, "Roughness", 0.24 if v["metal"] else 0.3)
+        set_input(self.accent, "Metallic", 1.0)
+        set_input(self.accent, "Roughness", 0.35)
+        set_input(self.accent, "Coat Weight", 0.0)
         glow = v["glow"]
         set_input(self.light, "Emission Color", (*glow, 1.0))
         hot = tuple(min(1.0, 0.55 + 0.45 * c) for c in glow)
@@ -280,7 +296,7 @@ def build_head(m):
     head.data.materials.append(m.shell)
 
     y0, y1 = HEAD_C.y - 2.0, HEAD_C.y
-    recess = prism("RecessCut", superellipse(VISOR_W * 1.065, VISOR_H * 1.095, VISOR_N, 192, VISOR_ZC), y0, y1)
+    recess = prism("RecessCut", superellipse(VISOR_W * 1.045, VISOR_H * 1.07, VISOR_N, 192, VISOR_ZC), y0, y1)
     floor = ellipsoid("RecessFloor", tuple(r * RECESS for r in HEAD_R), HEAD_C)
     apply_boolean(recess, floor, "DIFFERENCE")
     remove(floor)
@@ -288,7 +304,7 @@ def build_head(m):
     apply_boolean(head, recess, "DIFFERENCE")
     remove(recess)
     smooth(head, 38)
-    bevel(head, 0.006, 2, 38)
+    bevel(head, 0.016, 4, 38)    # a soft inward fillet into the thin dark gasket
 
     visor = prism("Visor", superellipse(VISOR_W, VISOR_H, VISOR_N, 192, VISOR_ZC), y0, y1)
     surface = ellipsoid("VisorSurface", tuple(r * VISOR_S for r in HEAD_R), HEAD_C)
@@ -304,31 +320,27 @@ def build_head(m):
 def build_headset(m):
     parts = []
     for side in (-1, 1):
-        cup = cylinder(f"EarCup{side}", 0.31, 0.24)
+        # The ear cups sit partly inside the head; their thin ring is the robot's only glowing part.
+        cup = cylinder(f"EarCup{side}", 0.265, 0.22)
         cup.rotation_euler = (0, math.radians(90), 0)
-        cup.location = (side * 1.03, 0.02, HEAD_C.z - 0.02)
+        cup.location = (side * 0.97, 0.02, HEAD_C.z - 0.02)
         cup.data.materials.append(m.shell)
-        bevel(cup, 0.05, 4, 30)
+        bevel(cup, 0.045, 4, 30)
 
-        cap = cylinder(f"EarCap{side}", 0.235, 0.07)
+        cap = cylinder(f"EarCap{side}", 0.2, 0.06)
         cap.rotation_euler = (0, math.radians(90), 0)
-        cap.location = (side * 1.16, 0.02, HEAD_C.z - 0.02)
+        cap.location = (side * 1.09, 0.02, HEAD_C.z - 0.02)
         cap.data.materials.append(m.accent)
-        bevel(cap, 0.022, 3, 30)
+        bevel(cap, 0.02, 3, 30)
 
-        ring = torus(f"EarRing{side}", 0.272, 0.013)
+        ring = torus(f"EarRing{side}", 0.232, 0.01)
         ring.rotation_euler = (0, math.radians(90), 0)
-        ring.location = (side * 1.155, 0.02, HEAD_C.z - 0.02)
+        ring.location = (side * 1.083, 0.02, HEAD_C.z - 0.02)
         ring.data.materials.append(m.light)
-
-        dot = cylinder(f"EarDot{side}", 0.075, 0.04)
-        dot.rotation_euler = (0, math.radians(90), 0)
-        dot.location = (side * 1.2, 0.02, HEAD_C.z - 0.02)
-        dot.data.materials.append(m.gasket)
-        parts += [cup, cap, ring, dot]
+        parts += [cup, cap, ring]
 
     # The band over the head, leaning back so it never crosses the visor.
-    band = torus("Band", 1.08, 0.062, keep=lambda co: co.y > 0.02)
+    band = torus("Band", 1.1, 0.038, minor_seg=24, keep=lambda co: co.y > 0.02)
     band.scale = (1.0, 0.9, 1.0)
     band.rotation_euler = (math.radians(90 - 14), 0, 0)
     band.location = (0, 0.06, HEAD_C.z + 0.02)
@@ -343,80 +355,31 @@ def build_body(m):
         for v in bm.verts:
             x, y, z = v.co
             taper = 1.0 - 0.16 * max(0.0, z)          # an egg: narrower at the shoulders
-            flat = 0.92 if z > 0.55 else 1.0
+            flat = 1.0 - 0.08 * max(0.0, z) ** 2      # a softer top, with no crease
             v.co = Vector((x * BODY_R[0] * taper, y * BODY_R[1] * taper, z * BODY_R[2] * flat)) + BODY_C
     body = mesh_object("Body", build)
     smooth(body)
-    body.data.materials.append(m.shell)
+    body.data.materials.append(m.satin)
 
+    # A real parting line instead of a hoop around the waist: a dark shadow gap cut into the shell.
+    seam_z = BODY_C.z - 0.06
+    rel = (seam_z - BODY_C.z) / BODY_R[2]
+    seam_r = BODY_R[0] * math.sqrt(1 - rel * rel)
+    groove = torus("GrooveCut", seam_r, 0.016, minor_seg=24)
+    groove.location = (0, 0, seam_z)
+    groove.scale = (1.0, BODY_R[1] / BODY_R[0], 1.0)
+    groove.data.materials.append(m.gasket)
+    apply_boolean(body, groove, "DIFFERENCE")
+    remove(groove)
+    smooth(body, 40)
+    bevel(body, 0.006, 2, 40)
+
+    # One narrow dark neck, mostly in the head's shadow, so the head seems to float.
     top = BODY_C.z + BODY_R[2] * 0.92
-    column = cylinder("NeckColumn", 0.19, HEAD_C.z - HEAD_R[2] - top + 0.16)
-    column.location = (0, 0, (top + HEAD_C.z - HEAD_R[2]) / 2)
+    column = cylinder("NeckColumn", 0.15, HEAD_C.z - HEAD_R[2] - top + 0.2)
+    column.location = (0, 0.02, (top + HEAD_C.z - HEAD_R[2]) / 2)
     column.data.materials.append(m.gasket)
-    neck = torus("Neck", 0.23, 0.045)
-    neck.location = (0, 0.0, top - 0.01)
-    neck.data.materials.append(m.gasket)
-    glow = torus("NeckLight", 0.195, 0.012)
-    glow.location = (0, 0.0, top + 0.035)
-    glow.data.materials.append(m.light)
-
-    seam = torus("Seam", BODY_R[0] * 1.0, 0.012)
-    seam.location = (0, 0, BODY_C.z - 0.05)
-    seam.scale = (1.0, BODY_R[1] / BODY_R[0], 1.0)
-    seam.data.materials.append(m.light)
-
-    band = torus("WaistBand", BODY_R[0] * 0.99, 0.045, minor_seg=24)
-    band.location = (0, 0, BODY_C.z - 0.05)
-    band.scale = (1.0, BODY_R[1] / BODY_R[0], 1.0)
-    band.data.materials.append(m.accent)
-    return [body, column, neck, glow, seam, band]
-
-
-def build_core(m):
-    """The arc-reactor heart on the chest: a nod to the gold hologram."""
-    z = BODY_C.z + 0.3
-    rel = (z - BODY_C.z) / BODY_R[2]
-    taper = 1.0 - 0.16 * max(0.0, rel)
-    y = BODY_C.y - BODY_R[1] * taper * math.sqrt(max(0.0, 1 - rel * rel))
-    normal = Vector((0, -1.0, 0.42)).normalized()
-    origin = Vector((0, y + 0.005, z))
-
-    parts = []
-    socket = cylinder("CoreSocket", 0.17, 0.05)
-    socket.data.materials.append(m.gasket)
-    bezel = torus("CoreBezel", 0.17, 0.028)
-    bezel.data.materials.append(m.accent)
-    heart = cylinder("CoreHeart", 0.06, 0.03)
-    heart.data.materials.append(m.core)
-    parts += [socket, bezel, heart]
-    for i in range(10):
-        seg = mesh_object(f"CoreSeg{i}", lambda bm: bmesh.ops.create_cube(bm, size=1.0))
-        seg.scale = (0.022, 0.05, 0.02)
-        a = 2 * math.pi * i / 10
-        seg.location = (0.108 * math.cos(a), 0.108 * math.sin(a), 0.015)
-        seg.rotation_euler = (0, 0, a + math.pi / 2)
-        seg.data.materials.append(m.light)
-        parts.append(seg)
-    pivot = bpy.data.objects.new("Core", None)
-    link(pivot)
-    for p in parts:
-        p.parent = pivot
-    pivot.location = origin
-    aim(pivot, normal)
-    return parts + [pivot]
-
-
-def capsule(name, start, end, radius):
-    start, end = Vector(start), Vector(end)
-    d = end - start
-    cyl = cylinder(name, radius, d.length, segments=64)
-    cyl.location = (start + end) / 2
-    aim(cyl, d)
-    caps = []
-    for i, p in enumerate((start, end)):
-        cap = ellipsoid(f"{name}Cap{i}", (radius, radius, radius), p, segments=48, rings=24)
-        caps.append(cap)
-    return [cyl] + caps
+    return [body, column]
 
 
 def _pivot(name, location, parent=None):
@@ -437,45 +400,42 @@ def _attach(objs, pivot):
         o.matrix_parent_inverse = pivot.matrix_world.inverted()
 
 
+def flipper(name, length, rx, ry):
+    """One smooth tapered arm, its top at the origin, hanging down -Z: full at the shoulder, a soft
+    rounded tip. No elbows, cuffs or thumbs."""
+    def build(bm):
+        bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=40, radius=1.0)
+        for v in bm.verts:
+            x, y, z = v.co
+            t = (1 - z) / 2                      # 0 at the top, 1 at the tip
+            taper = 1.0 - 0.28 * t * t
+            v.co = Vector((x * rx * taper, y * ry * taper, (z - 1) * length / 2))
+    obj = mesh_object(name, build)
+    smooth(obj)
+    return obj
+
+
 def build_arms(m, pose, rig=False):
-    """Two-part arms with a soft elbow bend, mitten hands with a thumb, and accent cuffs.
-    With rig=True the screen-right arm hangs from shoulder and elbow pivots for the wave."""
+    """Two flipper arms hanging close to the body, a little different left and right so the pose is not
+    stiff. With rig=True the screen-right arm hangs from a shoulder pivot for the wave."""
     parts = []
     pivots = None
     for side in (-1, 1):
-        shoulder = Vector((side * 0.58, -0.06, BODY_C.z + 0.28))
-        joint = ellipsoid(f"Shoulder{side}", (0.105, 0.105, 0.105), shoulder, segments=48, rings=24)
-        joint.data.materials.append(m.gasket)
+        shoulder = Vector((side * 0.585, -0.04, BODY_C.z + 0.3))
         if pose == "wave" and side == 1:
-            upper = Vector((0.75, -0.15, 0.25)).normalized()
-            fore = Vector((0.25, -0.2, 0.95)).normalized()
+            hang = Vector((0.85, -0.2, 0.5)).normalized()
         else:
-            upper = Vector((side * 0.55, -0.1, -0.83)).normalized()
-            fore = Vector((side * 0.18, -0.5, -0.85)).normalized()
-        elbow = shoulder + upper * 0.3
-        wrist = elbow + fore * 0.24
-        upper_parts = capsule(f"Upper{side}", shoulder + upper * 0.08, elbow, 0.08)
-        fore_parts = capsule(f"Fore{side}", elbow, wrist, 0.074)
-        for a in upper_parts + fore_parts:
-            a.data.materials.append(m.shell)
-        cuff = torus(f"Cuff{side}", 0.08, 0.024)
-        cuff.location = wrist
-        aim(cuff, fore)
-        cuff.data.materials.append(m.accent)
-        hand = ellipsoid(f"Hand{side}", (0.105, 0.135, 0.16), (0, 0, 0), segments=64, rings=32)
-        hand.location = wrist + fore * 0.12
-        aim(hand, fore)
-        hand.data.materials.append(m.shell)
-        thumb = ellipsoid(f"Thumb{side}", (0.045, 0.05, 0.075), (0, 0, 0), segments=32, rings=16)
-        thumb.location = wrist + fore * 0.08 + Vector((-side * 0.085, -0.07, 0.0))
-        aim(thumb, (fore + Vector((-side * 0.6, -0.3, 0))).normalized())
-        thumb.data.materials.append(m.shell)
-        parts += [joint, cuff, hand, thumb] + upper_parts + fore_parts
+            out = 0.3 if side < 0 else 0.24
+            hang = Vector((side * out, -0.16 if side < 0 else -0.1, -0.94)).normalized()
+        arm = flipper(f"Arm{side}", 0.62, 0.105, 0.088)
+        arm.location = shoulder
+        arm.rotation_euler = hang.to_track_quat("-Z", "Y").to_euler()
+        arm.data.materials.append(m.satin)
+        parts.append(arm)
         if rig and side == 1:
             sp = _pivot("ShoulderPivot", shoulder)
-            ep = _pivot("ElbowPivot", elbow, sp)
-            _attach(upper_parts, sp)
-            _attach(fore_parts + [cuff, hand, thumb], ep)
+            ep = _pivot("ElbowPivot", shoulder, sp)
+            _attach([arm], ep)
             pivots = (sp, ep)
     return parts, pivots
 
@@ -513,7 +473,6 @@ def build(pose, rig=False):
     parts = [head, visor]
     parts += build_headset(m)
     parts += build_body(m)
-    parts += build_core(m)
     arms, pivots = build_arms(m, pose, rig)
     parts += arms
     return m, visor, pivots
@@ -553,10 +512,13 @@ def setup_world(scene):
     glossy_mix = nt.nodes.new("ShaderNodeMixShader")
     nt.links.new(coords.outputs["Generated"], sep.inputs["Vector"])
     nt.links.new(sep.outputs["Z"], ramp.inputs["Fac"])
-    ramp.color_ramp.elements[0].position = 0.5
+    # The body sees a soft bright sky in its reflections (so the satin metal and the clear coat read);
+    # the glass pass dims it (sky_for_glass) so the visor stays deep black.
+    ramp.color_ramp.elements[0].position = 0.45
     ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1)
     ramp.color_ramp.elements[1].position = 1.0
-    ramp.color_ramp.elements[1].color = (0.55, 0.6, 0.7, 1)
+    ramp.color_ramp.elements[1].color = (0.6, 0.64, 0.72, 1)
+    hdri["sky_ramp"] = ramp.name
     nt.links.new(ramp.outputs["Color"], sky.inputs["Color"])
     sky.inputs["Strength"].default_value = 1.0
     nt.links.new(path.outputs["Is Glossy Ray"], glossy_mix.inputs["Fac"])
@@ -591,17 +553,78 @@ def area(name, loc, target, size, energy, color=(1, 1, 1), size_y=None):
 def setup_lights():
     target = (0, 0, 1.0)
     lights = {
-        "key": area("Key", (-3.4, -4.2, 4.4), target, 3.0, 520, (1.0, 0.975, 0.95)),
-        "fill": area("Fill", (3.8, -3.6, 1.2), target, 3.5, 70, (0.93, 0.96, 1.0)),
-        "top": area("Top", (0.0, 0.8, 5.5), target, 3.0, 150),
+        "key": area("Key", (-3.4, -4.2, 4.4), target, 4.0, 430, (1.0, 0.975, 0.95)),
+        "fill": area("Fill", (3.8, -3.6, 1.2), target, 3.5, 40, (0.93, 0.96, 1.0)),
+        "top": area("Top", (0.0, 0.8, 5.5), target, 3.0, 110),
         "rim_l": area("RimL", (-3.2, 3.0, 2.6), target, 1.6, 900),
         "rim_r": area("RimR", (3.2, 3.0, 2.2), target, 1.6, 900),
         "strip": area("Strip", (-1.5, -3.6, 3.4), (0, 0, 1.6), 2.6, 220, (1, 1, 1), size_y=0.22),
-        "under": area("Under", (0.0, -2.5, -2.0), target, 2.0, 50),
+        "under": area("Under", (0.0, -2.5, -2.0), target, 2.0, 25),
     }
     for name in ("key", "fill", "top", "under"):
         lights[name].visible_glossy = False
+        lights[name].data.specular_factor = 0.0
     return lights
+
+
+def setup_reflector():
+    """A soft window seen only in reflections: one graded highlight across the top of the visor and a
+    soft sheen on the head, instead of hard light dots."""
+    mesh = bpy.data.meshes.new("Reflector")
+    bm = bmesh.new()
+    bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=1.0)
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = link(bpy.data.objects.new("Reflector", mesh))
+    obj.location = (-0.55, -1.7, 4.3)
+    obj.scale = (1.5, 0.75, 1.0)
+    obj.rotation_euler = (Vector((0.0, -0.6, 1.75)) - obj.location).to_track_quat("Z", "Y").to_euler()
+
+    mat = bpy.data.materials.new("ReflectorLight")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    emit = nt.nodes.new("ShaderNodeEmission")
+    coords = nt.nodes.new("ShaderNodeTexCoord")
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    along = nt.nodes.new("ShaderNodeValToRGB")
+    across = nt.nodes.new("ShaderNodeValToRGB")
+    mul = nt.nodes.new("ShaderNodeMath")
+    mul.operation = "MULTIPLY"
+    nt.links.new(coords.outputs["Generated"], sep.inputs["Vector"])
+    # Bright along the far edge, fading to nothing toward the robot; soft at both ends.
+    nt.links.new(sep.outputs["Y"], along.inputs["Fac"])
+    along.color_ramp.interpolation = "EASE"
+    along.color_ramp.elements[0].position = 0.0
+    along.color_ramp.elements[0].color = (0, 0, 0, 1)
+    along.color_ramp.elements[1].position = 0.6
+    along.color_ramp.elements[1].color = (1, 1, 1, 1)
+    e = along.color_ramp.elements.new(0.82)
+    e.color = (1, 1, 1, 1)
+    e = along.color_ramp.elements.new(1.0)
+    e.color = (0, 0, 0, 1)
+    nt.links.new(sep.outputs["X"], across.inputs["Fac"])
+    across.color_ramp.interpolation = "EASE"
+    across.color_ramp.elements[0].color = (0, 0, 0, 1)
+    across.color_ramp.elements[0].position = 0.0
+    across.color_ramp.elements[1].color = (1, 1, 1, 1)
+    across.color_ramp.elements[1].position = 0.3
+    e = across.color_ramp.elements.new(0.7)
+    e.color = (1, 1, 1, 1)
+    e = across.color_ramp.elements.new(1.0)
+    e.color = (0, 0, 0, 1)
+    nt.links.new(along.outputs["Color"], mul.inputs[0])
+    nt.links.new(across.outputs["Color"], mul.inputs[1])
+    nt.links.new(mul.outputs["Value"], emit.inputs["Strength"])
+    emit.inputs["Color"].default_value = (2.2, 2.3, 2.5, 1)
+    nt.links.new(emit.outputs["Emission"], out.inputs["Surface"])
+    obj.data.materials.append(mat)
+    for attr in ("visible_camera", "visible_diffuse", "visible_shadow", "visible_transmission",
+                 "visible_volume_scatter"):
+        setattr(obj, attr, False)
+    obj.visible_glossy = True
+    return obj, emit
 
 
 def setup_camera(scene):
@@ -654,7 +677,7 @@ def setup_bloom(scene, enabled):
         layers = tree.nodes.new("CompositorNodeRLayers")
         out = tree.nodes.new("NodeGroupOutput")
         src = layers.outputs["Image"]
-        for threshold, strength, size in ((0.3, 0.5, 0.35), (0.8, 0.45, 0.6)):
+        for threshold, strength, size in ((0.4, 0.35, 0.22), (0.9, 0.2, 0.4)):
             node = tree.nodes.new("CompositorNodeGlare")
             for value in ("Bloom", "BLOOM"):
                 try:
@@ -702,6 +725,7 @@ def restore(undo):
 
 def render_pass(scene, m, lights, hdri, name, path, animate=False):
     rim_lights = (lights["rim_l"], lights["rim_r"])
+    hidden = []
     if name == "body":
         scene.render.film_transparent = True
         m.emission(EMIT_BODY)
@@ -715,17 +739,34 @@ def render_pass(scene, m, lights, hdri, name, path, animate=False):
     elif name == "glass":
         scene.render.film_transparent = False
         m.emission(0.0)
-        undo = swap_materials({mat: m.black for mat in (m.shell, m.accent, m.gasket, m.light, m.core)})
+        # Only the reflector card and the dim sky: one soft highlight, no hard light dots.
+        hidden = list(lights.values())
+        # The studio HDRI reaches the visor through direct light sampling as two bright dots; the glass
+        # pass needs only the reflector, so the HDRI is off while it renders.
+        hdri_strength = hdri.inputs["Strength"].default_value
+        hdri.inputs["Strength"].default_value = 0.0
+        sky = scene.world.node_tree.nodes[hdri["sky_ramp"]].color_ramp.elements
+        sky_was = (sky[0].position, tuple(sky[1].color))
+        sky[0].position = 0.8
+        sky[1].color = (0.12, 0.13, 0.15, 1)
+        undo = swap_materials({mat: m.black for mat in (m.shell, m.satin, m.accent, m.gasket, m.light, m.core)})
         setup_bloom(scene, False)
     elif name == "glow":
         scene.render.film_transparent = False
         m.emission(EMIT_GLOW)
-        undo = swap_materials({mat: m.black for mat in (m.shell, m.accent, m.gasket, m.visor)})
-        setup_bloom(scene, True)
+        undo = swap_materials({mat: m.black for mat in (m.shell, m.satin, m.accent, m.gasket, m.visor)})
+        # No compositor bloom: export_assistant.py adds a tight, controlled halo, so the light never
+        # washes colour over the white shell.
+        setup_bloom(scene, False)
     else:
         raise ValueError(name)
-    for light in rim_lights:
-        light.hide_render = False
+    for light in lights.values():
+        light.hide_render = light in hidden
+    view = (scene.view_settings.view_transform, scene.view_settings.look, scene.view_settings.exposure)
+    if name == "glow":
+        scene.view_settings.view_transform = "Standard"
+        scene.view_settings.look = "None"
+        scene.view_settings.exposure = 0.0
     scene.render.image_settings.color_mode = "RGBA" if scene.render.film_transparent else "RGB"
     if animate:
         scene.render.filepath = path.replace(".png", "_")
@@ -734,6 +775,10 @@ def render_pass(scene, m, lights, hdri, name, path, animate=False):
         scene.render.filepath = path
         bpy.ops.render.render(write_still=True)
     restore(undo)
+    scene.view_settings.view_transform, scene.view_settings.look, scene.view_settings.exposure = view
+    if name == "glass":
+        hdri.inputs["Strength"].default_value = hdri_strength
+        sky[0].position, sky[1].color = sky_was[0], sky_was[1]
     print("WROTE", path)
 
 
@@ -759,6 +804,11 @@ def export_face(scene, cam, path):
     print("FACE", data["bounds"], data["centre"])
 
 
+def rim_colour(v):
+    """Mostly cool neutral rims, with a quarter of the variant's tint: separation, not gamer RGB."""
+    return tuple(0.75 * n + 0.25 * c for n, c in zip((0.85, 0.9, 1.0), v["rim"]))
+
+
 def main():
     a = parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -770,13 +820,14 @@ def main():
         animate_wave(pivots)
     hdri = setup_world(scene)
     lights = setup_lights()
+    setup_reflector()
     cam = setup_camera(scene)
     setup_render(scene, a.res, a.samples, a.view, a.look, a.exposure)
     export_face(scene, cam, os.path.join(a.out, "face.json"))
     first = a.variants.split(",")[0]
     m.variant(VARIANTS[first])
     for light in (lights["rim_l"], lights["rim_r"]):
-        light.data.color = VARIANTS[first]["rim"]
+        light.data.color = rim_colour(VARIANTS[first])
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(a.out, "assistant.blend"))
     if a.no_render:
         return
@@ -784,7 +835,8 @@ def main():
         v = VARIANTS[name]
         m.variant(v)
         for light in (lights["rim_l"], lights["rim_r"]):
-            light.data.color = v["rim"]
+            light.data.color = rim_colour(v)
+        lights["under"].data.color = tuple(0.6 + 0.4 * c for c in v["glow"])
         suffix = "" if a.pose == "idle" else f"_{a.pose}"
         if a.wave:
             suffix = "_wave"

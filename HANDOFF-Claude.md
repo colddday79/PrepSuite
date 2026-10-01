@@ -3,7 +3,7 @@
 **Purpose of this file:** if the context window fills up, read this file first in a fresh chat. It has everything needed to resume without re-deriving it.
 
 **Owner:** colddday79@gmail.com
-**Last updated:** 2026-09-25 ~21:20 KST, by Claude (Opus 5.5). The app is Flutter at the repo root (Session 5), and Session 6 at the end of this file is the latest state: big presence on Home, real AI by default, and the AI voice answering questions. Read Sessions 5 and 6 first; §2–§5 are historical.
+**Last updated:** 2026-10-01, by Claude. The app is Flutter at the repo root. The newest section at the end of this file (Session 8) is the latest state; read Sessions 5 to 8 first. §2–§5 are historical (they still mention the old iCloud `HANDOFF.md`, the `jungwooshim1212` repo and Kotlin).
 
 ---
 
@@ -158,7 +158,7 @@ Also decided earlier in-session (owner's original message, still binding):
 
 - **AGP is pinned to 9.3.3, not the newest 9.4.1**, because the installed Android Studio can only sync 9.3.x projects. If the owner has since updated Studio, re-check before assuming this constraint still holds.
 - **Ultracode / ECC context:** this session runs under the user's global `~/.claude/CLAUDE.md` and project `AGENTS.md`, which mandate: `/graphify` skill on trigger, and **launching multiple agents in parallel for any substantive product/UI/motion work** (8+ agents preferred) rather than single-agent passes — this shaped both the research phase and should shape the build-wave execution (BUILD-PLAN.md's M1 already specifies an 8-agent parallel build wave for exactly this reason).
-- **Attribution requirement for this session:** git commits end with `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`; PR descriptions end with `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
+- **Attribution:** use the commit trailer the current session's system reminder gives (it changes with the model).
 - **The owner's typing has frequent typos** ("emualter" → emulator, "sotred" → stored, "beldndering" → Blender) — read requests charitably and confirm ambiguous asks rather than guessing wrong.
 - **Two assistants are collaborating on this project**: Claude (this file) and "GPT Astra" (`HANDOFF-GPT.md`, a separate assistant's copy). **Only update HANDOFF.md, never HANDOFF-GPT.md** — that file belongs to the other assistant to maintain. If you need to know what GPT Astra has done, you may read `HANDOFF-GPT.md`, but never write to it.
 - The PRD explicitly states numeric limits/schedule/pricing are *proposed defaults*, not commitments — don't treat "one to two weeks" or "3000 users" etc. as hard targets.
@@ -429,3 +429,45 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 - **Feedback:** typed answers show "Typed, so no voice feedback." instead of a two-line note.
 
 **State:** 139 Flutter tests pass and analyze is clean. Pushed to `colddday79/PrepSuite` main. Verified on the emulator after a clean install: onboarding through to Home, then a mock interview with real AI questions and feedback.
+
+---
+
+## Session 8 (2026-10-01): coach names, colours, the robot redesign, voice-first onboarding
+
+**Owner's asks and what changed:**
+- **Names:** the owner rejected Nova/Sol/Iris/Mint/Orb, then human names. They are now **Tide** (blue), **Ember** (amber), **Echo** (violet), **Sprout** (green) and **Orbit** (gold hologram). Internal enum ids are unchanged (`nova, sol, iris, mint, orb`), and so are the asset file names.
+- **Colours:** each `AssistantLook` has a hand-picked `tone` (button, progress, selection, bubbles) in a clearly different hue: Tide `#78A6F0`, Ember `#F39A5E`, Echo `#B39DF5`, Sprout `#63CC98`, Orbit `#E2BE62`. `glow` stays the bright face and light colour. Both earlier attempts failed: neon was "vibecoded", and auto-muted pastels "all look the same". `test/assistant_look_test.dart` asserts 7:1 for dark text on each tone and at least 15° of hue between any two.
+- **Robot redesign** (`tools/blender/models/assistant.py`), after an art-director review by an agent:
+  - two finishes, a glossy ceramic head and a satin body, in warm off-white;
+  - muted anodised accents (slate blue, champagne, lavender grey, sage);
+  - one-piece flipper arms, so no elbows, cuffs or thumbs;
+  - a dark shadow-gap waist seam, so no hoop;
+  - no chest lens;
+  - a narrow recessed neck;
+  - smaller ear cups sunk into the head, whose ring is the only light;
+  - a slimmer egg body;
+  - AgX "Medium High Contrast" at -0.3 EV for the body and glass passes, while the glow pass stays Standard so its colours stay saturated.
+- **Visor:** the visor is deep black with one soft highlight from a reflector card that only reflections can see. The glass pass turns off every light and the HDRI. The HDRI reached the visor through light sampling and caused the old "two dots".
+- **Glow layer:** it has no compositor bloom any more, because the bloom washed colour over the white shell. The halo is added by the exporter instead.
+- **Export:** renders are 1536 px at 128 samples, about 20 minutes for all four on the M3. The new `tools/blender/models/export_assistant.py` writes `assets/assistant/*.webp`:
+  - body: lossy q92 with exact alpha;
+  - glass: alpha only, in one colour, about 8 KB;
+  - glow: tight two-step halo, half size.
+
+  The camera, head and visor are unchanged, so `assistant_face.json` and `kAssistantVisor` did not change.
+- **Onboarding** (`lib/features/onboarding/onboarding_flow.dart`):
+  - The privacy question is gone. Consent is asked before the first practice, by the existing consent screen.
+  - Voice comes first: one big mic (76 dp, `onboarding-mic`) with "Tap to answer" and a "Type instead" button (`onboarding-type`). A spoken answer comes back as text in the typing bar to check and send.
+  - The chat centres the coach and the bubbles together, and the coach shrinks as the conversation grows.
+  - The picker uses a fixed layout, with Continue at the bottom, when it fits. Otherwise it falls back to a scrolling layout.
+- **Copy:** US English everywhere ("practice" as the verb too). An agent fixed 8 strings across Home, Practice, Profile history and the sample coach. Dates still use British order ("Tue 30 Sep"); the owner hasn't decided.
+- **Avatar** (`lib/design/assistant_avatar.dart`, done by an agent):
+  - decode buckets go up to 1536 px;
+  - the halo is calmer: fainter ticks and two slow arcs;
+  - the floor is a soft contact shadow and light pool, with no dashed ring.
+
+**Concurrent editing:**
+- Another tool (most likely Codex in the ChatGPT app) was editing this same checkout during this session. It worked on a responsive and performance pass: `responsive_layout_test.dart`, `assistant_performance_test.dart`, an `animate:` flag on `AssistantAvatar`, `hologram.dart`, the picker `Wrap`, Home, Talk and the shell.
+- It also ran `flutter run --profile` on the same emulator.
+- I committed only files that were mine alone, after checking that set by itself in a clean temporary worktree.
+- `assistant_avatar.dart` and `home_screen.dart` mix both tools' edits, so they stay uncommitted in the working tree for whoever finishes last. The halo/floor changes and the 1536 decode cap are in there.

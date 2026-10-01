@@ -2,13 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Which assistant the person practises with. The four robots differ only in colour; the orb is the
+/// Which assistant the person practices with. The four robots differ only in colour; the orb is the
 /// original gold hologram. They all use the same coach and the same voice.
 enum AssistantKind { nova, sol, iris, mint, orb }
 
 @immutable
 class AssistantLook {
-  const AssistantLook._(this.kind, this.name, this.colour, this.glow);
+  const AssistantLook._(this.kind, this.name, this.colour, this.glow, this.tone);
 
   final AssistantKind kind;
 
@@ -21,12 +21,10 @@ class AssistantLook {
   /// The face and lights colour, matched to the render's emission colour.
   final Color glow;
 
-  /// The colour for buttons, selection and progress: the render's [glow] with its neon taken out, so
-  /// the app chrome stays calm and only the robot itself glows.
-  Color get tone {
-    final hsl = HSLColor.fromColor(glow);
-    return hsl.withSaturation(hsl.saturation.clamp(0.0, 0.40)).withLightness(0.72).toColor();
-  }
+  /// The coach's own colour for buttons, selection and progress. Each coach has a clearly different
+  /// hue (blue, amber, violet, green, gold), softer than the [glow] so the chrome never looks neon.
+  /// Dark text on it clears 7:1 (asserted in test/design_test.dart).
+  final Color tone;
 
   bool get isRobot => kind != AssistantKind.orb;
 
@@ -34,11 +32,11 @@ class AssistantLook {
   String get glassAsset => 'assets/assistant/${kind.name}_glass.webp';
   String get glowAsset => 'assets/assistant/${kind.name}_glow.webp';
 
-  static const nova = AssistantLook._(AssistantKind.nova, 'Tide', 'Blue', Color(0xFF45D0FF));
-  static const sol = AssistantLook._(AssistantKind.sol, 'Ember', 'Gold', Color(0xFFFFBB59));
-  static const iris = AssistantLook._(AssistantKind.iris, 'Echo', 'Violet', Color(0xFFC09CFF));
-  static const mint = AssistantLook._(AssistantKind.mint, 'Sprout', 'Mint', Color(0xFF4DF7CF));
-  static const orb = AssistantLook._(AssistantKind.orb, 'Orbit', 'Gold hologram', Color(0xFFE6B35E));
+  static const nova = AssistantLook._(AssistantKind.nova, 'Tide', 'Blue', Color(0xFF45D0FF), Color(0xFF78A6F0));
+  static const sol = AssistantLook._(AssistantKind.sol, 'Ember', 'Amber', Color(0xFFFFA45E), Color(0xFFF39A5E));
+  static const iris = AssistantLook._(AssistantKind.iris, 'Echo', 'Violet', Color(0xFFC09CFF), Color(0xFFB39DF5));
+  static const mint = AssistantLook._(AssistantKind.mint, 'Sprout', 'Green', Color(0xFF4DF7CF), Color(0xFF63CC98));
+  static const orb = AssistantLook._(AssistantKind.orb, 'Orbit', 'Gold', Color(0xFFE6B35E), Color(0xFFE2BE62));
 
   static const all = [nova, sol, iris, mint, orb];
 

@@ -123,8 +123,8 @@ class FakeSpeechCapture implements SpeechCapture {
 
   static const _cannedAnswers = [
     'Um, so I am a really hard worker and I like working with people. At my last job, like, we were always busy and I just, um, did my best to keep up with everything.',
-    'One time a customer was upset because their order was wrong. I said sorry, remade it straight away and gave them a voucher. They came back the next week and asked for me.',
-    'I think my weakness is that I, uh, take on too much. I am learning to ask for help earlier, like when the queue gets long I call someone over before it gets out of hand.',
+    'One time a customer was upset because their order was wrong. I said sorry, remade it right away and gave them a voucher. They came back the next week and asked for me.',
+    'I think my weakness is that I, uh, take on too much. I am learning to ask for help earlier, like when the line gets long I call someone over before it gets out of hand.',
   ];
 }
 

@@ -69,7 +69,7 @@ class _Empty extends StatelessWidget {
         children: [
           Text('No practices yet.', style: PrepType.body),
           const SizedBox(height: Space.l),
-          PrimaryButton('Start practising', onPressed: onStart),
+          PrimaryButton('Start practicing', onPressed: onStart),
         ],
       ),
     );
