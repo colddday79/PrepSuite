@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:prepsuite_speech/prepsuite_speech.dart'
     show NormanVoice, OfflineSpeechCapture, WavReplayRecorder;
 
+import 'features/drills/drill_progress.dart';
 import 'app/app.dart';
 import 'app/assistant.dart';
 import 'app/profile.dart';
@@ -78,6 +79,7 @@ AppServices createServices() {
       sessions: SessionStore(persist: true),
       profile: ProfileStore(persist: true),
       assistant: AssistantStore(persist: true),
+      drills: DrillProgressStore.instance,
       mic: PluginMicPermission(),
       coachLabel: coachLabel,
       speechLabel: 'Demo voice input (SPEECH_FAKE): it plays back a sample answer instead of listening.',
@@ -110,6 +112,7 @@ AppServices createServices() {
     sessions: SessionStore(persist: true),
     profile: ProfileStore(persist: true),
     assistant: AssistantStore(persist: true),
+    drills: DrillProgressStore.instance,
     mic: PluginMicPermission(),
     speechSetup: setup,
     coachLabel: coachLabel,

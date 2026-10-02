@@ -259,7 +259,7 @@ void main() {
     await _open(tester, rig);
     await _recordAnswer(tester);
 
-    expect(find.text('Fix it'), findsOneWidget);
+    expect(find.text('Improve this'), findsOneWidget);
     expect(rig.voice.spoken, ['Tell me about yourself.', _feedbackLine]);
     expect(find.text('Stop'), findsOneWidget);
     await _settle(tester, 2000);
@@ -277,7 +277,7 @@ void main() {
     await _open(tester, rig);
     await _typeAnswer(tester);
 
-    expect(find.text('Fix it'), findsOneWidget);
+    expect(find.text('Improve this'), findsOneWidget);
     await _settle(tester, 2000);
     expect(rig.voice.spoken, isEmpty);
 

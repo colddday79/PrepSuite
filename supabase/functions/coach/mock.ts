@@ -527,19 +527,19 @@ export function mockFeedback(input: FeedbackInput): FeedbackResult {
       headline: "Good story, but where are you in it?",
       problem: 'It is all "we", so the interviewer cannot tell what you did yourself.',
       evidence: quote(transcript, toks, Math.max(0, weIndex - 2)),
-      fix: 'Say "I" for the parts that were you, like "I [what you did]", and name at least two things you did.',
+      fix: 'Say "I" for the parts that were you, like "I set up the sign-up sheet", and name at least two things you did.',
     },
     example: {
       headline: "Sounds fine, but there is no real example.",
       problem: "It stays general. There is no specific moment to back up what you are saying.",
       evidence: quote(transcript, toks, 0),
-      fix: 'Pick one real moment and tell it: "One time at [place], [what happened], so I [what you did]."',
+      fix: 'Pick one real moment and tell it: where you were, what happened, and what you did about it.',
     },
     result: {
       headline: "Decent example, but it has no ending.",
       problem: "You explain what happened but never say how it ended or what changed.",
       evidence: quote(transcript, toks, Math.max(0, wc - 12)),
-      fix: 'Finish with the outcome in one line: "In the end, [what changed]."',
+      fix: 'Finish with the outcome in one line, starting with "In the end" and saying what changed.',
     },
     rambling: {
       headline: "Good material, but it goes on too long.",
@@ -563,7 +563,7 @@ export function mockFeedback(input: FeedbackInput): FeedbackResult {
       headline: "Strong answer. Tie it back to the job.",
       problem: "The example works; the only gap is that you never link it back to this job.",
       evidence: "",
-      fix: `Finish with one line like "That is why I would be good at [part of this ${jobPhrase}]."`,
+      fix: `Finish with one line that links your example to one part of this ${jobPhrase}, starting with "That is why I would be good at".`,
     },
   };
 

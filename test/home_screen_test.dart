@@ -66,18 +66,28 @@ void main() {
     expect(find.text('Interview in 5 days · barista'), findsOneWidget);
   });
 
-  testWidgets('Start practice opens the job intake for five questions', (tester) async {
+  testWidgets('Start practice opens the job intake for three questions', (tester) async {
     await _boot(tester);
     await tester.tap(find.byKey(const ValueKey('start-practice')));
     await _settle(tester);
     final intake = tester.widget<IntakeScreen>(find.byType(IntakeScreen));
-    expect(intake.questionCount, 5);
+    expect(intake.questionCount, 3);
   });
 
-  testWidgets('Quick question opens the intake for one question', (tester) async {
+  testWidgets('home keeps only what is useful: no modes, tips or interview-date prompts', (tester) async {
     await _boot(tester);
-    await tester.ensureVisible(find.byKey(const ValueKey('quick-question')));
-    await tester.tap(find.byKey(const ValueKey('quick-question')));
+    expect(find.text('Ways to practice'), findsNothing);
+    expect(find.text('Tip of the day'), findsNothing);
+    expect(find.textContaining('interview date'), findsNothing);
+    expect(find.byKey(const ValueKey('shell-centre-button')), findsNothing);
+  });
+
+  testWidgets('Quick question on the Practice tab opens the intake for one question', (tester) async {
+    await _boot(tester);
+    await tester.tap(find.text('Practice').last);
+    await _settle(tester, 400);
+    await tester.ensureVisible(find.byKey(const ValueKey('mode-quick')));
+    await tester.tap(find.byKey(const ValueKey('mode-quick')));
     await _settle(tester);
     expect(tester.widget<IntakeScreen>(find.byType(IntakeScreen)).questionCount, 1);
   });

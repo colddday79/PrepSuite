@@ -26,6 +26,7 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
     unawaited(widget.services.sessions.restore());
     unawaited(widget.services.profile.restore());
     unawaited(widget.services.assistant.restore());
+    unawaited(widget.services.drills.restore());
     widget.services.assistant.addListener(_onAssistant);
     _applyAccent();
   }

@@ -99,7 +99,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (confirmed != true || !mounted) return;
     FocusScope.of(context).unfocus();
-    await Future.wait([services.profile.clear(), services.sessions.clearAll()]);
+    await Future.wait([services.profile.clear(), services.sessions.clearAll(), services.drills.clear()]);
     if (!mounted) return;
     final failed = services.profile.saveFailed || services.sessions.saveFailed;
     ScaffoldMessenger.of(context).showSnackBar(

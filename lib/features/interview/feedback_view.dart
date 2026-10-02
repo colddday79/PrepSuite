@@ -1,43 +1,56 @@
 import 'package:flutter/material.dart';
 
 import '../../coach/coach_api.dart';
+import '../../coach/contracts.dart';
+import '../../design/components.dart';
+import '../../design/icons.dart';
 import '../../design/tokens.dart';
+import '../common/coach_widgets.dart';
 
-/// Feedback on one answer: a blunt headline, what went wrong, the words that show it, the fix,
-/// how it sounded, and what worked. Short and scannable, no scores.
+/// Feedback on one answer, in the order it is useful: a short verdict, what worked, the one thing
+/// to improve (with their own words and the fix), and how it sounded. No scores.
 class FeedbackView extends StatelessWidget {
-  const FeedbackView({super.key, required this.question, required this.feedback, required this.typed, this.listen});
+  const FeedbackView({
+    super.key,
+    required this.question,
+    required this.feedback,
+    required this.typed,
+    this.metrics,
+    this.listen,
+  });
 
   final String question;
   final AnswerFeedback feedback;
+
+  /// Typed or corrected answers get no voice feedback: nothing was measured that matches the text.
   final bool typed;
+
+  /// What the phone measured for a spoken, unedited answer; shown on request under "How it sounded".
+  final DeliveryMetrics? metrics;
 
   /// The control to hear the feedback read aloud (or stop it), shown under the headline.
   final Widget? listen;
 
   @override
   Widget build(BuildContext context) {
-    final evidence = feedback.evidence.trim();
-    final delivery = feedback.delivery.trim();
-    final strength = feedback.strength.trim();
+    final headline = feedback.headline.trim();
+    final problem = feedback.problem.trim();
+    final evidence = _unquote(feedback.evidence);
     final fix = feedback.fix.trim();
+    final strength = feedback.strength.trim();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (feedback.mock) ...[
-          Text('Sample feedback', style: PrepType.label.copyWith(color: PrepColors.accent)),
-          const SizedBox(height: Space.s),
-        ],
         Text(question, style: PrepType.meta.copyWith(color: PrepColors.text3), maxLines: 2, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: Space.m),
+        const SizedBox(height: Space.s),
         Semantics(
           header: true,
           liveRegion: true,
-          child: Text(feedback.headline.trim().isEmpty ? 'Here is what to fix.' : feedback.headline.trim(), style: PrepType.headline),
+          child: Text(headline.isEmpty ? 'Here is what to work on.' : headline, style: PrepType.titleL),
         ),
-        if (feedback.problem.trim().isNotEmpty) ...[
-          const SizedBox(height: Space.m),
-          Text(feedback.problem.trim(), style: PrepType.bodyL),
+        if (feedback.mock) ...[
+          const SizedBox(height: Space.xs),
+          Text('Sample feedback', style: PrepType.caption),
         ],
         if (listen != null) ...[
           const SizedBox(height: Space.xs),
@@ -46,18 +59,45 @@ class FeedbackView extends StatelessWidget {
             alignment: AlignmentDirectional.centerStart,
             child: Transform.translate(offset: const Offset(-Space.m, 0), child: listen),
           ),
-        ],
-        if (evidence.isNotEmpty)
-          _Section(
-            label: 'What you said',
-            child: Text('“${_unquote(evidence)}”', style: PrepType.quote.copyWith(color: PrepColors.text2)),
+          const SizedBox(height: Space.s),
+        ] else
+          const SizedBox(height: Space.l),
+        if (strength.isNotEmpty) ...[
+          CoachCard(
+            title: 'What worked',
+            icon: PrepIcons.check,
+            iconColor: PrepColors.success,
+            child: Text(strength, style: PrepType.bodyL),
           ),
-        if (fix.isNotEmpty) _Section(label: 'Fix it', child: Text(fix, style: PrepType.bodyL)),
-        if (typed)
-          _Section(label: 'How it sounded', child: Text('Typed, so no voice feedback.', style: PrepType.body))
-        else if (delivery.isNotEmpty)
-          _Section(label: 'How it sounded', child: Text(delivery, style: PrepType.body)),
-        if (strength.isNotEmpty) _Section(label: 'What worked', child: Text(strength, style: PrepType.body)),
+          const SizedBox(height: Space.m),
+        ],
+        CoachCard(
+          title: 'Improve this',
+          icon: PrepIcons.target,
+          iconColor: PrepColors.warning,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (problem.isNotEmpty) Text(problem, style: PrepType.bodyL),
+              if (evidence.isNotEmpty) ...[
+                if (problem.isNotEmpty) const SizedBox(height: Space.m),
+                AnswerQuote(evidence),
+              ],
+              if (fix.isNotEmpty) ...[
+                const SizedBox(height: Space.l),
+                Text('Next time', style: PrepType.label.copyWith(color: PrepColors.text2)),
+                const SizedBox(height: Space.xs),
+                Text(fix, style: PrepType.bodyLMedium),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: Space.m),
+        CoachCard(
+          title: 'How it sounded',
+          icon: PrepIcons.speaker,
+          child: _HowItSounded(typed: typed, delivery: feedback.delivery.trim(), metrics: typed ? null : metrics),
+        ),
       ],
     );
   }
@@ -71,30 +111,92 @@ class FeedbackView extends StatelessWidget {
     while (t.isNotEmpty && quotes.contains(t[t.length - 1])) {
       t = t.substring(0, t.length - 1);
     }
-    return t;
+    return t.trim();
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.label, required this.child});
+/// One delivery observation, with the measured numbers behind it on request.
+class _HowItSounded extends StatefulWidget {
+  const _HowItSounded({required this.typed, required this.delivery, required this.metrics});
 
-  final String label;
-  final Widget child;
+  final bool typed;
+  final String delivery;
+  final DeliveryMetrics? metrics;
+
+  @override
+  State<_HowItSounded> createState() => _HowItSoundedState();
+}
+
+class _HowItSoundedState extends State<_HowItSounded> {
+  bool _open = false;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: Space.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 1, child: ColoredBox(color: PrepColors.line)),
-          const SizedBox(height: Space.l),
-          Text(label, style: PrepType.label.copyWith(color: PrepColors.text2)),
+    if (widget.typed) return Text('Typed, so no voice feedback.', style: PrepType.body);
+    final metrics = widget.metrics;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          widget.delivery.isEmpty ? 'No voice measurements came back for this answer.' : widget.delivery,
+          style: PrepType.bodyL,
+        ),
+        if (metrics != null) ...[
           const SizedBox(height: Space.xs),
-          child,
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Transform.translate(
+              offset: const Offset(-Space.m, 0),
+              child: QuietButton(
+                _open ? 'Hide details' : 'Show details',
+                icon: PrepIcons.sliders,
+                onPressed: () => setState(() => _open = !_open),
+              ),
+            ),
+          ),
+          if (_open) _Measured(metrics),
         ],
-      ),
+      ],
+    );
+  }
+}
+
+class _Measured extends StatelessWidget {
+  const _Measured(this.m);
+
+  final DeliveryMetrics m;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <(String, String)>[
+      ('Length', clock((m.durationS * 1000).round())),
+      ('Pace', '${m.wpm} words a minute'),
+      ('Filler words', '${m.fillerCount}'),
+      if (m.longestPauseS.isFinite && m.longestPauseS > 0) ('Longest pause', '${m.longestPauseS.toStringAsFixed(1)} seconds'),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (name, value) in rows) ...[
+          const Hairline(),
+          MergeSemantics(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: Space.s),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: Text(name, style: PrepType.body)),
+                  const SizedBox(width: Space.m),
+                  Expanded(child: Text(value, textAlign: TextAlign.end, style: PrepType.bodyLMedium)),
+                ],
+              ),
+            ),
+          ),
+        ],
+        const Hairline(),
+        const SizedBox(height: Space.s),
+        Text('Measured on this phone. The microphone and the room can change these numbers.', style: PrepType.caption),
+      ],
     );
   }
 }

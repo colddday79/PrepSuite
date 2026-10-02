@@ -28,6 +28,10 @@ class _Phone {
   final double ratio;
 
   double get keyboardHeight => size.height < 400 ? 180 : 250;
+
+  /// A portrait phone at the default text size: the practice's next action must sit in the pinned
+  /// bottom bar, in reach without scrolling.
+  bool get pinsActions => scale == 1 && size.height > size.width;
 }
 
 const _phones = [
@@ -330,6 +334,9 @@ void main() {
             _services(),
           );
           final record = find.byKey(const ValueKey('record-button'));
+          if (phone.pinsActions) {
+            expect(record.hitTestable(), findsOneWidget, reason: '${phone.name}: record control without scrolling');
+          }
           await _tap(tester, record, 'answer record');
           await _tap(tester, record, 'answer stop');
           expect(
@@ -372,6 +379,13 @@ void main() {
           _expectNoFlutterErrors(tester, 'typed answer');
           await _tap(tester, find.text('Send answer'), 'send typed answer');
           await _keyboard(tester, phone, visible: false);
+          if (phone.pinsActions) {
+            expect(
+              find.text('See your notes').hitTestable(),
+              findsOneWidget,
+              reason: '${phone.name}: the next step stays in view under long feedback',
+            );
+          }
           await _tap(tester, find.text('Ask the coach'), 'open coach panel');
           await _keyboard(tester, phone);
           final coachField = find.byKey(const ValueKey('ask-field'));

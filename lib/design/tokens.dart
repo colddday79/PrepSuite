@@ -1,38 +1,45 @@
 import 'package:flutter/animation.dart';
 import 'package:flutter/painting.dart';
 
-/// A clean, cool near-black with neutral slate greys, and one accent: the colour of the assistant
-/// the person chose (blue by default). The accent follows the assistant through [useAccent].
+/// A neutral graphite near-black (no blue cast, no gradients) and one accent: the colour of the
+/// coach the person chose. The accent is spent sparingly: the one primary action, progress and
+/// selection. Everything else is greys, so the screen reads as a calm product, not a glowing demo.
 ///
 /// WCAG contrast of every text colour (asserted in test/design_test.dart):
 ///
 /// |           | bg    | surface1 | surface2 |
 /// |-----------|-------|----------|----------|
-/// | text      | 18.2  | 16.6     | 14.9     |
-/// | text2     | 10.4  |  9.5     |  8.5     |
-/// | text3     |  6.5  |  5.9     |  5.3     |
-/// | danger    |  8.3  |  7.6     |  6.8     |
+/// | text      | 17.8  | 16.3     | 14.8     |
+/// | text2     | 10.0  |  9.1     |  8.3     |
+/// | text3     |  6.4  |  5.8     |  5.3     |
+/// | danger    |  8.5  |  7.8     |  7.0     |
 ///
 /// Every assistant accent clears 7:1 on bg, and [bg] text on an accent fill (the primary button)
 /// clears 7:1 too. Hairlines are decorative; controls whose outline is their only boundary use
 /// [text3], which clears 3:1 everywhere.
 abstract final class PrepColors {
-  static const bg = Color(0xFF0B0D12);
-  static const surface1 = Color(0xFF141821);
-  static const surface2 = Color(0xFF1C2130);
-  static const line = Color(0xFF262C3A);
-  static const lineStrong = Color(0xFF363E50);
-  static const text = Color(0xFFF2F5FA);
-  static const text2 = Color(0xFFB3BBCA);
-  static const text3 = Color(0xFF8C95A7);
+  static const bg = Color(0xFF0C0D10);
+  static const surface1 = Color(0xFF16181C);
+  static const surface2 = Color(0xFF1F2126);
+  static const line = Color(0xFF2A2D33);
+  static const lineStrong = Color(0xFF3A3E45);
+  static const text = Color(0xFFF4F5F7);
+  static const text2 = Color(0xFFB6BAC2);
+  static const text3 = Color(0xFF8F949D);
   static const danger = Color(0xFFFF8A7A);
   static const recording = Color(0xFFFF6B5B);
   static const glassBorder = Color(0x1FFFFFFF);
-  static const glassBg = Color(0x80141821);
+  static const glassBg = Color(0x8016181C);
   static const cardHighlight = Color(0x24FFFFFF);
 
-  /// Cool mid-grey press tint. It reads on the accent fill and on the dark surfaces alike.
-  static const press = Color(0xFF7F8796);
+  /// Neutral mid-grey press tint. It reads on the accent fill and on the dark surfaces alike.
+  static const press = Color(0xFF80858F);
+
+  /// Correct and not-quite states in drills. Words and icons always carry the meaning too.
+  static const success = Color(0xFF7FD3A1);
+  static const successTint = Color(0xFF15231B);
+  static const warning = Color(0xFFF2B36B);
+  static const warningTint = Color(0xFF2A2015);
 
   /// Behind dialogs and sheets.
   static const scrim = Color(0xB3000000);

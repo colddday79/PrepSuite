@@ -34,8 +34,8 @@ class CoachQuestion {
     final id = _str(j['id']);
     return CoachQuestion(
       id: id.isEmpty ? 'q${index + 1}' : id,
-      text: _str(j['text']),
-      focus: _str(j['focus']),
+      text: _text(j['text']),
+      focus: _text(j['focus']),
     );
   }
 }
@@ -74,7 +74,7 @@ class QuestionSet {
       }
     }
     return QuestionSet(
-      jobTitle: _str(j['job_title']),
+      jobTitle: _text(j['job_title']),
       questions: List.unmodifiable(questions),
       mock: _bool(j['mock']),
     );
@@ -96,12 +96,12 @@ class AnswerFeedback {
   });
 
   factory AnswerFeedback.fromJson(Map<String, dynamic> j) => AnswerFeedback(
-    headline: _str(j['headline']),
-    problem: _str(j['problem']),
-    evidence: _str(j['evidence']),
-    fix: _str(j['fix']),
-    delivery: _str(j['delivery']),
-    strength: _str(j['strength']),
+    headline: _text(j['headline']),
+    problem: _text(j['problem']),
+    evidence: _text(j['evidence']),
+    fix: _text(j['fix']),
+    delivery: _text(j['delivery']),
+    strength: _text(j['strength']),
     mock: _bool(j['mock']),
   );
 }
@@ -139,9 +139,9 @@ class Wrapup {
   });
 
   factory Wrapup.fromJson(Map<String, dynamic> j) => Wrapup(
-    tips: _strList(j['tips']),
-    lastMinuteNotes: _strList(j['last_minute_notes']),
-    storiesToUse: _strList(j['stories_to_use']),
+    tips: _textList(j['tips']),
+    lastMinuteNotes: _textList(j['last_minute_notes']),
+    storiesToUse: _textList(j['stories_to_use']),
     mock: _bool(j['mock']),
   );
 }
@@ -154,7 +154,7 @@ class CoachReply {
   const CoachReply({required this.answer, required this.mock});
 
   factory CoachReply.fromJson(Map<String, dynamic> j) =>
-      CoachReply(answer: _str(j['answer']), mock: _bool(j['mock']));
+      CoachReply(answer: _text(j['answer']), mock: _bool(j['mock']));
 }
 
 class CoachHealth {
@@ -227,7 +227,7 @@ abstract class CoachApi {
   /// Interview questions for [job] (the raw text the person typed or pasted).
   /// [about] is how the person described themselves, if they chose to; it
   /// may be used to tailor the questions, never to invent facts.
-  Future<QuestionSet> questions({required String job, int count = 5, String about = ''});
+  Future<QuestionSet> questions({required String job, int count = 3, String about = ''});
 
   /// Feedback on one answer. Pass [delivery] for spoken answers and null for
   /// typed ones. [about] is how the person described themselves, if they
@@ -286,7 +286,7 @@ class HttpCoachApi implements CoachApi {
   final bool _ownsClient;
 
   @override
-  Future<QuestionSet> questions({required String job, int count = 5, String about = ''}) async {
+  Future<QuestionSet> questions({required String job, int count = 3, String about = ''}) async {
     final json = await _post({
       'action': 'questions',
       'job': job,
@@ -535,7 +535,7 @@ class FakeCoachApi implements CoachApi {
   int _questionCalls = 0;
 
   @override
-  Future<QuestionSet> questions({required String job, int count = 5, String about = ''}) async {
+  Future<QuestionSet> questions({required String job, int count = 3, String about = ''}) async {
     _questionCalls++;
     final fail = _questionCalls <= failuresBeforeSuccess;
     await Future<void>.delayed(latency);
@@ -756,13 +756,36 @@ String _deliveryLine(DeliveryMetrics? d) {
 
 String _str(Object? v) => v is String ? v.trim() : '';
 
+/// Coach text for people to read: trimmed, with square-bracket placeholders opened up.
+String _text(Object? v) => stripPlaceholders(_str(v));
+
+final _placeholder = RegExp(r'\[([^\[\]]*)\]');
+
+/// [text] with square-bracket placeholders written as plain words. The model sometimes writes
+/// example wording like `Say how you helped by [reducing wait times]`, and the brackets read as a
+/// template the person was meant to fill in: `[reducing wait times]` becomes `reducing wait times`.
+/// An empty `[]` and any stray bracket are dropped.
+String stripPlaceholders(String text) {
+  if (!text.contains('[') && !text.contains(']')) return text;
+  var t = text;
+  for (var previous = ''; previous != t;) {
+    previous = t;
+    t = t.replaceAllMapped(_placeholder, (m) => m[1]!.trim());
+  }
+  return t
+      .replaceAll(RegExp(r'[\[\]]'), '')
+      .replaceAll(RegExp(r'[ \t]{2,}'), ' ')
+      .replaceAllMapped(RegExp(r' ([.,;:!?])'), (m) => m[1]!)
+      .trim();
+}
+
 bool _bool(Object? v) => v == true;
 
-List<String> _strList(Object? v) {
+List<String> _textList(Object? v) {
   if (v is! List) return const [];
   return List.unmodifiable([
     for (final e in v)
-      if (e is String && e.trim().isNotEmpty) e.trim(),
+      if (e is String && _text(e).isNotEmpty) _text(e),
   ]);
 }
 

@@ -246,7 +246,7 @@ Deno.test("limits are inclusive and optional fields have sane defaults", async (
   assertEquals((await send(mockHandler, { action: "questions", job: "a".repeat(300), count: 8 })).status, 200);
   assertEquals((await send(mockHandler, { action: "questions", job: "barista", about: "a".repeat(1200) })).status, 200);
   const defaulted = await send(mockHandler, { action: "questions", job: "barista" });
-  assertEquals(defaulted.body.questions.length, 5);
+  assertEquals(defaulted.body.questions.length, 3);
   const longAnswer = await send(mockHandler, feedbackBody({ transcript: "word ".repeat(1200).trim() }));
   assertEquals(longAnswer.status, 200);
   const noPitch = await send(

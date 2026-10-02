@@ -1,3 +1,4 @@
+import '../features/drills/drill_progress.dart';
 import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,10 +23,12 @@ class AppServices {
     SessionStore? sessions,
     ProfileStore? profile,
     AssistantStore? assistant,
+    DrillProgressStore? drills,
     SpeechSetup? speechSetup,
   }) : sessions = sessions ?? SessionStore(),
        profile = profile ?? ProfileStore(),
        assistant = assistant ?? AssistantStore(),
+       drills = drills ?? DrillProgressStore(),
        speechSetup = speechSetup ?? SpeechSetup.ready();
 
   final CoachApi coach;
@@ -47,6 +50,9 @@ class AppServices {
 
   /// Which assistant the person chose, and whether first-run onboarding is done.
   final AssistantStore assistant;
+
+  /// Which skill drills are done (the Duolingo-style lessons on the Practice tab).
+  final DrillProgressStore drills;
 
   /// Offline speech preparation (model copy on first launch, then loading), started at launch.
   final SpeechSetup speechSetup;

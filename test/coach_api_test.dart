@@ -111,10 +111,10 @@ void main() {
       });
     });
 
-    test('questions defaults count to 5', () async {
+    test('questions defaults count to 3', () async {
       final h = harness((_) => jsonResponse(questionsBody));
       await h.api.questions(job: 'Barista');
-      expect(bodyOf(h.requests.single)['count'], 5);
+      expect(bodyOf(h.requests.single)['count'], 3);
     });
 
     test(
@@ -457,6 +457,64 @@ void main() {
       }
     });
 
+    test('square-bracket placeholders are written as plain words', () {
+      expect(
+        stripPlaceholders('Say how it helped, like [reducing wait times or improving treatment outcomes].'),
+        'Say how it helped, like reducing wait times or improving treatment outcomes.',
+      );
+      expect(stripPlaceholders('One time at [ place ], I [what you did].'), 'One time at place, I what you did.');
+      expect(stripPlaceholders('End with the result [] .'), 'End with the result.');
+      expect(stripPlaceholders('Nested [[the result]] and a stray ] bracket'), 'Nested the result and a stray bracket');
+      // Text without brackets is left exactly as it was.
+      expect(stripPlaceholders('Say "I".  Twice.'), 'Say "I".  Twice.');
+    });
+
+    test('every kind of coach text is parsed without placeholders', () async {
+      final fb = await harness(
+        (_) => jsonResponse({
+          ...feedbackBody,
+          'headline': 'Say what [you] did.',
+          'problem': 'It never says [the result].',
+          'fix': 'End with "In the end, [what changed]."',
+          'strength': 'You named [the team].',
+          'delivery': '[Good] pace.',
+        }),
+      ).api.feedback(job: 'x', question: 'q', transcript: 't');
+      expect(fb.headline, 'Say what you did.');
+      expect(fb.problem, 'It never says the result.');
+      expect(fb.fix, 'End with "In the end, what changed."');
+      expect(fb.strength, 'You named the team.');
+      expect(fb.delivery, 'Good pace.');
+
+      final set = await harness(
+        (_) => jsonResponse({
+          'job_title': 'Barista at [cafe]',
+          'questions': [
+            {'text': 'Why [this cafe]?', 'focus': '[Motivation]'},
+          ],
+        }),
+      ).api.questions(job: 'x');
+      expect(set.jobTitle, 'Barista at cafe');
+      expect(set.questions.single.text, 'Why this cafe?');
+      expect(set.questions.single.focus, 'Motivation');
+
+      final notes = await harness(
+        (_) => jsonResponse({
+          'tips': ['Name [one result].'],
+          'last_minute_notes': ['Mention [the hospital].', '[]'],
+          'stories_to_use': ['[Your project]'],
+        }),
+      ).api.wrapup(job: 'x', answers: const []);
+      expect(notes.tips, ['Name one result.']);
+      expect(notes.lastMinuteNotes, ['Mention the hospital.']);
+      expect(notes.storiesToUse, ['Your project']);
+
+      final reply = await harness(
+        (_) => jsonResponse({'answer': 'Open with [your degree].'}),
+      ).api.ask(job: 'x', userQuestion: 'q');
+      expect(reply.answer, 'Open with your degree.');
+    });
+
     test('bodies are decoded as UTF-8 both ways', () async {
       final h = harness(
         (_) => http.Response.bytes(
@@ -726,8 +784,8 @@ void main() {
           'Junior barista',
         );
         expect(set.mock, isTrue);
-        expect(set.questions, hasLength(5));
-        expect(set.questions.map((q) => q.id).toSet(), hasLength(5));
+        expect(set.questions, hasLength(3));
+        expect(set.questions.map((q) => q.id).toSet(), hasLength(3));
         expect(
           set.questions.every((q) => q.text.isNotEmpty && q.focus.isNotEmpty),
           isTrue,

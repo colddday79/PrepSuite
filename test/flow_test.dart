@@ -31,12 +31,14 @@ class _CoachSpy extends FakeCoachApi {
   int feedbackFailures;
   int wrapupFailures;
   final jobs = <String>[];
+  final counts = <int>[];
   final feedbackCalls = <_FeedbackCall>[];
   final wrapupCalls = <List<AnswerSummary>>[];
 
   @override
   Future<QuestionSet> questions({String about = '', required String job, int count = 5}) {
     jobs.add(job);
+    counts.add(count);
     return super.questions(job: job, count: count);
   }
 
@@ -200,18 +202,21 @@ Future<void> _finishTypedPractice(WidgetTester tester, _Rig rig) async {
   await tester.pump();
   await _tap(tester, find.text('Use this'));
   await _settle(tester, 900);
-  for (var i = 1; i <= 5; i++) {
+  for (var i = 1; i <= _sessionLength; i++) {
     await tester.enterText(find.byKey(const ValueKey('answer-field')), 'I handled order $i by checking the ticket, remaking the drink and explaining the fix to the customer.');
     await tester.pump();
     await _tap(tester, find.text('Send answer'));
     await _settle(tester, 600);
-    await _tap(tester, find.text(i == 5 ? 'See your notes' : 'Next question'));
+    await _tap(tester, find.text(i == _sessionLength ? 'See your notes' : 'Next question'));
     await _settle(tester, 900);
   }
 }
 
+/// A short session is three questions (PRD §4); a quick drill is one.
+const _sessionLength = 3;
+
 void main() {
-  testWidgets('first run: consent, job by voice, five answers with feedback, notes, home', (tester) async {
+  testWidgets('first run: consent, job by voice, three answers with feedback, notes, home', (tester) async {
     final rig = _Rig();
     await _boot(tester, rig);
 
@@ -240,22 +245,26 @@ void main() {
     await _tap(tester, find.text('Use this'));
     expect(find.text('Writing questions for this role'), findsOneWidget);
     await _settle(tester, 1000);
+    expect(rig.coach.counts, [_sessionLength]);
 
-    // Interview: five questions.
-    for (var i = 1; i <= 5; i++) {
-      expect(find.textContaining('Question $i of 5'), findsOneWidget);
+    // Interview: three questions, with feedback in order: what worked, what to improve, how it sounded.
+    for (var i = 1; i <= _sessionLength; i++) {
+      expect(find.textContaining('Question $i of $_sessionLength'), findsOneWidget);
       expect(find.textContaining('Sample questions'), findsOneWidget);
       await _answerOutLoud(tester);
-      expect(find.text('Fix it'), findsOneWidget);
+      expect(find.text('What worked'), findsOneWidget);
+      expect(find.text('Improve this'), findsOneWidget);
       expect(find.text('How it sounded'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('What worked')).dy, lessThan(tester.getTopLeft(find.text('Improve this')).dy));
+      expect(tester.getTopLeft(find.text('Improve this')).dy, lessThan(tester.getTopLeft(find.text('How it sounded')).dy));
       if (i == 1) {
-        // Retry once: the question comes back ready to record.
-        await _tap(tester, find.text('Try this one again'));
+        // Practice it once more: the question comes back ready to record.
+        await _tap(tester, find.text('Practice this'));
         await _settle(tester, 300);
         expect(find.text('Up to 2 minutes'), findsOneWidget);
         await _answerOutLoud(tester);
       }
-      await _tap(tester, find.text(i == 5 ? 'See your notes' : 'Next question'));
+      await _tap(tester, find.text(i == _sessionLength ? 'See your notes' : 'Next question'));
       await _settle(tester, 800);
     }
 
@@ -319,7 +328,7 @@ void main() {
 
     await _tap(tester, find.text('Try again'));
     await _settle(tester, 1200);
-    expect(find.textContaining('Question 1 of 5'), findsOneWidget);
+    expect(find.textContaining('Question 1 of $_sessionLength'), findsOneWidget);
   });
 
   testWidgets('Not now keeps you on Home; microphone off offers typing', (tester) async {
@@ -361,7 +370,7 @@ void main() {
     await _tap(tester, find.text('Use this'));
     await _settle(tester, 1000);
     expect(rig.coach.jobs, ['Graduate civil engineer designing bridges']);
-    expect(find.textContaining('Question 1 of 5'), findsOneWidget);
+    expect(find.textContaining('Question 1 of $_sessionLength'), findsOneWidget);
   });
 
   testWidgets('silent job is not sent to the coach and can be re-recorded', (tester) async {
@@ -489,11 +498,11 @@ void main() {
     expect(find.text('Next question'), findsOneWidget);
   });
 
-  testWidgets('wrapup outage keeps five answers for a retry from Home', (tester) async {
+  testWidgets('wrapup outage keeps every answer for a retry from Home', (tester) async {
     final rig = _Rig(consented: true, wrapupFailures: 1);
     await _finishTypedPractice(tester, rig);
     expect(find.text("Couldn't write your notes."), findsOneWidget);
-    expect(rig.services.sessions.last!.answers, hasLength(5));
+    expect(rig.services.sessions.last!.answers, hasLength(_sessionLength));
     expect(rig.services.sessions.last!.wrapup, isNull);
     final originals = rig.coach.wrapupCalls.single.map((a) => a.transcript).toList();
 
@@ -510,7 +519,7 @@ void main() {
     await _settle(tester, 1000);
     expect(rig.coach.wrapupCalls, hasLength(2));
     expect(rig.coach.wrapupCalls.last.map((a) => a.transcript), originals);
-    expect(rig.coach.feedbackCalls, hasLength(5));
+    expect(rig.coach.feedbackCalls, hasLength(_sessionLength));
     expect(find.text('Tips'), findsOneWidget);
     expect(rig.services.sessions.last!.wrapup, isNotNull);
   });

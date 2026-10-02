@@ -276,7 +276,7 @@ class AskCoachController extends ChangeNotifier {
   }
 }
 
-/// Inline under the feedback: their question in their words, then the coach's answer. Every
+/// A card under the feedback: their question in their words, then the coach's answer. Every
 /// action here is quiet; "Next question" stays the one primary action on the screen.
 class AskCoachPanel extends StatelessWidget {
   const AskCoachPanel({super.key, required this.controller, required this.voice});
@@ -288,25 +288,30 @@ class AskCoachPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: Listenable.merge([controller, voice]),
-      builder: (context, _) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Hairline(),
-          const SizedBox(height: Space.xs),
-          Row(
-            children: [
-              Expanded(
-                child: Semantics(
-                  header: true,
-                  child: Text('Ask the coach', style: PrepType.label.copyWith(color: PrepColors.text2)),
+      builder: (context, _) => CoachCard(
+        padding: const EdgeInsets.fromLTRB(Space.xl, Space.s, Space.s, Space.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const PrepIcon(PrepIcons.chat, color: PrepColors.text2, size: 20),
+                const SizedBox(width: Space.s),
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text('Ask the coach', style: PrepType.label.copyWith(color: PrepColors.text)),
+                  ),
                 ),
-              ),
-              QuietButton('Close', onPressed: controller.close),
-            ],
-          ),
-          const SizedBox(height: Space.xs),
-          ..._content(context),
-        ],
+                QuietButton('Close', onPressed: controller.close),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: Space.m, top: Space.xs),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _content(context)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -323,7 +328,13 @@ class AskCoachPanel extends StatelessWidget {
         return [
           const SizedBox(height: Space.s),
           Center(
-            child: RecordButton(recording: recording, countdown: true, progress: c.progress, onPressed: c.record),
+            child: RecordButton(
+              recording: recording,
+              countdown: true,
+              progress: c.progress,
+              onPressed: c.record,
+              semanticLabel: recording ? 'Stop recording' : 'Start recording your question',
+            ),
           ),
           const SizedBox(height: Space.m),
           Center(
@@ -361,7 +372,15 @@ class AskCoachPanel extends StatelessWidget {
             body: 'Speak up, or type it.',
           ),
           const SizedBox(height: Space.l),
-          Center(child: RecordButton(recording: false, countdown: true, progress: c.progress, onPressed: c.record)),
+          Center(
+            child: RecordButton(
+              recording: false,
+              countdown: true,
+              progress: c.progress,
+              onPressed: c.record,
+              semanticLabel: 'Start recording your question',
+            ),
+          ),
           const SizedBox(height: Space.s),
           Center(child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: c.typeInstead)),
         ];

@@ -120,7 +120,8 @@ const STYLE_RULES = `How to write:
 - No em dashes, no emoji, no buzzwords ("leverage", "synergy", "impactful", "passionate", "robust"), no acronyms like "STAR". Say "what happened, what you did, how it ended" instead.
 - Never give scores, ratings, grades, percentages or pass/fail verdicts.
 - Never judge the person: nothing about personality, confidence, nerves, feelings, intelligence or how employable they are. Talk about the answer and how it came across.
-- Never invent facts about the user, including anything beyond what they actually wrote in <candidate> when it is given. When you show example wording, put anything they did not say in square brackets, like "[what you did]" or "[the result]".`;
+- Never invent facts about the user, including anything beyond what they actually wrote in <candidate> when it is given. When you show example wording, describe anything they did not say in plain words, like "then say what you did" or "end with the result".
+- Never use square-bracket placeholders such as "[the result]" or "[reducing wait times]". Write plain words instead; the app shows your text exactly as written.`;
 
 // ---------------------------------------------------------------------------
 // 1. Questions
@@ -204,7 +205,7 @@ Calibrate before replying:
 Fields:
 - problem: the main meaningful weakness in plain words, at most 2 sentences, or "No major problem in this answer." when it works.
 - evidence: a short quote copied word for word from the transcript that shows the problem, at most about 15 words. It must come from <transcript> only, never from <candidate>. Use "" when the problem is something missing and no quote shows it, or when the transcript is empty.
-- fix: one concrete thing to do next time, at most 2 sentences, tailored to this answer. Example wording is welcome if it uses square-bracket placeholders for anything they did not say.
+- fix: one concrete thing to do next time, at most 2 sentences, tailored to this answer. Example wording is welcome if it describes anything they did not say in plain words, never in square brackets.
 - strength: one specific thing that worked in this answer, 1 sentence. If nothing did (for example an empty answer), say plainly there is nothing to go on yet.
 - headline: the blunt verdict in at most 12 words, e.g. "Good example, but you never said what you did."
 

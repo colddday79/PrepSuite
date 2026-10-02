@@ -43,7 +43,7 @@ export const LIMITS = {
   question: 400,
   transcript: 6000,
   answers: 10,
-  count: { min: 1, max: 8, default: 5 },
+  count: { min: 1, max: 8, default: 3 },
   feedbackText: 1000, // headline / problem / delivery (or fix) echoed back in wrap-up and ask
   userQuestion: 500,
   askReplyWords: 110, // hard cap on the spoken ask reply; the prompt asks for at most 80

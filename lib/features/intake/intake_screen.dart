@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -25,11 +24,11 @@ enum _Phase { settingUp, asking, ready, preparing, recording, transcribing, revi
 /// Step one: the interviewer asks for the job, the person says it (10 seconds at most), checks
 /// what we heard, and the coach writes questions for that role.
 class IntakeScreen extends StatefulWidget {
-  const IntakeScreen({super.key, this.preferTyping = false, this.questionCount = 5});
+  const IntakeScreen({super.key, this.preferTyping = false, this.questionCount = 3});
 
   final bool preferTyping;
 
-  /// How many questions to ask: 5 for a mock interview, 1 for a quick question.
+  /// How many questions to ask: 3 for a short session, 1 for a quick drill.
   final int questionCount;
 
   @override
@@ -302,17 +301,6 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
     }
   }
 
-  /// Large while the interviewer asks and listens, smaller once there is text to read or edit.
-  double _presenceSize(BuildContext context) {
-    final screen = MediaQuery.sizeOf(context);
-    final talking = switch (_phase) {
-      _Phase.settingUp || _Phase.asking || _Phase.ready || _Phase.preparing || _Phase.recording || _Phase.transcribing => true,
-      _ => false,
-    };
-    if (!talking) return 152;
-    return math.min(screen.width * 0.92, screen.height * 0.38).clamp(200.0, 420.0);
-  }
-
   AssistantMood get _mood => switch (_phase) {
         _Phase.asking => AssistantMood.speaking,
         _Phase.recording => AssistantMood.listening,
@@ -320,73 +308,65 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
         _ => AssistantMood.idle,
       };
 
+  /// What the coach is doing, in words beside it.
+  String get _status => switch (_phase) {
+        _Phase.settingUp => 'Getting my voice ready',
+        _Phase.asking => 'Asking',
+        _Phase.ready => 'Your turn',
+        _Phase.preparing => 'Getting ready to listen',
+        _Phase.recording => 'Listening',
+        _Phase.transcribing => 'Writing down what you said',
+        _Phase.review => _typing ? 'Your turn' : 'Check what I heard',
+        _Phase.unheard => "Didn't catch that",
+        _Phase.micOff => 'Waiting for the microphone',
+        _Phase.loading => 'Writing your questions',
+        _Phase.error => "Couldn't get your questions",
+      };
+
+  String get _caption {
+    final count = widget.questionCount;
+    return count == 1 ? 'New practice · 1 question' : 'New practice · $count questions';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final phase = _phaseContent();
     return CoachScaffold(
-      status: 'Your job',
-      presenceSize: _presenceSize(context),
-      level: _level,
-      mood: _mood,
       onClose: () => Navigator.of(context).maybePop(),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, Space.xxl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            RevealText(controller: _question, style: PrepType.question),
-            const SizedBox(height: Space.s),
-            ..._phaseContent(),
-          ],
+      progress: 0,
+      progressLabel: 'Setting up your practice',
+      caption: _caption,
+      actions: _actions(),
+      children: [
+        CoachLine(mood: _mood, status: _status, level: _level),
+        const SizedBox(height: Space.xl),
+        RevealText(controller: _question, style: PrepType.question),
+        const SizedBox(height: Space.s),
+        Text(
+          '${_typing ? 'Type' : 'Say'} the role and where it is. You can add one thing the job asks for.',
+          style: PrepType.body,
         ),
-      ),
+        if (phase.isNotEmpty) ...[const SizedBox(height: Space.xxl), ...phase],
+      ],
     );
   }
 
   List<Widget> _phaseContent() {
     switch (_phase) {
-      // Ready and recording share one layout, so the record button never moves under a finger.
       case _Phase.asking:
       case _Phase.ready:
+      case _Phase.preparing:
       case _Phase.recording:
-        final recording = _phase == _Phase.recording;
+      case _Phase.transcribing:
+        final live = _phase == _Phase.recording || _phase == _Phase.transcribing;
         return [
-          const SizedBox(height: Space.xl),
-          Center(
-            child: RecordButton(recording: recording, countdown: true, progress: _progress, onPressed: recording ? _stop : _record),
+          TranscriptCard(
+            text: live ? _partial : '',
+            placeholder: live ? 'Listening' : 'Your words will show up here as you talk.',
           ),
-          const SizedBox(height: Space.m),
-          Center(
-            child: recording
-                ? ValueListenableBuilder<double>(
-                    valueListenable: _progress,
-                    builder: (context, p, _) {
-                      final left = ((1 - p.clamp(0.0, 1.0)) * _maxJobRecording.inSeconds).ceil();
-                      return Text('${left}s left', style: PrepType.meta);
-                    },
-                  )
-                : Text('10 seconds', style: PrepType.meta),
-          ),
-          const SizedBox(height: Space.m),
-          if (recording)
-            Text(
-              _partial.isEmpty ? 'Listening' : _partial,
-              textAlign: TextAlign.center,
-              style: PrepType.bodyL.copyWith(color: _partial.isEmpty ? PrepColors.text3 : PrepColors.text),
-            )
-          else
-            Center(child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead)),
         ];
       case _Phase.settingUp:
-        return [
-          const SizedBox(height: Space.l),
-          _SetupProgress(setup: _services.speechSetup.state.value),
-          const SizedBox(height: Space.xl),
-          Center(child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead)),
-        ];
-      case _Phase.transcribing:
-        return const [SizedBox(height: Space.l), LoadingLine('Turning your voice into text')];
-      case _Phase.preparing:
-        return const [SizedBox(height: Space.l), LoadingLine('Preparing microphone')];
+        return [_SetupProgress(setup: _services.speechSetup.state.value)];
       case _Phase.review:
         final voiceNote = _voiceNote;
         final voiceMissing = _services.speechSetup.state.value.missing;
@@ -400,38 +380,22 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
             ),
             const SizedBox(height: Space.xl),
           ],
-          const SizedBox(height: Space.s),
           PrepTextField(
             fieldKey: const ValueKey('job-field'),
             controller: _job,
+            label: _typing ? 'The job' : 'What I heard',
             hint: 'Junior data analyst at a hospital',
             minLines: 2,
             autofocus: _typing && _job.text.isEmpty,
             onChanged: (_) => setState(() {}),
           ),
-          const SizedBox(height: Space.xxl),
-          PrimaryButton('Use this', onPressed: _job.text.trim().isEmpty ? null : _submit),
-          const SizedBox(height: Space.s),
-          if (!(_typing && voiceMissing))
-            Center(
-              child: QuietButton(
-                _typing ? 'Say it instead' : 'Record again',
-                icon: _typing ? PrepIcons.mic : PrepIcons.replay,
-                onPressed: _record,
-              ),
-            ),
+          if (!_typing) ...[
+            const SizedBox(height: Space.s),
+            Text('Fix any words I got wrong.', style: PrepType.meta),
+          ],
         ];
       case _Phase.unheard:
-        return [
-          const ProblemNote(
-            title: "We couldn't hear that.",
-            body: 'Speak up, or type it.',
-          ),
-          const SizedBox(height: Space.xxl),
-          Center(child: RecordButton(recording: false, countdown: true, progress: _progress, onPressed: _record)),
-          const SizedBox(height: Space.s),
-          Center(child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead)),
-        ];
+        return const [ProblemNote(title: "We couldn't hear that.", body: 'Speak up, or type it.')];
       case _Phase.micOff:
         return [
           ProblemNote(
@@ -442,31 +406,111 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
                     ? 'Allow it in Settings, or type it.'
                     : 'Allow it when you try again, or type it.',
           ),
-          const SizedBox(height: Space.xxl),
-          PrimaryButton('Type instead', onPressed: _typeInstead),
-          const SizedBox(height: Space.s),
-          Center(
-            child: QuietButton(
-              _micBlocked ? 'Open settings' : 'Try again',
-              onPressed: _micBlocked ? _services.mic.openSettings : _record,
-            ),
-          ),
         ];
       case _Phase.loading:
         return [
-          Text(_job.text.trim(), style: PrepType.bodyL.copyWith(color: PrepColors.text2)),
+          AnswerQuote(_job.text.trim(), semanticPrefix: 'Your job'),
           const SizedBox(height: Space.xxl),
           const LoadingLine('Writing questions for this role'),
         ];
       case _Phase.error:
         return [
           ProblemNote(title: "Couldn't get your questions.", body: _error?.userMessage ?? 'Something went wrong. Try again.'),
-          const SizedBox(height: Space.xxl),
-          PrimaryButton('Try again', onPressed: _submit),
-          const SizedBox(height: Space.s),
-          Center(child: QuietButton('Change the job', onPressed: () => setState(() => _phase = _Phase.review))),
         ];
     }
+  }
+
+  List<Widget> _actions() {
+    switch (_phase) {
+      case _Phase.asking:
+      case _Phase.ready:
+      case _Phase.preparing:
+      case _Phase.recording:
+      case _Phase.transcribing:
+      case _Phase.unheard:
+        return [_dock()];
+      case _Phase.settingUp:
+        return [
+          QuietRow([QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead)]),
+        ];
+      case _Phase.review:
+        final voiceMissing = _services.speechSetup.state.value.missing;
+        return [
+          PrimaryButton('Use this', onPressed: _job.text.trim().isEmpty ? null : _submit),
+          if (!(_typing && voiceMissing))
+            QuietRow([
+              QuietButton(
+                _typing ? 'Say it instead' : 'Record again',
+                icon: _typing ? PrepIcons.mic : PrepIcons.replay,
+                onPressed: _record,
+              ),
+            ]),
+        ];
+      case _Phase.micOff:
+        return [
+          PrimaryButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead),
+          QuietRow([
+            QuietButton(
+              _micBlocked ? 'Open settings' : 'Try again',
+              onPressed: _micBlocked ? _services.mic.openSettings : _record,
+            ),
+          ]),
+        ];
+      case _Phase.loading:
+        return [PrimaryButton('Use this', busy: true, onPressed: () {})];
+      case _Phase.error:
+        return [
+          PrimaryButton('Try again', onPressed: _submit),
+          QuietRow([QuietButton('Change the job', onPressed: () => setState(() => _phase = _Phase.review))]),
+        ];
+    }
+  }
+
+  /// The record button with "Type instead" and "Hear it again" beside it.
+  Widget _dock() {
+    final recording = _phase == _Phase.recording;
+    final busy = _phase == _Phase.preparing || _phase == _Phase.transcribing;
+    final Widget status;
+    Widget? detail;
+    if (recording) {
+      status = ValueListenableBuilder<double>(
+        valueListenable: _progress,
+        builder: (context, p, _) {
+          final left = ((1 - p.clamp(0.0, 1.0)) * _maxJobRecording.inSeconds).ceil();
+          return Text(
+            'Recording, ${left}s left',
+            style: PrepType.titleM.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+          );
+        },
+      );
+      detail = const Text('Tap to stop');
+    } else if (_phase == _Phase.preparing) {
+      status = const Text('Getting the microphone ready');
+    } else if (_phase == _Phase.transcribing) {
+      status = const Text('Turning your voice into text');
+    } else {
+      status = Text(_phase == _Phase.unheard ? 'Tap to try again' : 'Tap to answer');
+      detail = const Text('Up to 10 seconds');
+    }
+    return RecordDock(
+      button: RecordButton(
+        recording: recording,
+        countdown: true,
+        progress: _progress,
+        onPressed: busy ? null : (recording ? _stop : _record),
+        semanticLabel: recording ? 'Stop recording' : 'Start recording the job',
+      ),
+      status: Semantics(liveRegion: !recording, child: status),
+      detail: detail,
+      sidesVisible: !recording && !busy,
+      leading: DockAction(icon: PrepIcons.keyboard, label: 'Type instead', onPressed: _typeInstead),
+      trailing: DockAction(
+        icon: PrepIcons.speaker,
+        label: 'Hear it again',
+        semanticLabel: 'Hear the question again',
+        onPressed: _phase == _Phase.ready || _phase == _Phase.unheard ? _ask : null,
+      ),
+    );
   }
 }
 
