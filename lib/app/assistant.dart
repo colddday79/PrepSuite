@@ -2,10 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Which assistant the person practices with. Four white robots differ in colour; Onyx is the same
-/// robot in black. They all use the same coach and the same voice. (The gold hologram "orb" was
-/// retired; a saved choice of it now opens as Onyx.)
-enum AssistantKind { nova, sol, iris, mint, onyx }
+/// Which assistant the person practices with. Four white robots that differ only in colour; they all
+/// use the same coach and the same voice. (The gold hologram "orb" and a black "onyx" robot were
+/// retired; a saved choice of either opens as the default.)
+enum AssistantKind { nova, sol, iris, mint }
 
 @immutable
 class AssistantLook {
@@ -27,7 +27,7 @@ class AssistantLook {
   /// Dark text on it clears 7:1 (asserted in test/design_test.dart).
   final Color tone;
 
-  /// Every look is a rendered robot now. Kept so the avatar's older hologram path still compiles.
+  /// Every look is a rendered robot. Kept so the avatar's older hologram path still compiles.
   bool get isRobot => true;
 
   String get bodyAsset => 'assets/assistant/${kind.name}_body.webp';
@@ -38,9 +38,7 @@ class AssistantLook {
   static const sol = AssistantLook._(AssistantKind.sol, 'Ember', 'Amber', Color(0xFFFFA45E), Color(0xFFF39A5E));
   static const iris = AssistantLook._(AssistantKind.iris, 'Echo', 'Violet', Color(0xFFC09CFF), Color(0xFFB39DF5));
   static const mint = AssistantLook._(AssistantKind.mint, 'Sprout', 'Green', Color(0xFF4DF7CF), Color(0xFF63CC98));
-  static const onyx = AssistantLook._(AssistantKind.onyx, 'Onyx', 'Black', Color(0xFFE6EEFF), Color(0xFFC5CDD8));
-
-  static const all = [nova, sol, iris, mint, onyx];
+  static const all = [nova, sol, iris, mint];
 
   static AssistantLook of(AssistantKind kind) => all.firstWhere((l) => l.kind == kind);
 }
@@ -79,9 +77,8 @@ class AssistantStore extends ChangeNotifier implements ValueListenable<Assistant
     try {
       final prefs = await SharedPreferences.getInstance();
       if (revision == _revision) {
-        var kind = prefs.getString(_kindKey);
-        // The retired gold orb's place is taken by Onyx.
-        if (kind == 'orb') kind = AssistantKind.onyx.name;
+        final kind = prefs.getString(_kindKey);
+        // A retired look (the orb, onyx) is no longer a kind, so it opens as the default.
         final match = AssistantKind.values.where((k) => k.name == kind);
         if (match.isNotEmpty) _look = AssistantLook.of(match.first);
         _onboarded = prefs.getBool(_onboardedKey) ?? false;
