@@ -472,3 +472,56 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 - It also ran `flutter run --profile` on the same emulator.
 - I committed only files that were mine alone, after checking that set by itself in a clean temporary worktree.
 - `assistant_avatar.dart` and `home_screen.dart` mix both tools' edits, so they stay uncommitted in the working tree for whoever finishes last. The halo/floor changes and the 1536 decode cap are in there.
+
+---
+
+## Session 9 (2026-10-02 night): calm Home, skill drills, redesigned practice session
+
+**Source of truth for product scope:** `docs/PREPSUITE-PRD-2026-10-02.md` (written by the other assistant, accepted by the owner). Read it before product work. Its P0 items that are still missing are listed under Next.
+
+**Owner's asks (away, "don't ask me any questions"):**
+- Home looked dirty: remove "Ways to practice", the interview-date card and the tip of the day; fix the spacing.
+- The colours looked AI vibe-coded.
+- Add Duolingo-style practice with answer boxes.
+- Make the practice session clearly usable and better designed.
+
+**How the work ran:**
+- The other assistant's uncommitted responsive-layout and performance pass, and the new PRD, were committed unchanged first as their own checkpoint (`29260e2`, all tests green), so this work had a clean base.
+- Then two agents worked on separate files: drills in `lib/features/drills/**`, and the session in `intake`, `interview`, `wrapup`, `coach_widgets` and `coach_api` sanitising. I did tokens, the shared chrome, Home, Practice, the shell and the integration.
+
+**What changed:**
+- **Palette** (`tokens.dart`): neutral graphite (bg `#0C0D10`, surfaces `#16181C` and `#1F2126`, lines `#2A2D33` and `#3A3E45`), with no blue cast. New `success`/`warning` colours and tints for drill results. The accent (the coach tone) is used only for the primary action, progress and selection.
+- **Shared chrome** (`lib/design/practice_chrome.dart`): `ProgressTrack`, `StepTopBar` (close plus progress plus caption) and `BottomActionBar` (pinned next action). The session and the drills both use them.
+- **Shell:** four even tabs. The glowing raised mic button is gone.
+- **Home:**
+  - greeting, the coach on a plain card (tap to talk), and `Start practice` (3 questions);
+  - **Skills**, with the `NextLessonCard`;
+  - **Last practice**, only when there is one.
+- **Practice tab:**
+  - an **Out loud** list (`LinkRow`s: Mock interview 3 questions, Quick question 1, Type your answers, Ask {coach}, Your notes);
+  - **Skills**, with the full `SkillPath`.
+- **Drills** (`lib/features/drills/`):
+  - Four PRD skills × two lessons × six exercises, reviewed static content with no AI.
+  - Exercise types: choose the best answer, odd one out, fill the blank, put in order, and one written rewrite.
+  - Answers are checked at once, with a reason. A miss comes back at the end, and the score counts first tries.
+  - `DrillProgressStore` lives in `AppServices.drills` (an in-memory default for tests; `main.dart` passes `DrillProgressStore.instance`, saved under `drills.progress.v1`). It is restored in `app.dart` and cleared by "Delete everything".
+  - The finish screen's "Practice it out loud" opens a one-question session.
+  - There are no streaks, XP or confetti (the PRD forbids them).
+- **Practice session:**
+  - step chrome on intake, questions, review, feedback and wrap-up;
+  - a small coach whose state is shown in words, with the question as the hero;
+  - a 76 dp record control, with outlined "Type instead" and "Hear it again";
+  - the transcript review step restyled;
+  - feedback as cards in order: headline, What worked, Improve this (with their quote and "Next time"), How it sounded;
+  - Next always visible, plus "Practice this" and "Ask the coach";
+  - sessions default to 3 questions, in the client, the server and the tests.
+- **Placeholders:** coach text is cleaned of `[square brackets]` when it's parsed. The server prompts used to *ask* for brackets; they now forbid them. The mock replies were rewritten.
+
+**State:** flutter analyze is clean; flutter test: 247 passed; Deno: 34 passed. Checked on the emulator with real AI (Ollama `gemma4:31b-cloud`): Home, Practice, a drill lesson (correct path) and a typed three-question session through feedback. Not checked on the device: a wrong-answer drill and voice recording (the emulator has no mic).
+
+**Next (PRD P0 still missing):**
+- Immutable attempts and an Original-vs-Retry comparison that survives a restart. Recordings are currently deleted after transcription, so this needs local audio retention with a deletion control.
+- The reviewed 12-question pack with rubrics. Questions are AI-generated today.
+- A real-phone check of recording and playback.
+- `RecordButton` is now 96 dp and also used by Talk and Profile; check those screens.
+- `CoachTopBar` in `components.dart` is now only used by `design_test` and can go.
