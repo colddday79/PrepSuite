@@ -65,7 +65,10 @@ Future<void> showEditAboutSheet(BuildContext context) async {
     backgroundColor: PrepColors.surface1,
     barrierColor: PrepColors.scrim,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.sheet))),
-    builder: (context) => _EditAboutSheet(initial: services.profile.value.about),
+    builder: (context) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: _EditAboutSheet(initial: services.profile.value.about),
+    ),
   );
   if (result != null) {
     final profile = services.profile;
@@ -255,13 +258,16 @@ class _SayItSheetState extends State<_SayItSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(Space.xxl, Space.x3, Space.xxl, Space.l),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Semantics(header: true, child: Text('Say it', style: PrepType.headline, textAlign: TextAlign.center)),
+          Semantics(
+            header: true,
+            child: Text('Say it', style: PrepType.headline, textAlign: TextAlign.center),
+          ),
           const SizedBox(height: Space.xxl),
           ..._content(),
         ],
@@ -288,7 +294,9 @@ class _SayItSheetState extends State<_SayItSheet> {
             child: Text(
               recording ? (_partial.isEmpty ? 'Listening' : _partial) : 'Up to 60 seconds',
               textAlign: TextAlign.center,
-              style: PrepType.bodyL.copyWith(color: recording && _partial.isNotEmpty ? PrepColors.text : PrepColors.text3),
+              style: PrepType.bodyL.copyWith(
+                color: recording && _partial.isNotEmpty ? PrepColors.text : PrepColors.text3,
+              ),
             ),
           ),
         ];
@@ -298,7 +306,9 @@ class _SayItSheetState extends State<_SayItSheet> {
         return [
           const ProblemNote(title: "We couldn't hear that.", body: 'Try again.'),
           const SizedBox(height: Space.xl),
-          Center(child: RecordButton(recording: false, progress: _progress, onPressed: _record)),
+          Center(
+            child: RecordButton(recording: false, progress: _progress, onPressed: _record),
+          ),
         ];
       case _SayPhase.micOff:
         return [

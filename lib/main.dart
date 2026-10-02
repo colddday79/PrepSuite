@@ -53,10 +53,11 @@ void main() {
   HologramVideo.instance.ensure();
   final services = createServices();
   runApp(PrepSuiteApp(services: services));
-  // Copy the offline models on first launch and load them now, so the first
-  // question is spoken at once. Screens show the progress if they get there
-  // first; failures are shown there too.
-  unawaited(services.speechSetup.prepare().catchError((Object _) {}));
+  // Let the first screen paint before loading the offline speech engines.
+  // Screens still join this preparation and show progress or failures.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(services.speechSetup.prepare().catchError((Object _) {}));
+  });
 }
 
 AppServices createServices() {
@@ -79,8 +80,7 @@ AppServices createServices() {
       assistant: AssistantStore(persist: true),
       mic: PluginMicPermission(),
       coachLabel: coachLabel,
-      speechLabel:
-          'Demo voice input (SPEECH_FAKE): it plays back a sample answer instead of listening.',
+      speechLabel: 'Demo voice input (SPEECH_FAKE): it plays back a sample answer instead of listening.',
     );
   }
 

@@ -10,6 +10,7 @@ import '../../design/components.dart';
 import '../../design/hologram.dart';
 import '../../design/icons.dart';
 import '../../design/tokens.dart';
+import '../common/adaptive_cards.dart';
 import '../consent/consent_sheet.dart';
 import '../intake/intake_screen.dart';
 import '../profile/profile_format.dart';
@@ -80,7 +81,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       if (!await _ensureConsent() || !mounted) return;
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => IntakeScreen(questionCount: questionCount, preferTyping: typing)),
+        MaterialPageRoute<void>(
+          builder: (_) => IntakeScreen(questionCount: questionCount, preferTyping: typing),
+        ),
       );
     } finally {
       _starting = false;
@@ -105,7 +108,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final name = services.profile.value.name.trim();
     setState(() => _heroMood = AssistantMood.speaking);
     try {
-      await services.voice.speak(name.isEmpty ? 'Hello! What would you like to ask?' : 'Hi $name! What would you like to ask?');
+      await services.voice.speak(
+        name.isEmpty ? 'Hello! What would you like to ask?' : 'Hi $name! What would you like to ask?',
+      );
     } catch (_) {
       // No voice on this phone: go straight to the conversation.
     }
@@ -162,32 +167,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   child: _StartButton(glow: look.tone, onPressed: () => _startPractice()),
                 ),
                 const SizedBox(height: Space.x3),
-                _SectionTitle('Ways to practise'),
+                _SectionTitle('Ways to practice'),
                 const SizedBox(height: Space.m),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-                  child: Row(
+                  child: AdaptiveCardRow(
                     children: [
-                      Expanded(
-                        child: _ModeCard(
-                          key: const ValueKey('quick-question'),
-                          look: look,
-                          mood: AssistantMood.thinking,
-                          title: 'Quick question',
-                          meta: '1 question',
-                          onTap: () => _startPractice(questionCount: 1),
-                        ),
+                      _ModeCard(
+                        key: const ValueKey('quick-question'),
+                        look: look,
+                        mood: AssistantMood.thinking,
+                        title: 'Quick question',
+                        meta: '1 question',
+                        onTap: () => _startPractice(questionCount: 1),
                       ),
-                      const SizedBox(width: Space.m),
-                      Expanded(
-                        child: _ModeCard(
-                          key: const ValueKey('talk-to-assistant'),
-                          look: look,
-                          mood: AssistantMood.speaking,
-                          title: 'Talk to ${look.name}',
-                          meta: 'Ask anything',
-                          onTap: _openTalk,
-                        ),
+                      _ModeCard(
+                        key: const ValueKey('talk-to-assistant'),
+                        look: look,
+                        mood: AssistantMood.speaking,
+                        title: 'Talk to ${look.name}',
+                        meta: 'Ask anything',
+                        onTap: _openTalk,
                       ),
                     ],
                   ),
@@ -241,7 +241,11 @@ class _Greeting extends StatelessWidget {
       children: [
         Semantics(
           header: true,
-          child: Text(name.isEmpty ? 'Hi there' : 'Hi, $name', key: const ValueKey('home-greeting'), style: PrepType.display),
+          child: Text(
+            name.isEmpty ? 'Hi there' : 'Hi, $name',
+            key: const ValueKey('home-greeting'),
+            style: PrepType.display,
+          ),
         ),
         const SizedBox(height: Space.xxs),
         Text(line, key: const ValueKey('home-countdown'), style: PrepType.body),
@@ -285,8 +289,8 @@ class _Stage extends StatelessWidget {
           child: InkWell(
             key: const ValueKey('home-assistant'),
             onTap: onTap,
-            child: SizedBox(
-              height: size + Space.xxl,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: size + Space.xxl),
               child: Stack(
                 children: [
                   // The stage light: the assistant's colour pooled behind it.
@@ -296,7 +300,11 @@ class _Stage extends StatelessWidget {
                         gradient: RadialGradient(
                           center: const Alignment(0.25, -0.1),
                           radius: 0.9,
-                          colors: [glow.withValues(alpha: 0.22), glow.withValues(alpha: 0.04), glow.withValues(alpha: 0)],
+                          colors: [
+                            glow.withValues(alpha: 0.22),
+                            glow.withValues(alpha: 0.04),
+                            glow.withValues(alpha: 0),
+                          ],
                           stops: const [0, 0.55, 1],
                         ),
                       ),
@@ -307,12 +315,14 @@ class _Stage extends StatelessWidget {
                     bottom: Space.s,
                     child: AssistantAvatar(look: look, size: size, mood: mood, level: level),
                   ),
-                  Positioned(
-                    left: Space.xl,
-                    top: Space.xl,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 170),
-                      child: _Bubble(text: line, glow: glow, name: look.name),
+                  Padding(
+                    padding: const EdgeInsets.all(Space.xl),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 170),
+                        child: _Bubble(text: line, glow: glow, name: look.name),
+                      ),
                     ),
                   ),
                 ],
@@ -382,31 +392,37 @@ class _StartButton extends StatelessWidget {
             key: const ValueKey('start-practice'),
             borderRadius: BorderRadius.circular(32),
             onTap: onPressed,
-            child: SizedBox(
-              height: 64,
-              child: Row(
-                children: [
-                  const SizedBox(width: Space.s),
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: const BoxDecoration(color: PrepColors.bg, shape: BoxShape.circle),
-                    child: Center(child: PrepIcon(PrepIcons.mic, color: glow, size: 22)),
-                  ),
-                  const SizedBox(width: Space.l),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Start practice', style: PrepType.button.copyWith(color: PrepColors.bg, fontSize: 17)),
-                        Text('5 questions · 10 min', style: PrepType.caption.copyWith(color: PrepColors.bg.withValues(alpha: 0.72))),
-                      ],
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 64),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: Space.s),
+                child: Row(
+                  children: [
+                    const SizedBox(width: Space.s),
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: const BoxDecoration(color: PrepColors.bg, shape: BoxShape.circle),
+                      child: Center(child: PrepIcon(PrepIcons.mic, color: glow, size: 22)),
                     ),
-                  ),
-                  const PrepIcon(PrepIcons.chevron, color: PrepColors.bg, size: 20),
-                  const SizedBox(width: Space.xl),
-                ],
+                    const SizedBox(width: Space.l),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Start practice', style: PrepType.button.copyWith(color: PrepColors.bg, fontSize: 17)),
+                          Text(
+                            '5 questions · 10 min',
+                            style: PrepType.caption.copyWith(color: PrepColors.bg.withValues(alpha: 0.72)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const PrepIcon(PrepIcons.chevron, color: PrepColors.bg, size: 20),
+                    const SizedBox(width: Space.xl),
+                  ],
+                ),
               ),
             ),
           ),
@@ -474,15 +490,15 @@ class _ModeCard extends StatelessWidget {
                       width: double.infinity,
                       color: look.tone.withValues(alpha: 0.08),
                       alignment: Alignment.bottomCenter,
-                      child: AssistantAvatar(look: look, size: 112, mood: mood, hud: false),
+                      child: AssistantAvatar(look: look, size: 112, mood: mood, hud: false, animate: false),
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.l, 0),
-                      child: Text(title, style: PrepType.bodyLMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      child: Text(title, style: PrepType.bodyLMedium),
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(Space.l, Space.xxs, Space.l, Space.l),
-                      child: Text(meta, style: PrepType.meta, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      child: Text(meta, style: PrepType.meta),
                     ),
                   ],
                 ),
@@ -542,7 +558,9 @@ class _InterviewCard extends StatelessWidget {
     }
     return Semantics(
       button: !upcoming,
-      label: upcoming ? '$days days to your interview${role.isEmpty ? '' : ', $role'}' : 'Add your interview date',
+      label: upcoming
+          ? '$days ${days == 1 ? 'day' : 'days'} to your interview${role.isEmpty ? '' : ', $role'}'
+          : 'Add your interview date',
       excludeSemantics: true,
       onTap: upcoming ? null : onSet,
       child: Material(
@@ -590,7 +608,9 @@ class _RecentCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(child: Text('Last practice', style: PrepType.label.copyWith(color: PrepColors.text2))),
+                    Expanded(
+                      child: Text('Last practice', style: PrepType.label.copyWith(color: PrepColors.text2)),
+                    ),
                     Text(date, style: PrepType.meta),
                   ],
                 ),
@@ -616,7 +636,9 @@ class _RecentCard extends StatelessWidget {
                 ),
                 const SizedBox(height: Space.s),
                 Text(
-                  session.wrapup != null ? '$answered of $total answered · Notes ready' : '$answered of $total answered',
+                  session.wrapup != null
+                      ? '$answered of $total answered · Notes ready'
+                      : '$answered of $total answered',
                   style: PrepType.meta,
                 ),
               ],
@@ -644,7 +666,7 @@ class _TipCard extends StatelessWidget {
     'Keep answers under two minutes.',
     'Use numbers when you can.',
     'Know why you want this job.',
-    'Practise out loud, not in your head.',
+    'Practice out loud, not in your head.',
   ];
 
   @override
@@ -654,10 +676,7 @@ class _TipCard extends StatelessWidget {
     final tip = _tips[day % _tips.length];
     return Container(
       padding: const EdgeInsets.all(Space.xl),
-      decoration: BoxDecoration(
-        color: glow.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(Radii.card),
-      ),
+      decoration: BoxDecoration(color: glow.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(Radii.card)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

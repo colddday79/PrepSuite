@@ -34,7 +34,6 @@ class CoachScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final target = keyboard ? presenceSize * 0.55 : presenceSize;
     final assistant = AppScope.of(context).assistant;
     return Scaffold(
       backgroundColor: PrepColors.bg,
@@ -43,22 +42,40 @@ class CoachScaffold extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             CoachTopBar(onClose: onClose, status: status),
-            // The assistant grows while it talks and listens, and steps back for typing and reading.
-            TweenAnimationBuilder<double>(
-              tween: Tween(end: target),
-              duration: Motion.enter,
-              curve: Motion.standard,
-              builder: (context, size, _) => SizedBox(
-                height: size,
-                child: Center(
-                  child: ValueListenableBuilder<AssistantLook>(
-                    valueListenable: assistant,
-                    builder: (context, look, _) => AssistantAvatar(look: look, size: size, mood: mood, level: level),
-                  ),
-                ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  final target = math.min(
+                    presenceSize,
+                    math.min(box.maxWidth, box.maxHeight * (keyboard ? 0.18 : 0.4)),
+                  );
+                  return Column(
+                    children: [
+                      // Use the space left after the top bar and keyboard, keeping the form reachable.
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(end: target),
+                        duration: Motion.enter,
+                        curve: Motion.standard,
+                        builder: (context, size, _) {
+                          final currentSize = math.min(size, target);
+                          return SizedBox(
+                            height: currentSize,
+                            child: Center(
+                              child: ValueListenableBuilder<AssistantLook>(
+                                valueListenable: assistant,
+                                builder: (context, look, _) =>
+                                    AssistantAvatar(look: look, size: currentSize, mood: mood, level: level),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      Expanded(child: body),
+                    ],
+                  );
+                },
               ),
             ),
-            Expanded(child: body),
           ],
         ),
       ),
@@ -130,7 +147,11 @@ class RevealText extends StatelessWidget {
               style: style,
               children: [
                 TextSpan(text: seen),
-                if (rest.isNotEmpty) TextSpan(text: '${seen.isEmpty ? '' : ' '}$rest', style: style.copyWith(color: const Color(0x00000000))),
+                if (rest.isNotEmpty)
+                  TextSpan(
+                    text: '${seen.isEmpty ? '' : ' '}$rest',
+                    style: style.copyWith(color: const Color(0x00000000)),
+                  ),
               ],
             ),
           ),
@@ -181,7 +202,9 @@ class RecordButton extends StatelessWidget {
             ),
             Material(
               type: MaterialType.transparency,
-              shape: CircleBorder(side: BorderSide(color: PrepColors.text.withValues(alpha: enabled ? 0.85 : 0.25), width: 1.5)),
+              shape: CircleBorder(
+                side: BorderSide(color: PrepColors.text.withValues(alpha: enabled ? 0.85 : 0.25), width: 1.5),
+              ),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 key: const ValueKey('record-button'),

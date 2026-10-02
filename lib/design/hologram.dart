@@ -7,7 +7,8 @@ import 'package:video_player/video_player.dart';
 import 'tokens.dart';
 
 /// One looping, muted player for the Blender-rendered gold presence, shared by every screen so
-/// route changes never re-decode the clip. Tests and previews turn it off with [enabled].
+/// route changes never re-decode the clip. It decodes only when a visible presence needs it and
+/// pauses while no animated presence is visible. Tests turn it off with [enabled].
 class HologramVideo with WidgetsBindingObserver {
   HologramVideo._();
 
@@ -20,9 +21,29 @@ class HologramVideo with WidgetsBindingObserver {
   bool enabled = true;
   VideoPlayerController? _controller;
   final ValueNotifier<VideoPlayerController?> ready = ValueNotifier(null);
+  final Set<Object> _visible = {};
+  bool _observing = false;
+  bool _foreground = true;
+  Future<void> _playbackQueue = Future.value();
+
+  void _setVisible(Object consumer, bool visible) {
+    if (visible) {
+      _visible.add(consumer);
+      unawaited(ensure());
+    } else {
+      _visible.remove(consumer);
+    }
+    unawaited(_syncPlayback());
+  }
 
   Future<void> ensure() async {
-    if (!enabled || _controller != null) return;
+    if (!enabled || _visible.isEmpty || _controller != null) return;
+    if (!_observing) {
+      final state = WidgetsBinding.instance.lifecycleState;
+      _foreground = state == null || state == AppLifecycleState.resumed;
+      WidgetsBinding.instance.addObserver(this);
+      _observing = true;
+    }
     final controller = VideoPlayerController.asset(
       asset,
       // Never take audio focus: the interviewer voice and the microphone own the audio session.
@@ -33,24 +54,40 @@ class HologramVideo with WidgetsBindingObserver {
       await controller.initialize();
       await controller.setLooping(true);
       await controller.setVolume(0);
-      await controller.play();
       ready.value = controller;
-      WidgetsBinding.instance.addObserver(this);
+      await _syncPlayback();
     } catch (error) {
       debugPrint('Presence video unavailable: $error');
+      _controller = null;
       ready.value = null;
+      await controller.dispose();
     }
+  }
+
+  Future<void> _syncPlayback() {
+    // Route changes can arrive while a native play/pause call is still in flight. Apply them in
+    // order and read the latest visibility when each command reaches the player.
+    return _playbackQueue = _playbackQueue
+        .then((_) async {
+          final controller = ready.value;
+          if (controller == null) return;
+          final play = enabled && _foreground && _visible.isNotEmpty;
+          if (play == controller.value.isPlaying) return;
+          if (play) {
+            await controller.play();
+          } else {
+            await controller.pause();
+          }
+        })
+        .catchError((Object error) {
+          debugPrint('Presence playback unavailable: $error');
+        });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final controller = ready.value;
-    if (controller == null) return;
-    if (state == AppLifecycleState.resumed) {
-      controller.play();
-    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
-      controller.pause();
-    }
+    _foreground = state == AppLifecycleState.resumed;
+    unawaited(_syncPlayback());
   }
 }
 
@@ -71,13 +108,7 @@ double presenceSpill(double size) => size * (_glowReach - 0.5);
 /// [top] is where the presence box starts inside this widget. Content in [child] paints on top of
 /// the stage, so a frosted panel placed there blurs the finished light.
 class PresenceBackdrop extends StatelessWidget {
-  const PresenceBackdrop({
-    super.key,
-    required this.top,
-    required this.size,
-    required this.child,
-    this.level,
-  });
+  const PresenceBackdrop({super.key, required this.top, required this.size, required this.child, this.level});
 
   final double top;
   final double size;
@@ -134,7 +165,9 @@ class HologramStage extends StatelessWidget {
                     child: SizedBox.square(dimension: size, child: const _PresenceVideo()),
                   ),
                 ),
-                CustomPaint(painter: _ScreenedRoom(size: size, level: l)),
+                CustomPaint(
+                  painter: _ScreenedRoom(size: size, level: l),
+                ),
               ],
             );
           },
@@ -147,14 +180,53 @@ class HologramStage extends StatelessWidget {
 /// Just the looping hologram (on its own black), with no room or light around it. Put it on
 /// black, for example inside a round lens.
 class PresenceLoop extends StatelessWidget {
-  const PresenceLoop({super.key});
+  const PresenceLoop({super.key, this.animate = true});
+
+  final bool animate;
 
   @override
-  Widget build(BuildContext context) => const _PresenceVideo();
+  Widget build(BuildContext context) => _PresenceVideo(animate: animate);
 }
 
-class _PresenceVideo extends StatelessWidget {
-  const _PresenceVideo();
+class _PresenceVideo extends StatefulWidget {
+  const _PresenceVideo({this.animate = true});
+
+  final bool animate;
+
+  @override
+  State<_PresenceVideo> createState() => _PresenceVideoState();
+}
+
+class _PresenceVideoState extends State<_PresenceVideo> {
+  bool _visible = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncVisibility();
+  }
+
+  @override
+  void didUpdateWidget(_PresenceVideo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncVisibility();
+  }
+
+  void _syncVisibility() {
+    final visible =
+        widget.animate &&
+        TickerMode.valuesOf(context).enabled &&
+        !(MediaQuery.maybeDisableAnimationsOf(context) ?? false);
+    if (_visible == visible) return;
+    _visible = visible;
+    HologramVideo.instance._setVisible(this, visible);
+  }
+
+  @override
+  void dispose() {
+    if (_visible) HologramVideo.instance._setVisible(this, false);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -164,7 +236,7 @@ class _PresenceVideo extends StatelessWidget {
       gaplessPlayback: true,
       filterQuality: FilterQuality.medium,
     );
-    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return poster;
+    if (!_visible) return poster;
     return ValueListenableBuilder<VideoPlayerController?>(
       valueListenable: HologramVideo.instance.ready,
       builder: (context, controller, _) {

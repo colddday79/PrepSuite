@@ -21,7 +21,20 @@ import 'read_aloud.dart';
 
 const _maxAnswer = Duration(minutes: 2);
 
-enum _Phase { speaking, ready, preparing, recording, transcribing, review, unheard, typing, micOff, checking, error, feedback }
+enum _Phase {
+  speaking,
+  ready,
+  preparing,
+  recording,
+  transcribing,
+  review,
+  unheard,
+  typing,
+  micOff,
+  checking,
+  error,
+  feedback,
+}
 
 /// Step two: one question at a time. The interviewer asks, the person answers out loud (up to
 /// two minutes), and the coach comes back with short, blunt feedback on what went wrong.
@@ -110,7 +123,9 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
   bool get _mayReadAloud {
     if (_session.preferTyping || !mounted) return false;
     final life = WidgetsBinding.instance.lifecycleState;
-    if (life == AppLifecycleState.hidden || life == AppLifecycleState.paused || life == AppLifecycleState.detached) return false;
+    if (life == AppLifecycleState.hidden || life == AppLifecycleState.paused || life == AppLifecycleState.detached) {
+      return false;
+    }
     return !MediaQuery.accessibleNavigationOf(context);
   }
 
@@ -287,7 +302,12 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         about: _services.profile.value.about,
       );
       if (!mounted || operation != _operation) return;
-      _session.answers[_index] = AnswerRecord(transcript: _transcript, metrics: _metrics, feedback: feedback, typed: _wasTyped);
+      _session.answers[_index] = AnswerRecord(
+        transcript: _transcript,
+        metrics: _metrics,
+        feedback: feedback,
+        typed: _wasTyped,
+      );
       _asker.close();
       setState(() {
         _feedback = feedback;
@@ -355,9 +375,8 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       _leaving = true;
       await _services.sessions.finished(_session);
       if (!mounted) return;
-      await Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => WrapupScreen(session: _session)),
-      );
+      await Navigator.of(context)
+          .pushReplacement(MaterialPageRoute<void>(builder: (_) => WrapupScreen(session: _session)));
       return;
     }
     _typed.clear();
@@ -427,8 +446,10 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
   double _presenceSize(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
     return switch (_phase) {
-      _Phase.speaking || _Phase.ready || _Phase.preparing || _Phase.recording =>
-        math.min(screen.width * 0.8, screen.height * 0.28).clamp(152.0, 320.0),
+      _Phase.speaking ||
+      _Phase.ready ||
+      _Phase.preparing ||
+      _Phase.recording => math.min(screen.width * 0.8, screen.height * 0.28).clamp(152.0, 320.0),
       _Phase.feedback => 112,
       _ => 152,
     };
@@ -497,10 +518,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
 
   List<Widget> _answerContent() {
     return [
-      if (_session.set.mock) ...[
-        Text('Sample questions', style: PrepType.meta),
-        const SizedBox(height: Space.s),
-      ],
+      if (_session.set.mock) ...[Text('Sample questions', style: PrepType.meta), const SizedBox(height: Space.s)],
       RevealText(controller: _question, style: PrepType.question),
       const SizedBox(height: Space.xxl),
       ..._phaseContent(),
@@ -515,19 +533,23 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       case _Phase.recording:
         final recording = _phase == _Phase.recording;
         return [
-          Center(child: RecordButton(recording: recording, progress: _progress, onPressed: recording ? _stop : _record)),
+          Center(
+            child: RecordButton(recording: recording, progress: _progress, onPressed: recording ? _stop : _record),
+          ),
           const SizedBox(height: Space.m),
-          SizedBox(
-            height: 26,
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 26),
             child: Center(
               child: recording
                   ? ValueListenableBuilder<int>(
                       valueListenable: _elapsed,
                       builder: (context, ms, _) => Text.rich(
-                        TextSpan(children: [
-                          TextSpan(text: clock(ms), style: PrepType.timer),
-                          TextSpan(text: '  / 2:00', style: PrepType.meta),
-                        ]),
+                        TextSpan(
+                          children: [
+                            TextSpan(text: clock(ms), style: PrepType.timer),
+                            TextSpan(text: '  / 2:00', style: PrepType.meta),
+                          ],
+                        ),
                       ),
                     )
                   : Text('Up to 2 minutes', style: PrepType.meta),
@@ -569,18 +591,21 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
           const SizedBox(height: Space.xxl),
           PrimaryButton('Get feedback', onPressed: _typed.text.trim().isEmpty ? null : _confirmTranscript),
           const SizedBox(height: Space.s),
-          Center(child: QuietButton('Record again', icon: PrepIcons.replay, onPressed: _record)),
+          Center(
+            child: QuietButton('Record again', icon: PrepIcons.replay, onPressed: _record),
+          ),
         ];
       case _Phase.unheard:
         return [
-          const ProblemNote(
-            title: "We couldn't hear your answer.",
-            body: 'Speak up, or type it.',
-          ),
+          const ProblemNote(title: "We couldn't hear your answer.", body: 'Speak up, or type it.'),
           const SizedBox(height: Space.xxl),
-          Center(child: RecordButton(recording: false, progress: _progress, onPressed: _record)),
+          Center(
+            child: RecordButton(recording: false, progress: _progress, onPressed: _record),
+          ),
           const SizedBox(height: Space.s),
-          Center(child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead)),
+          Center(
+            child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead),
+          ),
         ];
       case _Phase.typing:
         return [
@@ -596,7 +621,9 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
           const SizedBox(height: Space.xxl),
           PrimaryButton('Send answer', onPressed: _typed.text.trim().isEmpty ? null : _sendTyped),
           const SizedBox(height: Space.s),
-          Center(child: QuietButton('Answer out loud instead', icon: PrepIcons.mic, onPressed: _record)),
+          Center(
+            child: QuietButton('Answer out loud instead', icon: PrepIcons.mic, onPressed: _record),
+          ),
         ];
       case _Phase.micOff:
         return [
@@ -605,8 +632,8 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
             body: _micFailed
                 ? _speechError ?? 'Try again, or type it.'
                 : _micBlocked
-                    ? 'Allow it in Settings, or type it.'
-                    : 'Allow it when you try again, or type it.',
+                ? 'Allow it in Settings, or type it.'
+                : 'Allow it when you try again, or type it.',
           ),
           const SizedBox(height: Space.xxl),
           PrimaryButton('Type instead', onPressed: _typeInstead),
@@ -620,20 +647,22 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         ];
       case _Phase.checking:
         return [
-          Text(
-            '“${_tail(_transcript, 220)}”',
-            style: PrepType.quote.copyWith(color: PrepColors.text2),
-          ),
+          Text('“${_tail(_transcript, 220)}”', style: PrepType.quote.copyWith(color: PrepColors.text2)),
           const SizedBox(height: Space.xxl),
           const LoadingLine('Checking your answer'),
         ];
       case _Phase.error:
         return [
-          ProblemNote(title: "Couldn't check your answer.", body: _error?.userMessage ?? 'Something went wrong. Try again.'),
+          ProblemNote(
+            title: "Couldn't check your answer.",
+            body: _error?.userMessage ?? 'Something went wrong. Try again.',
+          ),
           const SizedBox(height: Space.xxl),
           PrimaryButton('Try again', onPressed: _check),
           const SizedBox(height: Space.s),
-          Center(child: QuietButton('Answer again', icon: PrepIcons.replay, onPressed: _tryAgain)),
+          Center(
+            child: QuietButton('Answer again', icon: PrepIcons.replay, onPressed: _tryAgain),
+          ),
         ];
       case _Phase.feedback:
         return const [];

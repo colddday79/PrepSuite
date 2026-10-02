@@ -6,6 +6,7 @@ import '../../design/assistant_avatar.dart';
 import '../../design/components.dart';
 import '../../design/icons.dart';
 import '../../design/tokens.dart';
+import '../common/adaptive_cards.dart';
 import '../consent/consent_sheet.dart';
 import '../intake/intake_screen.dart';
 import '../shell/shell_scope.dart';
@@ -78,56 +79,46 @@ class _PracticeScreenState extends State<PracticeScreen> {
               const SizedBox(height: Space.l),
               _FeaturedCard(look: look, onStart: _openIntake),
               const SizedBox(height: Space.m),
-              Row(
+              AdaptiveCardRow(
                 children: [
-                  Expanded(
-                    child: _Tile(
-                      key: const ValueKey('mode-quick'),
-                      look: look,
-                      mood: AssistantMood.thinking,
-                      title: 'Quick question',
-                      meta: '1 question',
-                      onTap: () => _openIntake(questionCount: 1),
-                    ),
+                  _Tile(
+                    key: const ValueKey('mode-quick'),
+                    look: look,
+                    mood: AssistantMood.thinking,
+                    title: 'Quick question',
+                    meta: '1 question',
+                    onTap: () => _openIntake(questionCount: 1),
                   ),
-                  const SizedBox(width: Space.m),
-                  Expanded(
-                    child: _Tile(
-                      key: const ValueKey('mode-talk'),
-                      look: look,
-                      mood: AssistantMood.happy,
-                      title: 'Talk to ${look.name}',
-                      meta: 'Ask anything',
-                      onTap: _openTalk,
-                    ),
+                  _Tile(
+                    key: const ValueKey('mode-talk'),
+                    look: look,
+                    mood: AssistantMood.happy,
+                    title: 'Talk to ${look.name}',
+                    meta: 'Ask anything',
+                    onTap: _openTalk,
                   ),
                 ],
               ),
               const SizedBox(height: Space.m),
-              Row(
+              AdaptiveCardRow(
                 children: [
-                  Expanded(
-                    child: _Tile(
-                      key: const ValueKey('mode-typing'),
-                      look: look,
-                      mood: AssistantMood.idle,
-                      badge: PrepIcons.keyboard,
-                      title: 'Type answers',
-                      meta: 'No microphone',
-                      onTap: () => _openIntake(preferTyping: true),
-                    ),
+                  _Tile(
+                    key: const ValueKey('mode-typing'),
+                    look: look,
+                    mood: AssistantMood.idle,
+                    badge: PrepIcons.keyboard,
+                    title: 'Type answers',
+                    meta: 'No microphone',
+                    onTap: () => _openIntake(preferTyping: true),
                   ),
-                  const SizedBox(width: Space.m),
-                  Expanded(
-                    child: _Tile(
-                      key: const ValueKey('mode-notes'),
-                      look: look,
-                      mood: AssistantMood.idle,
-                      badge: PrepIcons.write,
-                      title: 'Your notes',
-                      meta: 'Before you go in',
-                      onTap: _openNotes,
-                    ),
+                  _Tile(
+                    key: const ValueKey('mode-notes'),
+                    look: look,
+                    mood: AssistantMood.idle,
+                    badge: PrepIcons.write,
+                    title: 'Your notes',
+                    meta: 'Before you go in',
+                    onTap: _openNotes,
                   ),
                 ],
               ),
@@ -163,54 +154,76 @@ class _FeaturedCard extends StatelessWidget {
         child: InkWell(
           key: const ValueKey('mode-mock'),
           onTap: onStart,
-          child: SizedBox(
-            height: 196,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: RadialGradient(
-                        center: const Alignment(0.7, 0.1),
-                        radius: 0.9,
-                        colors: [glow.withValues(alpha: 0.24), glow.withValues(alpha: 0)],
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: -Space.s,
-                  bottom: 0,
-                  child: AssistantAvatar(look: look, size: 190, mood: AssistantMood.speaking, hud: false),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(Space.xl),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Mock interview', style: PrepType.titleL),
-                      const SizedBox(height: Space.xxs),
-                      Text('5 questions · 10 min', style: PrepType.meta),
-                      const Spacer(),
-                      DecoratedBox(
-                        decoration: BoxDecoration(color: glow, borderRadius: BorderRadius.circular(24)),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: Space.xl, vertical: Space.m),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const PrepIcon(PrepIcons.mic, color: PrepColors.bg, size: 18),
-                              const SizedBox(width: Space.s),
-                              Text('Start', style: PrepType.button.copyWith(color: PrepColors.bg)),
-                            ],
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final compact = box.maxWidth < 320 || MediaQuery.textScalerOf(context).scale(16) > 22;
+              return ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 196),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: RadialGradient(
+                            center: const Alignment(0.7, 0.1),
+                            radius: 0.9,
+                            colors: [glow.withValues(alpha: 0.24), glow.withValues(alpha: 0)],
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    if (!compact)
+                      Positioned(
+                        right: -Space.s,
+                        bottom: 0,
+                        child: AssistantAvatar(
+                          look: look,
+                          size: 190,
+                          mood: AssistantMood.speaking,
+                          hud: false,
+                          animate: false,
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.all(Space.xl),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (compact)
+                            Center(
+                              child: AssistantAvatar(
+                                look: look,
+                                size: 144,
+                                mood: AssistantMood.speaking,
+                                hud: false,
+                                animate: false,
+                              ),
+                            ),
+                          Text('Mock interview', style: PrepType.titleL),
+                          const SizedBox(height: Space.xxs),
+                          Text('5 questions · 10 min', style: PrepType.meta),
+                          const SizedBox(height: Space.xl),
+                          DecoratedBox(
+                            decoration: BoxDecoration(color: glow, borderRadius: BorderRadius.circular(24)),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: Space.xl, vertical: Space.m),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const PrepIcon(PrepIcons.mic, color: PrepColors.bg, size: 18),
+                                  const SizedBox(width: Space.s),
+                                  Text('Start', style: PrepType.button.copyWith(color: PrepColors.bg)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -264,7 +277,7 @@ class _Tile extends StatelessWidget {
                     children: [
                       Align(
                         alignment: Alignment.bottomCenter,
-                        child: AssistantAvatar(look: look, size: 106, mood: mood, hud: false),
+                        child: AssistantAvatar(look: look, size: 106, mood: mood, hud: false, animate: false),
                       ),
                       if (badge != null)
                         Positioned(
@@ -273,7 +286,10 @@ class _Tile extends StatelessWidget {
                           child: Container(
                             width: 32,
                             height: 32,
-                            decoration: BoxDecoration(color: PrepColors.bg.withValues(alpha: 0.8), shape: BoxShape.circle),
+                            decoration: BoxDecoration(
+                              color: PrepColors.bg.withValues(alpha: 0.8),
+                              shape: BoxShape.circle,
+                            ),
                             child: Center(child: PrepIcon(badge!, color: glow, size: 16)),
                           ),
                         ),
@@ -285,9 +301,9 @@ class _Tile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: PrepType.bodyLMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(title, style: PrepType.bodyLMedium),
                       const SizedBox(height: Space.xxs),
-                      Text(meta, style: PrepType.meta, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(meta, style: PrepType.meta),
                     ],
                   ),
                 ),
@@ -304,10 +320,10 @@ class _Tile extends StatelessWidget {
 /// a day, so the card is not the same on every visit but never needs its own state.
 const List<String> _tips = [
   'Start with the point, then one example.',
-  'Say what you did, not the team.',
+  'Say what you did, not what the team did.',
   'End every story with a result.',
   'Keep each answer under two minutes.',
-  'Practise out loud, not in your head.',
+  'Practice out loud, not in your head.',
   'A short pause beats a filler word.',
   'Use a real number when you can.',
   'Match their energy in the room.',

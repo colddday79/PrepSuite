@@ -306,13 +306,22 @@ class CoachTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 64,
+    final media = MediaQuery.of(context);
+    final compact = media.size.height - media.padding.vertical - media.viewInsets.bottom < 360;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 64),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
+        padding: const EdgeInsets.symmetric(horizontal: Space.gutter, vertical: Space.s),
         child: Row(
           children: [
-            Expanded(child: Text(status ?? '', style: PrepType.meta, maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Expanded(
+              child: Text(
+                status ?? '',
+                style: PrepType.meta,
+                maxLines: compact ? 1 : 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             const SizedBox(width: Space.m),
             IconAction(PrepIcons.close, label: 'Close', onPressed: onClose),
           ],

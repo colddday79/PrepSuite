@@ -98,34 +98,40 @@ class SpeechModels {
       for (final f in manifest['files'] as List) (f['path'] as String, f['bytes'] as int),
     ];
 
-    bool complete(String root) => files.every((f) {
-          final file = File('$root/${f.$1}');
-          return file.existsSync() && file.lengthSync() == f.$2;
-        });
+    // This also runs on ordinary launches. Keep filesystem checks off the UI
+    // isolate so slower phone storage cannot stall the first screen.
+    Future<bool> complete(String root) async {
+      for (final (rel, bytes) in files) {
+        final stat = await File('$root/$rel').stat();
+        if (stat.type != FileSystemEntityType.file || stat.size != bytes) return false;
+      }
+      return true;
+    }
 
     // iOS: Flutter assets are plain files inside the app bundle.
     if (Platform.isIOS) {
       final bundled =
           '${File(Platform.resolvedExecutable).parent.path}/Frameworks/App.framework/flutter_assets/$assetRoot';
-      if (complete(bundled)) return _paths = SpeechModelPaths(bundled);
+      if (await complete(bundled)) return _paths = SpeechModelPaths(bundled);
     }
 
     final support = await getApplicationSupportDirectory();
     final root = '${support.path}/prepsuite_speech/models';
     final installed = File('$root/manifest.json');
-    if (installed.existsSync() && installed.readAsStringSync() == manifestText && complete(root)) {
+    if (await installed.exists() && await installed.readAsString() == manifestText && await complete(root)) {
       _progress.add(1);
       return _paths = SpeechModelPaths(root);
     }
 
     // (Re)copy everything; the manifest is written last as the "done" marker.
-    if (installed.existsSync()) installed.deleteSync();
+    if (await installed.exists()) await installed.delete();
     final total = files.fold<int>(0, (a, f) => a + f.$2);
     var copied = 0;
     _progress.add(0);
     for (final (rel, bytes) in files) {
       final dest = File('$root/$rel');
-      if (!(dest.existsSync() && dest.lengthSync() == bytes)) {
+      final stat = await dest.stat();
+      if (stat.type != FileSystemEntityType.file || stat.size != bytes) {
         await dest.parent.create(recursive: true);
         final data = await bundle.load('$assetRoot/$rel');
         final tmp = File('${dest.path}.part');

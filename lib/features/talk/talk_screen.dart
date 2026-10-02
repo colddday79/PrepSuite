@@ -316,12 +316,6 @@ class _TalkScreenState extends State<TalkScreen> with WidgetsBindingObserver {
       valueListenable: _services.assistant,
       builder: (context, look, _) {
         final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
-        final media = MediaQuery.sizeOf(context);
-        // Big while there is nothing to read yet; smaller once the conversation needs the room.
-        final empty = _turns.isEmpty;
-        final baseSize = empty
-            ? math.min(media.width * 0.78, media.height * 0.36).clamp(150.0, 360.0)
-            : math.min(media.width * 0.4, media.height * 0.2).clamp(110.0, 170.0);
         return Scaffold(
           backgroundColor: PrepColors.bg,
           body: SafeArea(
@@ -329,40 +323,60 @@ class _TalkScreenState extends State<TalkScreen> with WidgetsBindingObserver {
               children: [
                 _TopBar(title: 'Talk to ${look.name}', onBack: () => Navigator.of(context).maybePop()),
                 Expanded(
-                  child: Column(
-                    children: [
-                      const SizedBox(height: Space.s),
-                      TweenAnimationBuilder<double>(
-                        tween: Tween(end: keyboard ? baseSize * 0.5 : baseSize),
-                        duration: Motion.enter,
-                        curve: Motion.standard,
-                        builder: (context, size, _) => SizedBox(
-                          height: size,
-                          child: Center(
-                            child: AssistantAvatar(look: look, size: size, mood: _mood, level: _activeLevel, hud: true),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: Space.m),
-                      Expanded(
-                        child: _turns.isEmpty
-                            ? Padding(
-                                padding: const EdgeInsets.fromLTRB(Space.gutter, 0, Space.gutter, Space.l),
-                                child: Align(alignment: Alignment.bottomCenter, child: _SuggestionChips(onTap: _ask)),
-                              )
-                            : ListView.builder(
-                                controller: _scroll,
-                                padding: const EdgeInsets.fromLTRB(Space.gutter, 0, Space.gutter, Space.l),
-                                itemCount: _turns.length,
-                                itemBuilder: (context, i) => _TurnView(turn: _turns[i], onRetry: () => _retry(_turns[i])),
+                  child: LayoutBuilder(
+                    builder: (context, box) {
+                      final size = math
+                          .min(
+                            box.maxWidth * (_turns.isEmpty ? 0.78 : 0.4),
+                            box.maxHeight * (keyboard ? 0.15 : (_turns.isEmpty ? 0.42 : 0.25)),
+                          )
+                          .clamp(0.0, _turns.isEmpty ? 360.0 : 170.0);
+                      return CustomScrollView(
+                        controller: _scroll,
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: Space.s, bottom: Space.m),
+                              child: TweenAnimationBuilder<double>(
+                                tween: Tween(end: size),
+                                duration: Motion.enter,
+                                curve: Motion.standard,
+                                builder: (context, currentSize, _) => Center(
+                                  child: AssistantAvatar(
+                                    look: look,
+                                    size: currentSize,
+                                    mood: _mood,
+                                    level: _activeLevel,
+                                    hud: true,
+                                  ),
+                                ),
                               ),
-                      ),
-                    ],
+                            ),
+                          ),
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(Space.gutter, 0, Space.gutter, Space.l),
+                            sliver: _turns.isEmpty
+                                ? SliverToBoxAdapter(child: _SuggestionChips(onTap: _ask))
+                                : SliverList.builder(
+                                    itemCount: _turns.length,
+                                    itemBuilder: (context, i) =>
+                                        _TurnView(turn: _turns[i], onRetry: () => _retry(_turns[i])),
+                                  ),
+                          ),
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(Space.gutter, 0, Space.gutter, Space.l),
+                                child: _inputArea(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(Space.gutter, 0, Space.gutter, Space.l),
-                  child: _inputArea(),
                 ),
               ],
             ),
@@ -455,7 +469,9 @@ class _TalkScreenState extends State<TalkScreen> with WidgetsBindingObserver {
             ),
           )
         else
-          Center(child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _asking ? null : _typeInstead)),
+          Center(
+            child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _asking ? null : _typeInstead),
+          ),
       ],
     );
   }
@@ -482,7 +498,11 @@ class _TalkScreenState extends State<TalkScreen> with WidgetsBindingObserver {
             spacing: Space.s,
             runSpacing: Space.s,
             children: [
-              QuietButton('Send', icon: PrepIcons.chat, onPressed: _asking || value.text.trim().isEmpty ? null : _sendTyped),
+              QuietButton(
+                'Send',
+                icon: PrepIcons.chat,
+                onPressed: _asking || value.text.trim().isEmpty ? null : _sendTyped,
+              ),
               QuietButton('Speak instead', icon: PrepIcons.mic, onPressed: _asking ? null : _speakInstead),
             ],
           ),
@@ -565,7 +585,9 @@ class _Chip extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 48),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.s),
-              child: Center(child: Text(text, style: PrepType.meta.copyWith(color: PrepColors.text2))),
+              child: Center(
+                child: Text(text, style: PrepType.meta.copyWith(color: PrepColors.text2)),
+              ),
             ),
           ),
         ),

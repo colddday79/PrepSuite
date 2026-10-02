@@ -34,8 +34,9 @@ const Rect kAssistantVisor = Rect.fromLTRB(0.29219, 0.20526, 0.70781, 0.48411);
 const double _visorExponent = 3.1;
 
 /// The assistant: a Blender-rendered robot whose face is drawn live on its visor, so the mouth moves
-/// with the voice and the eyes blink and react. Behind it a quiet holographic halo and floor ring
-/// keep the original Jarvis feel. The orb look shows the gold hologram instead.
+/// with the voice and the eyes blink and react. Behind it a quiet halo keeps a hint of the original
+/// Jarvis feel, and under it a soft shadow and light pool stand it on a stage. The orb look shows
+/// the gold hologram instead.
 ///
 /// [size] is the side of the square the render fills; the robot's feet sit near its bottom edge.
 class AssistantAvatar extends StatefulWidget {
@@ -46,6 +47,7 @@ class AssistantAvatar extends StatefulWidget {
     this.mood = AssistantMood.idle,
     this.level,
     this.hud = true,
+    this.animate = true,
     this.semanticLabel,
   });
 
@@ -59,8 +61,11 @@ class AssistantAvatar extends StatefulWidget {
   /// Voice level 0..1: the assistant's own voice while speaking, the microphone while listening.
   final ValueListenable<double>? level;
 
-  /// Draw the holographic halo and floor ring.
+  /// Draw the halo behind the head and the stage (shadow, light pool, floor line) under the robot.
   final bool hud;
+
+  /// Keep small picker and profile previews still while the main assistant moves.
+  final bool animate;
 
   final String? semanticLabel;
 
@@ -97,7 +102,9 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
       old.level?.removeListener(_onLevel);
       widget.level?.addListener(_onLevel);
     }
-    if (old.look != widget.look || old.size != widget.size) _load();
+    if (old.look != widget.look || old.size != widget.size || old.hud != widget.hud || old.animate != widget.animate) {
+      _load();
+    }
 
     if (old.mood != widget.mood) _clock.moodChanged(widget.mood);
     _syncTicker();
@@ -111,7 +118,11 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
     super.dispose();
   }
 
-  bool get _animate => AssistantAvatar.live && !(MediaQuery.maybeDisableAnimationsOf(context) ?? false);
+  bool get _animate =>
+      widget.animate &&
+      AssistantAvatar.live &&
+      TickerMode.valuesOf(context).enabled &&
+      !(MediaQuery.maybeDisableAnimationsOf(context) ?? false);
 
   void _syncTicker() {
     if (_animate && widget.look.isRobot) {
@@ -125,7 +136,9 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
   void _tick(Duration elapsed) => _clock.advance(elapsed, widget.mood, widget.level?.value ?? 0);
 
   void _onLevel() {
-    if (!_ticker.isActive) _clock.advance(null, widget.mood, widget.level?.value ?? 0);
+    if (_animate && !_ticker.isActive) {
+      _clock.advance(null, widget.mood, widget.level?.value ?? 0);
+    }
   }
 
   void _load() {
@@ -134,11 +147,16 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
     final ratio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.0;
     final px = _AssetCache.bucket(widget.size * ratio);
     // While a size animates, keep the sharpest layers already decoded for this look.
-    if (look == _loaded && px <= _bucket) return;
+    if (look == _loaded &&
+        px <= _bucket &&
+        (!widget.hud || _layers?.shadow != null) &&
+        (!widget.animate || _layers?.face != null)) {
+      return;
+    }
     _loaded = look;
     _bucket = px;
     final ticket = ++_requested;
-    _Layers.load(look, px).then((layers) {
+    _Layers.load(look, px, hud: widget.hud, cacheFace: widget.animate).then((layers) {
       if (mounted && ticket == _requested) setState(() => _layers = layers);
     }, onError: (Object e) => debugPrint('Assistant images unavailable: $e'));
   }
@@ -164,7 +182,11 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
                   color: const Color(0xFF000000),
                   child: Padding(
                     padding: EdgeInsets.all(widget.size * 0.04),
-                    child: _Pulse(level: widget.level, child: const PresenceLoop()),
+                    child: _Pulse(
+                      level: widget.level,
+                      animate: widget.animate,
+                      child: PresenceLoop(animate: widget.animate && AssistantAvatar.live),
+                    ),
                   ),
                 ),
               ),
@@ -186,6 +208,7 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
               mood: widget.mood,
               clock: _clock,
               hud: widget.hud,
+              pixelRatio: MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.0,
             ),
           ),
         ),
@@ -196,15 +219,21 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
 
 /// Swells a little with the voice level.
 class _Pulse extends StatelessWidget {
-  const _Pulse({required this.level, required this.child});
+  const _Pulse({required this.level, required this.child, required this.animate});
 
   final ValueListenable<double>? level;
   final Widget child;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
     final level = this.level;
-    if (level == null) return child;
+    if (level == null ||
+        !animate ||
+        !TickerMode.valuesOf(context).enabled ||
+        (MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
+      return child;
+    }
     return ValueListenableBuilder<double>(
       valueListenable: level,
       builder: (context, v, child) => Transform.scale(scale: 1 + 0.05 * v.clamp(0.0, 1.0), child: child),
@@ -223,6 +252,14 @@ class _FaceClock extends ChangeNotifier {
   double level = 0;
   double blink = 0;
   Offset gaze = Offset.zero;
+
+  /// The halo's turn in radians. It drifts at rest and turns faster while thinking, easing between
+  /// the two so the arcs never jump when the mood changes.
+  double spin = 0;
+  double _spinRate = _calmSpin;
+  static const _calmSpin = 0.1;
+  static const _busySpin = 0.5;
+
   Offset _gazeTarget = Offset.zero;
   double _nextBlink = 2.2;
   double _nextGaze = 1.5;
@@ -236,6 +273,7 @@ class _FaceClock extends ChangeNotifier {
   void moodChanged(AssistantMood mood) => _moodSince = t;
 
   void still() {
+    _last = null;
     blink = 0;
     gaze = Offset.zero;
     _notify();
@@ -248,6 +286,9 @@ class _FaceClock extends ChangeNotifier {
       dt = last == null ? 0 : ((elapsed - last).inMicroseconds / 1e6).clamp(0.0, 0.1);
       _last = elapsed;
       t += dt;
+      final rate = mood == AssistantMood.thinking ? _busySpin : _calmSpin;
+      _spinRate += (rate - _spinRate) * math.min(1.0, dt * 2.5);
+      spin += _spinRate * dt;
     }
     // Rise fast, fall a little slower, so the mouth follows syllables without chattering.
     final k = target > level ? 0.55 : 0.28;
@@ -292,36 +333,192 @@ class _FaceClock extends ChangeNotifier {
 // ---------------------------------------------------------------------------
 
 class _Layers {
-  const _Layers(this.body, this.glass, this.glow);
+  const _Layers(this.body, this.glass, this.glow, this.shadow, this.face);
 
   final ui.Image body;
   final ui.Image glass;
   final ui.Image glow;
+  final ui.Image? shadow;
+  final _FaceTextures? face;
 
-  static Future<_Layers> load(AssistantLook look, int px) async {
+  static Future<_Layers> load(AssistantLook look, int px, {bool hud = true, bool cacheFace = true}) async {
     final images = await Future.wait([
       _AssetCache.image(look.bodyAsset, px),
       _AssetCache.image(look.glassAsset, px),
       _AssetCache.image(look.glowAsset, (px / 2).round()),
+      if (hud) _ShadowCache.image(px),
     ]);
-    return _Layers(images[0], images[1], images[2]);
+    final face = cacheFace ? await _FaceTextureCache.load(look, px) : null;
+    return _Layers(images[0], images[1], images[2], hud ? images[3] : null, face);
   }
+}
+
+/// A feature's halo, bloom and core are static even while gaze moves it around the visor. Store
+/// those passes in a small transparent texture so idle eyes and smiles do not blur every frame.
+class _FaceTextures {
+  const _FaceTextures(this.px, this.eyes, this.idleMouth, this.happyMouth, this.dot);
+
+  final int px;
+  final Map<AssistantMood, ui.Image> eyes;
+  final ui.Image idleMouth;
+  final ui.Image happyMouth;
+  final ui.Image dot;
+}
+
+abstract final class _FaceTextureCache {
+  static final Map<String, Future<_FaceTextures>> _faces = {};
+
+  static Future<_FaceTextures> load(AssistantLook look, int px) {
+    final key = '${look.kind.name}@$px';
+    return _faces.putIfAbsent(key, () async {
+      final w = (kAssistantVisor.width - 0.016) * px;
+      final h = (kAssistantVisor.height - 0.016) * px;
+      final edge = (h * 1.4).ceil();
+      final center = Offset(edge / 2, edge / 2);
+      final glow = look.glow;
+      final core = Color.lerp(glow, const Color(0xFFFFFFFF), 0.28)!;
+
+      Future<ui.Image> stamp(void Function(Canvas canvas, Paint paint) draw) async {
+        final recorder = ui.PictureRecorder();
+        final canvas = Canvas(recorder);
+        draw(
+          canvas,
+          Paint()
+            ..color = glow.withValues(alpha: 0.45)
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, h * 0.12),
+        );
+        draw(
+          canvas,
+          Paint()
+            ..color = glow
+            ..maskFilter = MaskFilter.blur(BlurStyle.normal, h * 0.035),
+        );
+        draw(canvas, Paint()..color = core);
+        final picture = recorder.endRecording();
+        try {
+          return await picture.toImage(edge, edge);
+        } finally {
+          picture.dispose();
+        }
+      }
+
+      Future<ui.Image> eye(double wide) => stamp((canvas, paint) {
+        final ew = w * 0.12;
+        final rect = Rect.fromCenter(center: center, width: ew, height: h * 0.36 * wide);
+        canvas.drawRRect(RRect.fromRectAndRadius(rect, Radius.circular(ew / 2)), paint);
+      });
+
+      final idlePath = Path()
+        ..moveTo(center.dx - w * 0.13 / 2, center.dy - h * 0.02)
+        ..quadraticBezierTo(center.dx, center.dy + h * 0.07, center.dx + w * 0.13 / 2, center.dy - h * 0.02);
+      final happyPath = Path()
+        ..moveTo(center.dx - w * 0.18 / 2, center.dy - h * 0.05)
+        ..quadraticBezierTo(center.dx, center.dy + h * 0.16, center.dx + w * 0.18 / 2, center.dy - h * 0.05)
+        ..close();
+      try {
+        final images = await Future.wait([
+          eye(1),
+          eye(1.1),
+          eye(0.82),
+          stamp(
+            (canvas, paint) => canvas.drawArc(
+              Rect.fromCenter(center: center, width: w * 0.13, height: h * 0.26),
+              math.pi * 1.08,
+              math.pi * 0.84,
+              false,
+              _AssistantPainter._stroke(paint, h * 0.075),
+            ),
+          ),
+          stamp((canvas, paint) => canvas.drawPath(idlePath, _AssistantPainter._stroke(paint, h * 0.05))),
+          stamp((canvas, paint) => canvas.drawPath(happyPath, paint)),
+          stamp((canvas, paint) => canvas.drawCircle(center, h * 0.035, paint)),
+        ]);
+        return _FaceTextures(
+          px,
+          {
+            AssistantMood.idle: images[0],
+            AssistantMood.speaking: images[0],
+            AssistantMood.listening: images[1],
+            AssistantMood.thinking: images[2],
+            AssistantMood.happy: images[3],
+          },
+          images[4],
+          images[5],
+          images[6],
+        );
+      } catch (_) {
+        _faces.remove(key);
+        rethrow;
+      }
+    });
+  }
+}
+
+/// The contact shadow keeps its soft Gaussian edges, but its blur is rasterized only once per
+/// display-size bucket. Every robot shares the same small transparent texture.
+abstract final class _ShadowCache {
+  static final Map<int, Future<ui.Image>> _images = {};
+  static const width = 0.5;
+  static const height = 0.18;
+  static const darkness = 1.08;
+
+  static Future<ui.Image> image(int px) => _images.putIfAbsent(px, () async {
+    final w = (px * width).ceil();
+    final h = (px * height).ceil();
+    final center = Offset(w / 2, h / 2);
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.drawOval(
+      Rect.fromCenter(center: center, width: px * 0.34, height: px * 0.05),
+      Paint()
+        ..color = const Color.fromRGBO(0, 0, 0, 0.3 * darkness)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, px * 0.018),
+    );
+    canvas.drawOval(
+      Rect.fromCenter(center: center, width: px * 0.17, height: px * 0.022),
+      Paint()
+        ..color = const Color.fromRGBO(0, 0, 0, 0.24 * darkness)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, px * 0.007),
+    );
+    final picture = recorder.endRecording();
+    try {
+      return await picture.toImage(w, h);
+    } catch (_) {
+      _images.remove(px);
+      rethrow;
+    } finally {
+      picture.dispose();
+    }
+  });
 }
 
 /// Decoded render layers, shared between avatars and decoded at about the size they are shown.
 abstract final class _AssetCache {
   static final Map<String, Future<ui.Image>> _images = {};
 
-  /// Decode sizes step in 192 px so a handful of sizes share one decode.
-  static int bucket(double px) => (((px / 192).ceil()) * 192).clamp(192, 1152);
+  /// Decode sizes step in 192 px so a handful of sizes share one decode, up to the 1536 px renders.
+  static int bucket(double px) => (((px / 192).ceil()) * 192).clamp(192, 1536);
 
   static Future<ui.Image> image(String asset, int px) {
-    return _images.putIfAbsent('$asset@$px', () async {
-      final data = await rootBundle.load(asset);
-      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List(), targetWidth: px, targetHeight: px);
-      final frame = await codec.getNextFrame();
-      codec.dispose();
-      return frame.image;
+    final key = '$asset@$px';
+    return _images.putIfAbsent(key, () async {
+      try {
+        final buffer = await rootBundle.loadBuffer(asset);
+        // Never upscale while decoding: a smaller file stays at its own size and the GPU scales it.
+        final codec = await ui.instantiateImageCodecWithSize(
+          buffer,
+          getTargetSize: (w, h) => ui.TargetImageSize(width: math.min(px, w), height: math.min(px, h)),
+        );
+        try {
+          return (await codec.getNextFrame()).image;
+        } finally {
+          codec.dispose();
+        }
+      } catch (_) {
+        // An unavailable asset can be retried when a later screen requests it.
+        _images.remove(key);
+        rethrow;
+      }
     });
   }
 }
@@ -331,14 +528,44 @@ abstract final class _AssetCache {
 // ---------------------------------------------------------------------------
 
 class _AssistantPainter extends CustomPainter {
-  _AssistantPainter({required this.layers, required this.look, required this.mood, required this.clock, required this.hud})
-      : super(repaint: clock);
+  _AssistantPainter({
+    required this.layers,
+    required this.look,
+    required this.mood,
+    required this.clock,
+    required this.hud,
+    required this.pixelRatio,
+  }) : super(repaint: clock);
+
+  // Stage anchors as fractions of the render square, matched to the Blender camera.
+  /// Centre of the head, where the halo sits.
+  static const double _headY = 0.345;
+
+  /// The floor line under the robot, where the shadow and light pool sit.
+  static const double _floorY = 0.925;
+
+  /// Radius of the halo's tick ring.
+  static const double _haloRadius = 0.41;
+
+  /// Half-width of the floor ellipse; its depth follows [_floorDepth].
+  static const double _floorRadius = 0.26;
+
+  /// Height-to-width ratio of anything lying on the floor (the camera looks slightly down).
+  static const double _floorDepth = 1 / 6;
+
+  /// Seconds per hover cycle, and how far the robot rises and sinks, as a fraction of the square.
+  static const double _hoverPeriod = 4.2;
+  static const double _hoverTravel = 0.012;
 
   final _Layers? layers;
   final AssistantLook look;
   final AssistantMood mood;
   final _FaceClock clock;
   final bool hud;
+  final double pixelRatio;
+
+  /// -1 at the top of the hover, 1 at the bottom (closest to the floor).
+  double get _hover => math.sin(clock.t * 2 * math.pi / _hoverPeriod);
 
   double get _energy {
     final t = clock.t;
@@ -356,13 +583,13 @@ class _AssistantPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final s = size.width;
     final t = clock.t;
-    if (hud) _paintHud(canvas, s, t);
+    if (hud) _paintHud(canvas, s);
 
     final layers = this.layers;
     if (layers == null) return;
 
     // A slow hover and the smallest sway, so the robot never looks frozen.
-    final float = math.sin(t * 2 * math.pi / 4.2) * s * 0.012;
+    final float = _hover * s * _hoverTravel;
     final sway = math.sin(t * 2 * math.pi / 6.8) * 0.012;
     canvas.save();
     canvas.translate(s / 2, s / 2 + float);
@@ -370,15 +597,21 @@ class _AssistantPainter extends CustomPainter {
     canvas.translate(-s / 2, -s / 2);
 
     final box = Offset.zero & size;
+    // Mipmapped sampling keeps moving edges steady without bicubic work over each full image.
     final smoothing = Paint()..filterQuality = FilterQuality.medium;
     _drawImage(canvas, layers.body, box, smoothing);
     _paintFace(canvas, s);
     // Light layers carry their own transparency (baked from renders on black), so they are
     // drawn normally: they add light and leave the page untouched everywhere else.
-    _drawImage(canvas, layers.glass, box, Paint()..filterQuality = FilterQuality.medium);
-    _drawImage(canvas, layers.glow, box, Paint()
-      ..filterQuality = FilterQuality.medium
-      ..color = Color.fromRGBO(255, 255, 255, _energy.clamp(0.0, 1.0)));
+    _drawImage(canvas, layers.glass, box, smoothing);
+    _drawImage(
+      canvas,
+      layers.glow,
+      box,
+      Paint()
+        ..filterQuality = FilterQuality.medium
+        ..color = Color.fromRGBO(255, 255, 255, _energy.clamp(0.0, 1.0)),
+    );
     canvas.restore();
   }
 
@@ -387,76 +620,132 @@ class _AssistantPainter extends CustomPainter {
     canvas.drawImageRect(image, src, dst, paint);
   }
 
-  // The Jarvis part: a thin halo of arcs and ticks behind the head and a hover ring under the feet.
-  void _paintHud(Canvas canvas, double s, double t) {
+  // The Jarvis hint, kept quiet: a soft wash, a faint bezel of ticks and two thin slow arcs behind
+  // the head. Under the robot a product-shot stage: its light on the floor, a soft contact shadow
+  // and one faint floor line. Everything uses the robot's light colour at low strength.
+  void _paintHud(Canvas canvas, double s) {
     final glow = look.glow;
-    final busy = mood == AssistantMood.thinking;
-    final speed = busy ? 1.1 : 0.22;
-    final lift = busy ? 0.18 : 0.0;
+    final busy = mood == AssistantMood.thinking ? 1.0 : 0.0;
+    final spin = clock.spin;
+    final head = Offset(s * 0.5, s * _headY);
 
-    final head = Offset(s * 0.5, s * 0.345);
+    final wash = s * 0.46;
     canvas.drawCircle(
       head,
-      s * 0.46,
+      wash,
       Paint()
-        ..shader = ui.Gradient.radial(head, s * 0.46, [
-          glow.withValues(alpha: 0.2 + lift),
-          glow.withValues(alpha: 0.05),
-          glow.withValues(alpha: 0),
-        ], const [0, 0.55, 1]),
+        ..shader = ui.Gradient.radial(
+          head,
+          wash,
+          [glow.withValues(alpha: 0.11 + 0.05 * busy), glow.withValues(alpha: 0.03), glow.withValues(alpha: 0)],
+          const [0, 0.5, 1],
+        ),
     );
 
-    final r = s * 0.41;
-    final ticks = Paint()
-      ..color = glow.withValues(alpha: 0.16 + lift * 0.5)
-      ..strokeWidth = math.max(1, s * 0.0022)
+    // A watch bezel of hairline ticks, a longer one every 30 degrees.
+    final r = s * _haloRadius;
+    final hairline = math.max(0.75, s * 0.0016);
+    Paint tick(double alpha) => Paint()
+      ..color = glow.withValues(alpha: alpha)
+      ..strokeWidth = hairline
       ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < 72; i++) {
-      final a = i / 72 * 2 * math.pi + t * speed * 0.35;
-      final len = i % 6 == 0 ? s * 0.016 : s * 0.007;
+    final minor = tick(0.07 + 0.03 * busy);
+    final major = tick(0.1 + 0.04 * busy);
+    const ticks = 60;
+    for (var i = 0; i < ticks; i++) {
+      final a = i / ticks * 2 * math.pi + spin * 0.25;
+      final long = i % 5 == 0;
       final dir = Offset(math.cos(a), math.sin(a));
-      canvas.drawLine(head + dir * r, head + dir * (r + len), ticks);
-    }
-    final arc = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = math.max(1.2, s * 0.004)
-      ..color = glow.withValues(alpha: 0.42 + lift);
-    final rect = Rect.fromCircle(center: head, radius: r - s * 0.018);
-    for (final (start, sweep, dir) in const [(0.2, 0.7, 1.0), (2.3, 0.45, 1.0), (4.1, 1.1, 1.0), (1.2, 0.3, -1.6)]) {
-      canvas.drawArc(rect, start + t * speed * dir, sweep, false, arc);
+      canvas.drawLine(head + dir * r, head + dir * (r + s * (long ? 0.013 : 0.006)), long ? major : minor);
     }
 
-    final floor = Offset(s * 0.5, s * 0.925);
-    final rx = s * 0.3, ry = s * 0.05;
-    // The pool of light under the hover ring: a radial glow squashed into the floor's perspective.
+    // Two thin arcs turning slowly in opposite directions, each fading towards its tail.
+    final ring = Rect.fromCircle(center: Offset.zero, radius: r - s * 0.018);
+    final lit = glow.withValues(alpha: 0.24 + 0.12 * busy);
+    final unlit = glow.withValues(alpha: 0);
+    void arc(double from, double sweep, {required bool clockwise}) {
+      canvas.save();
+      canvas.translate(head.dx, head.dy);
+      // Drawn around pi so the round caps never cross the sweep gradient's seam at 0.
+      canvas.rotate(from - math.pi);
+      canvas.drawArc(
+        ring,
+        math.pi,
+        sweep,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = math.max(1.0, s * 0.0026)
+          ..shader = ui.Gradient.sweep(
+            Offset.zero,
+            clockwise ? [unlit, lit] : [lit, unlit],
+            null,
+            TileMode.clamp,
+            math.pi,
+            math.pi + sweep,
+          ),
+      );
+      canvas.restore();
+    }
+
+    arc(-0.9 + spin, 0.8, clockwise: true);
+    arc(2.0 - spin * 0.6, 0.45, clockwise: false);
+
+    final floor = Offset(s * 0.5, s * _floorY);
+    final rx = s * _floorRadius, ry = rx * _floorDepth;
+
+    // The robot's light falling on the floor: a radial glow squashed into the floor's perspective.
+    final pool = rx * 1.25;
     canvas.save();
     canvas.translate(floor.dx, floor.dy);
-    canvas.scale(1, ry / rx);
+    canvas.scale(1, _floorDepth);
     canvas.drawCircle(
       Offset.zero,
-      rx * 1.3,
+      pool,
       Paint()
-        ..shader = ui.Gradient.radial(Offset.zero, rx * 1.3, [
-          glow.withValues(alpha: 0.32 + lift),
-          glow.withValues(alpha: 0),
-        ]),
+        ..shader = ui.Gradient.radial(
+          Offset.zero,
+          pool,
+          [glow.withValues(alpha: 0.16 + 0.05 * busy), glow.withValues(alpha: 0.05), glow.withValues(alpha: 0)],
+          const [0, 0.45, 1],
+        ),
     );
     canvas.restore();
-    final ring = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1, s * 0.003)
-      ..color = glow.withValues(alpha: 0.55);
-    canvas.drawOval(Rect.fromCenter(center: floor, width: rx * 2, height: ry * 2), ring);
-    final dashes = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = math.max(1, s * 0.0045)
-      ..strokeCap = StrokeCap.round
-      ..color = glow.withValues(alpha: 0.5);
-    final outer = Rect.fromCenter(center: floor, width: rx * 2.7, height: ry * 2.7);
-    for (var i = 0; i < 16; i++) {
-      canvas.drawArc(outer, i / 16 * 2 * math.pi + t * speed, 0.16, false, dashes);
+
+    // A soft contact shadow (a wide penumbra and a tight core), a little tighter and darker as the
+    // hover brings the robot down. Only once the robot is there to cast it.
+    final shadow = layers?.shadow;
+    if (shadow != null) {
+      final near = _hover;
+      final spread = 1 - 0.06 * near;
+      final dark = 1 + 0.08 * near;
+      _drawImage(
+        canvas,
+        shadow,
+        Rect.fromCenter(
+          center: floor,
+          width: s * _ShadowCache.width * spread,
+          height: s * _ShadowCache.height * spread,
+        ),
+        Paint()
+          ..filterQuality = FilterQuality.medium
+          ..color = Color.fromRGBO(255, 255, 255, dark / _ShadowCache.darkness),
+      );
     }
+
+    // One faint floor line, fading from the front edge to nothing at the back.
+    final edge = Rect.fromCenter(center: floor, width: rx * 2, height: ry * 2);
+    canvas.drawOval(
+      edge,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(0.75, s * 0.0016)
+        ..shader = ui.Gradient.linear(edge.topCenter, edge.bottomCenter, [
+          glow.withValues(alpha: 0.02),
+          glow.withValues(alpha: 0.16 + 0.06 * busy),
+        ]),
+    );
   }
 
   // The face on the visor: eyes and mouth in the glow colour, with a soft bloom, clipped to the glass.
@@ -507,6 +796,17 @@ class _AssistantPainter extends CustomPainter {
       draw(solid);
     }
 
+    final face = layers?.face;
+    void stamp(ui.Image image, Offset center) {
+      final scale = s / face!.px;
+      _drawImage(
+        canvas,
+        image,
+        Rect.fromCenter(center: center, width: image.width * scale, height: image.height * scale),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    }
+
     final w = visor.width, h = visor.height;
     final gaze = Offset(clock.gaze.dx * w * 0.035, clock.gaze.dy * h * 0.06);
     final eyeY = visor.top + h * 0.45;
@@ -517,8 +817,12 @@ class _AssistantPainter extends CustomPainter {
       final stroke = h * 0.075;
       for (final side in const [-1.0, 1.0]) {
         final c = Offset(visor.center.dx + side * dx, eyeY + h * 0.03) + gaze;
-        final arc = Rect.fromCenter(center: c, width: w * 0.13, height: h * 0.26);
-        shape((p) => canvas.drawArc(arc, math.pi * 1.08, math.pi * 0.84, false, _stroke(p, stroke)));
+        if (face != null) {
+          stamp(face.eyes[mood]!, c);
+        } else {
+          final arc = Rect.fromCenter(center: c, width: w * 0.13, height: h * 0.26);
+          shape((p) => canvas.drawArc(arc, math.pi * 1.08, math.pi * 0.84, false, _stroke(p, stroke)));
+        }
       }
     } else {
       final open = 1 - 0.92 * clock.blink;
@@ -533,7 +837,11 @@ class _AssistantPainter extends CustomPainter {
       for (final side in const [-1.0, 1.0]) {
         final c = Offset(visor.center.dx + side * dx, eyeY) + gaze;
         final rect = Rect.fromCenter(center: c, width: ew, height: math.max(eh, h * 0.035));
-        shape((p) => canvas.drawRRect(RRect.fromRectAndRadius(rect, Radius.circular(ew / 2)), p));
+        if (face != null && clock.blink == 0) {
+          stamp(face.eyes[mood]!, c);
+        } else {
+          shape((p) => canvas.drawRRect(RRect.fromRectAndRadius(rect, Radius.circular(ew / 2)), p));
+        }
         // A small catch-light, only while the eye is open enough to hold it.
         if (open > 0.6 && mood != AssistantMood.thinking) {
           canvas.drawCircle(Offset(rect.left + ew * 0.32, rect.top + ew * 0.36), ew * 0.13, sparkle);
@@ -545,18 +853,26 @@ class _AssistantPainter extends CustomPainter {
     final mouth = Offset(visor.center.dx, visor.top + h * 0.77) + gaze * 0.4;
     switch (mood) {
       case AssistantMood.idle:
-        final mw = w * 0.13;
-        final path = Path()
-          ..moveTo(mouth.dx - mw / 2, mouth.dy - h * 0.02)
-          ..quadraticBezierTo(mouth.dx, mouth.dy + h * 0.07, mouth.dx + mw / 2, mouth.dy - h * 0.02);
-        shape((p) => canvas.drawPath(path, _stroke(p, h * 0.05)));
+        if (face != null) {
+          stamp(face.idleMouth, mouth);
+        } else {
+          final mw = w * 0.13;
+          final path = Path()
+            ..moveTo(mouth.dx - mw / 2, mouth.dy - h * 0.02)
+            ..quadraticBezierTo(mouth.dx, mouth.dy + h * 0.07, mouth.dx + mw / 2, mouth.dy - h * 0.02);
+          shape((p) => canvas.drawPath(path, _stroke(p, h * 0.05)));
+        }
       case AssistantMood.happy:
-        final mw = w * 0.18;
-        final path = Path()
-          ..moveTo(mouth.dx - mw / 2, mouth.dy - h * 0.05)
-          ..quadraticBezierTo(mouth.dx, mouth.dy + h * 0.16, mouth.dx + mw / 2, mouth.dy - h * 0.05)
-          ..close();
-        shape((p) => canvas.drawPath(path, p));
+        if (face != null) {
+          stamp(face.happyMouth, mouth);
+        } else {
+          final mw = w * 0.18;
+          final path = Path()
+            ..moveTo(mouth.dx - mw / 2, mouth.dy - h * 0.05)
+            ..quadraticBezierTo(mouth.dx, mouth.dy + h * 0.16, mouth.dx + mw / 2, mouth.dy - h * 0.05)
+            ..close();
+          shape((p) => canvas.drawPath(path, p));
+        }
       case AssistantMood.speaking:
         final mw = w * (0.09 + 0.06 * l);
         final mh = h * (0.045 + 0.2 * l);
@@ -566,20 +882,26 @@ class _AssistantPainter extends CustomPainter {
         const bars = 7;
         final span = w * 0.24;
         final bw = span / (bars * 1.9);
+        final wavePath = Path();
         for (var i = 0; i < bars; i++) {
           final x = mouth.dx - span / 2 + (i + 0.5) * span / bars;
           final wave = 0.5 + 0.5 * math.sin(t * 9 + i * 1.3);
           final centre = 1 - (i - (bars - 1) / 2).abs() / bars;
           final bh = h * (0.035 + (0.05 + 0.2 * l) * wave * centre);
           final rect = Rect.fromCenter(center: Offset(x, mouth.dy), width: bw, height: bh);
-          shape((p) => canvas.drawRRect(RRect.fromRectAndRadius(rect, Radius.circular(bw / 2)), p));
+          wavePath.addRRect(RRect.fromRectAndRadius(rect, Radius.circular(bw / 2)));
         }
+        shape((p) => canvas.drawPath(wavePath, p));
       case AssistantMood.thinking:
         for (var i = 0; i < 3; i++) {
           final phase = (t * 2.2 - i * 0.33) % 1.0;
           final lift = math.max(0.0, math.sin(phase * math.pi)) * h * 0.06;
           final c = Offset(mouth.dx + (i - 1) * w * 0.06, mouth.dy - lift);
-          shape((p) => canvas.drawCircle(c, h * 0.035, p));
+          if (face != null) {
+            stamp(face.dot, c);
+          } else {
+            shape((p) => canvas.drawCircle(c, h * 0.035, p));
+          }
         }
     }
     canvas.restore();
@@ -611,7 +933,7 @@ class _AssistantPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_AssistantPainter old) =>
-      old.layers != layers || old.look != look || old.mood != mood || old.hud != hud;
+      old.layers != layers || old.look != look || old.mood != mood || old.hud != hud || old.pixelRatio != pixelRatio;
 }
 
 /// Warms up the render layers for [look] (for example while onboarding shows the picker).

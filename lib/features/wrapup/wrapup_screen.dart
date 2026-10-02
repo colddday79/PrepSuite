@@ -260,7 +260,10 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(width: 24, child: Text('${i + 1}', style: PrepType.questionM.copyWith(color: PrepColors.accent))),
+              SizedBox(
+                width: MediaQuery.textScalerOf(context).scale(24),
+                child: Text('${i + 1}', style: PrepType.questionM.copyWith(color: PrepColors.accent)),
+              ),
               const SizedBox(width: Space.s),
               Expanded(child: Text(notes[i], style: PrepType.questionM)),
             ],

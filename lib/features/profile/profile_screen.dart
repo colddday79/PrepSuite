@@ -36,7 +36,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: PrepColors.surface1,
       barrierColor: PrepColors.scrim,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.sheet))),
-      builder: (context) => _NameJobSheet(initialName: profile.name, initialJob: profile.targetRole),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: _NameJobSheet(initialName: profile.name, initialJob: profile.targetRole),
+      ),
     );
     if (result != null) {
       final p = services.profile;
@@ -100,7 +103,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     final failed = services.profile.saveFailed || services.sessions.saveFailed;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(failed ? "Couldn't delete everything. Try again." : 'Your details and practices are deleted.')),
+      SnackBar(
+        content: Text(failed ? "Couldn't delete everything. Try again." : 'Your details and practices are deleted.'),
+      ),
     );
   }
 
@@ -132,12 +137,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   const _SectionHeader('Details'),
-                  LinkRow(
-                    icon: PrepIcons.user,
-                    title: 'Name',
-                    meta: profile.name,
-                    onTap: () => _editNameJob(services),
-                  ),
+                  LinkRow(icon: PrepIcons.user, title: 'Name', meta: profile.name, onTap: () => _editNameJob(services)),
                   const Hairline(indent: Space.gutter + 24 + Space.l),
                   LinkRow(
                     icon: PrepIcons.target,
@@ -176,10 +176,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const _SectionHeader('Your assistant'),
                   ValueListenableBuilder<AssistantLook>(
                     valueListenable: services.assistant,
-                    builder: (context, look, _) => AssistantPicker(
-                      selected: look.kind,
-                      onSelected: (kind) => services.assistant.choose(kind),
-                    ),
+                    builder: (context, look, _) =>
+                        AssistantPicker(selected: look.kind, onSelected: (kind) => services.assistant.choose(kind)),
                   ),
                   const _SectionHeader('Settings'),
                   FutureBuilder<CoachHealth>(
@@ -194,7 +192,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => services.assistant.resetOnboarding(),
                   ),
                   const Hairline(indent: Space.gutter + 24 + Space.l),
-                  LinkRow(icon: PrepIcons.shield, title: 'Privacy', onTap: () => showConsentSheet(context, infoOnly: true)),
+                  LinkRow(
+                    icon: PrepIcons.shield,
+                    title: 'Privacy',
+                    onTap: () => showConsentSheet(context, infoOnly: true),
+                  ),
                   const Hairline(indent: Space.gutter + 24 + Space.l),
                   _DeleteRow(onTap: () => _deleteEverything(services)),
                 ],
@@ -233,7 +235,7 @@ class _Header extends StatelessWidget {
         children: [
           ValueListenableBuilder<AssistantLook>(
             valueListenable: services.assistant,
-            builder: (context, look, _) => AssistantAvatar(look: look, size: 72, hud: false),
+            builder: (context, look, _) => AssistantAvatar(look: look, size: 72, hud: false, animate: false),
           ),
           const SizedBox(width: Space.l),
           Expanded(
