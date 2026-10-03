@@ -525,3 +525,45 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 - A real-phone check of recording and playback.
 - `RecordButton` is now 96 dp and also used by Talk and Profile; check those screens.
 - `CoachTopBar` in `components.dart` is now only used by `design_test` and can go.
+
+---
+
+## Session 10 (2026-10-03): dark glass metal redesign, three themes, impeccable
+
+**Owner's asks:**
+- The light theme was "boring", with too many words and a robot that was too small.
+- Make it look like their dark smart-home references: glassy metallic cards and one warm accent.
+- Offer 2–3 switchable themes.
+- None of their 20 "vibe-coded" tells (listed in `CLAUDE.md`).
+- Install the impeccable design skill and always use it.
+
+**Plan:** `/Users/macintosh/.claude/plans/the-current-app-that-tender-frog.md`.
+
+**Done:**
+- **Tooling:**
+  - `npx impeccable install` put the skill in `.claude/skills/impeccable/` and the detector hook in `.claude/settings.local.json` (not committed).
+  - New `PRODUCT.md`, plus a repo `CLAUDE.md` holding the design rules, the banned list and the word budget.
+  - A memory note says to always use impeccable.
+- **Theme engine** (`lib/design/tokens.dart`):
+  - `PrepThemeData` comes in three versions: `PrepThemes.ember` (amber, the default), `signal` (red) and `brass` (gold).
+  - `PrepColors.*` and `PrepType.*` are now getters that read the current theme, so a switch repaints the app. A script removed `const` wherever a theme colour was used.
+  - `ThemeStore` (`lib/app/theme_store.dart`, key `theme.v1`) lives in `AppServices.theme`. The switch is in Profile → Appearance.
+  - Coach colours now appear only inside the robot.
+- **Kit:**
+  - `lib/design/metal.dart`: MetalCard/MetalTile (smoked glass via `paintGlass`), MetalDisc, ArcGauge, FloatingTabBar (glass, with the active tab as a labelled accent pill) and MetalSegments.
+  - `lib/design/glass.dart`: AmbientBackdrop (a lit room behind the glass) and `paintGlass`.
+  - `lib/design/robot_stage.dart`: RobotStage, the robot inside a tick dial with a real-progress arc, on a metal pedestal with an accent floor light.
+- **Screens:** all rebuilt by three agents with disjoint files.
+  - Home: robot hero on its stage, "x/8 Skills", a richer Start pill, a This week card with sessions, answers, days and a 7-day bar chart, and Next skill / Last tiles.
+  - Practice: Speak / Skills.
+  - Profile: Appearance.
+  - Session: record dial with live waveform and timer, short feedback cards, pace as a numeral. Shorter labels: Next, Again, Ask, 1/3.
+  - Drills: glass tiles, tinted result card.
+  - Onboarding and Talk: robot on its stage.
+- **State:** analyze is clean; 237 Flutter tests and 35 Deno tests pass. Committed as `4a69ba8`.
+
+**Open (found on the emulator, being checked):**
+- On the device, switching the theme in Profile didn't visibly change Home. Either the tap missed the swatch below the fold, or the repaint doesn't happen.
+- After `pm clear`, the coach starts as Ember instead of Tide (possibly Android backup restoring old prefs).
+- The This week bars sit under the floating tab bar until you scroll.
+- `DESIGN.md` hasn't been written yet. The impeccable documenter should write it from the built app.
