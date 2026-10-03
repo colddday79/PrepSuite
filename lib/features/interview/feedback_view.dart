@@ -7,28 +7,21 @@ import '../../design/icons.dart';
 import '../../design/tokens.dart';
 import '../common/coach_widgets.dart';
 
-/// Feedback on one answer, in the order it is useful: a short verdict, what worked, the one thing
-/// to improve (with their own words and the fix), and how it sounded. No scores.
+/// Feedback on one answer, short: a verdict, then at most three blocks in the order they are
+/// useful. "Good" is what worked; "Try" is their own words and the fix; "Voice" is how it sounded,
+/// shown only when the phone measured a spoken answer. No scores.
 class FeedbackView extends StatelessWidget {
-  const FeedbackView({
-    super.key,
-    required this.question,
-    required this.feedback,
-    required this.typed,
-    this.metrics,
-    this.listen,
-  });
+  const FeedbackView({super.key, required this.feedback, required this.typed, this.metrics, this.listen});
 
-  final String question;
   final AnswerFeedback feedback;
 
-  /// Typed or corrected answers get no voice feedback: nothing was measured that matches the text.
+  /// Typed or corrected answers get no voice block: nothing was measured that matches the text.
   final bool typed;
 
-  /// What the phone measured for a spoken, unedited answer; shown on request under "How it sounded".
+  /// What the phone measured for a spoken, unedited answer; the numbers are under "Details".
   final DeliveryMetrics? metrics;
 
-  /// The control to hear the feedback read aloud (or stop it), shown under the headline.
+  /// The small control to hear the feedback read aloud (or stop it), beside the headline.
   final Widget? listen;
 
   @override
@@ -38,66 +31,65 @@ class FeedbackView extends StatelessWidget {
     final evidence = _unquote(feedback.evidence);
     final fix = feedback.fix.trim();
     final strength = feedback.strength.trim();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(question, style: PrepType.meta.copyWith(color: PrepColors.text3), maxLines: 2, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: Space.s),
-        Semantics(
-          header: true,
-          liveRegion: true,
-          child: Text(headline.isEmpty ? 'Here is what to work on.' : headline, style: PrepType.titleL),
-        ),
-        if (feedback.mock) ...[
-          const SizedBox(height: Space.xs),
-          Text('Sample feedback', style: PrepType.caption),
-        ],
-        if (listen != null) ...[
-          const SizedBox(height: Space.xs),
-          // Nudged left so the icon, not the button's padding, lines up with the text.
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Transform.translate(offset: const Offset(-Space.m, 0), child: listen),
-          ),
-          const SizedBox(height: Space.s),
-        ] else
-          const SizedBox(height: Space.l),
-        if (strength.isNotEmpty) ...[
-          CoachCard(
-            title: 'What worked',
-            icon: PrepIcons.check,
-            iconColor: PrepColors.success,
-            child: Text(strength, style: PrepType.bodyL),
-          ),
-          const SizedBox(height: Space.m),
-        ],
+    final delivery = feedback.delivery.trim();
+    final measured = typed ? null : metrics;
+    // The fix says what to do; the problem is only spelled out when there is no fix.
+    final tryText = fix.isNotEmpty ? fix : problem;
+    final blocks = <Widget>[
+      if (strength.isNotEmpty)
         CoachCard(
-          title: 'Improve this',
+          title: 'Good',
+          icon: PrepIcons.check,
+          iconColor: PrepColors.success,
+          child: Text(strength, style: PrepType.bodyL),
+        ),
+      if (evidence.isNotEmpty || tryText.isNotEmpty)
+        CoachCard(
+          title: 'Try',
           icon: PrepIcons.target,
           iconColor: PrepColors.warning,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (problem.isNotEmpty) Text(problem, style: PrepType.bodyL),
+              if (fix.isEmpty && tryText.isNotEmpty) Text(tryText, style: PrepType.bodyL),
               if (evidence.isNotEmpty) ...[
-                if (problem.isNotEmpty) const SizedBox(height: Space.m),
+                if (fix.isEmpty && tryText.isNotEmpty) const SizedBox(height: Space.m),
                 AnswerQuote(evidence),
               ],
               if (fix.isNotEmpty) ...[
-                const SizedBox(height: Space.l),
-                Text('Next time', style: PrepType.label.copyWith(color: PrepColors.text2)),
-                const SizedBox(height: Space.xs),
+                if (evidence.isNotEmpty) const SizedBox(height: Space.m),
                 Text(fix, style: PrepType.bodyLMedium),
               ],
             ],
           ),
         ),
-        const SizedBox(height: Space.m),
-        CoachCard(
-          title: 'How it sounded',
-          icon: PrepIcons.speaker,
-          child: _HowItSounded(typed: typed, delivery: feedback.delivery.trim(), metrics: typed ? null : metrics),
+      if (measured != null && delivery.isNotEmpty)
+        CoachCard(title: 'Voice', icon: PrepIcons.speaker, child: _Voice(delivery: delivery, metrics: measured)),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: Space.xs),
+                child: Semantics(
+                  header: true,
+                  liveRegion: true,
+                  child: Text(headline.isEmpty ? 'One thing to work on.' : headline, style: PrepType.titleL),
+                ),
+              ),
+            ),
+            if (listen != null) ...[const SizedBox(width: Space.s), listen!],
+          ],
         ),
+        if (feedback.mock) ...[
+          const SizedBox(height: Space.xs),
+          Text('Sample feedback', style: PrepType.caption),
+        ],
+        for (final block in blocks) ...[const SizedBox(height: Space.m), block],
       ],
     );
   }
@@ -116,46 +108,38 @@ class FeedbackView extends StatelessWidget {
 }
 
 /// One delivery observation, with the measured numbers behind it on request.
-class _HowItSounded extends StatefulWidget {
-  const _HowItSounded({required this.typed, required this.delivery, required this.metrics});
+class _Voice extends StatefulWidget {
+  const _Voice({required this.delivery, required this.metrics});
 
-  final bool typed;
   final String delivery;
-  final DeliveryMetrics? metrics;
+  final DeliveryMetrics metrics;
 
   @override
-  State<_HowItSounded> createState() => _HowItSoundedState();
+  State<_Voice> createState() => _VoiceState();
 }
 
-class _HowItSoundedState extends State<_HowItSounded> {
+class _VoiceState extends State<_Voice> {
   bool _open = false;
 
   @override
   Widget build(BuildContext context) {
-    if (widget.typed) return Text('Typed, so no voice feedback.', style: PrepType.body);
-    final metrics = widget.metrics;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          widget.delivery.isEmpty ? 'No voice measurements came back for this answer.' : widget.delivery,
-          style: PrepType.bodyL,
-        ),
-        if (metrics != null) ...[
-          const SizedBox(height: Space.xs),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Transform.translate(
-              offset: const Offset(-Space.m, 0),
-              child: QuietButton(
-                _open ? 'Hide details' : 'Show details',
-                icon: PrepIcons.sliders,
-                onPressed: () => setState(() => _open = !_open),
-              ),
+        Text(widget.delivery, style: PrepType.bodyL),
+        const SizedBox(height: Space.xs),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Transform.translate(
+            offset: const Offset(-Space.m, 0),
+            child: QuietButton(
+              _open ? 'Hide details' : 'Details',
+              icon: PrepIcons.sliders,
+              onPressed: () => setState(() => _open = !_open),
             ),
           ),
-          if (_open) _Measured(metrics),
-        ],
+        ),
+        if (_open) _Measured(widget.metrics),
       ],
     );
   }
@@ -195,7 +179,7 @@ class _Measured extends StatelessWidget {
         ],
         const Hairline(),
         const SizedBox(height: Space.s),
-        Text('Measured on this phone. The microphone and the room can change these numbers.', style: PrepType.caption),
+        Text('Measured on this phone. The mic and the room can change these.', style: PrepType.caption),
       ],
     );
   }

@@ -4,6 +4,7 @@ import '../../coach/coach_api.dart';
 import '../../coach/contracts.dart';
 import '../../design/components.dart';
 import '../../design/icons.dart';
+import '../../design/tokens.dart';
 
 /// What Norman reads out on the interview screen besides the question itself.
 enum Spoken { feedback, reply, notes }
@@ -60,25 +61,76 @@ class ReadAloud extends ChangeNotifier {
   }
 }
 
-/// A quiet control to hear a piece of text read aloud, or stop it. It sits right under the text.
+/// A quiet control to hear a piece of text read aloud, or stop it. It sits right by the text.
+/// [iconOnly] draws just a small round speaker (a stop square while it plays); the words are then
+/// for screen readers only.
 class ReadAloudButton extends StatelessWidget {
-  const ReadAloudButton({super.key, required this.label, required this.stopLabel, required this.speaking, required this.onPressed});
+  const ReadAloudButton({
+    super.key,
+    required this.label,
+    required this.stopLabel,
+    required this.speaking,
+    required this.onPressed,
+    this.iconOnly = false,
+  });
 
   /// "Hear feedback"; [stopLabel] is what screen readers hear while it plays ("Stop reading the feedback").
   final String label;
   final String stopLabel;
   final bool speaking;
   final VoidCallback? onPressed;
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
+    final enabled = onPressed != null;
     return Semantics(
+      container: true,
       button: true,
-      enabled: onPressed != null,
+      enabled: enabled,
       label: speaking ? stopLabel : label,
       onTap: onPressed,
       excludeSemantics: true,
-      child: QuietButton(speaking ? 'Stop' : label, icon: speaking ? PrepIcons.stop : PrepIcons.speaker, onPressed: onPressed),
+      child: iconOnly
+          ? FocusRing(
+              radius: 24,
+              child: Material(
+                type: MaterialType.transparency,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onPressed,
+                  customBorder: const CircleBorder(),
+                  focusColor: Colors.transparent,
+                  child: SizedBox.square(
+                    dimension: 48,
+                    child: Center(
+                      child: DecoratedBox(
+                        decoration: ShapeDecoration(
+                          color: PrepColors.surface1,
+                          shape: CircleBorder(
+                            side: BorderSide(
+                              color: !enabled ? PrepColors.line : (speaking ? PrepColors.accent : PrepColors.text3),
+                            ),
+                          ),
+                        ),
+                        child: SizedBox.square(
+                          dimension: 40,
+                          child: Center(
+                            child: PrepIcon(
+                              speaking ? PrepIcons.stop : PrepIcons.speaker,
+                              color: !enabled ? PrepColors.text3 : (speaking ? PrepColors.accent : PrepColors.text2),
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : QuietButton(speaking ? 'Stop' : label, icon: speaking ? PrepIcons.stop : PrepIcons.speaker, onPressed: onPressed),
     );
   }
 }

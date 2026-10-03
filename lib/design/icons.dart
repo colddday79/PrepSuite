@@ -1,6 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:path_drawing/path_drawing.dart';
 
+import 'tokens.dart';
+
 /// Hairline icons drawn on a 24-unit grid with one 1.5 stroke weight, so the set reads as one
 /// family. Path data is ported unchanged from the native app (designsystem/Icons.kt).
 enum PrepIcons {
@@ -43,7 +45,7 @@ enum PrepIcons {
 
 /// Paints one hairline icon. Decorative by default; pass [semanticLabel] when it stands alone.
 class PrepIcon extends StatelessWidget {
-  const PrepIcon(this.icon, {super.key, this.color = const Color(0xFFF5EFE6), this.size = 24, this.semanticLabel});
+  const PrepIcon(this.icon, {super.key, this.color = PrepColors.text, this.size = 24, this.semanticLabel});
 
   final PrepIcons icon;
   final Color color;

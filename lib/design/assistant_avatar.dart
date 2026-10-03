@@ -47,6 +47,7 @@ class AssistantAvatar extends StatefulWidget {
     this.mood = AssistantMood.idle,
     this.level,
     this.hud = true,
+    this.stage = true,
     this.animate = true,
     this.semanticLabel,
   });
@@ -63,6 +64,10 @@ class AssistantAvatar extends StatefulWidget {
 
   /// Draw the halo behind the head and the stage (shadow, light pool, floor line) under the robot.
   final bool hud;
+
+  /// Stand the robot on a pale disc of the coach's colour, so the white robot reads on the light
+  /// page. Off where it already sits on a coloured card.
+  final bool stage;
 
   /// Keep small picker and profile previews still while the main assistant moves.
   final bool animate;
@@ -208,6 +213,7 @@ class _AssistantAvatarState extends State<AssistantAvatar> with SingleTickerProv
               mood: widget.mood,
               clock: _clock,
               hud: widget.hud,
+              stage: widget.stage,
               pixelRatio: MediaQuery.maybeDevicePixelRatioOf(context) ?? 2.0,
             ),
           ),
@@ -534,24 +540,13 @@ class _AssistantPainter extends CustomPainter {
     required this.mood,
     required this.clock,
     required this.hud,
+    required this.stage,
     required this.pixelRatio,
   }) : super(repaint: clock);
 
   // Stage anchors as fractions of the render square, matched to the Blender camera.
-  /// Centre of the head, where the halo sits.
-  static const double _headY = 0.345;
-
-  /// The floor line under the robot, where the shadow and light pool sit.
+  /// The floor line under the robot, where the contact shadow sits.
   static const double _floorY = 0.925;
-
-  /// Radius of the halo's tick ring.
-  static const double _haloRadius = 0.41;
-
-  /// Half-width of the floor ellipse; its depth follows [_floorDepth].
-  static const double _floorRadius = 0.26;
-
-  /// Height-to-width ratio of anything lying on the floor (the camera looks slightly down).
-  static const double _floorDepth = 1 / 6;
 
   /// Seconds per hover cycle, and how far the robot rises and sinks, as a fraction of the square.
   static const double _hoverPeriod = 4.2;
@@ -562,6 +557,7 @@ class _AssistantPainter extends CustomPainter {
   final AssistantMood mood;
   final _FaceClock clock;
   final bool hud;
+  final bool stage;
   final double pixelRatio;
 
   /// -1 at the top of the hover, 1 at the bottom (closest to the floor).
@@ -583,6 +579,9 @@ class _AssistantPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final s = size.width;
     final t = clock.t;
+    if (stage) {
+      canvas.drawCircle(Offset(s * 0.5, s * 0.5), s * 0.47, Paint()..color = look.soft);
+    }
     if (hud) _paintHud(canvas, s);
 
     final layers = this.layers;
@@ -623,95 +622,10 @@ class _AssistantPainter extends CustomPainter {
   // The Jarvis hint, kept quiet: a soft wash, a faint bezel of ticks and two thin slow arcs behind
   // the head. Under the robot a product-shot stage: its light on the floor, a soft contact shadow
   // and one faint floor line. Everything uses the robot's light colour at low strength.
+  // Under the robot, a soft contact shadow so it stands on its stage. (The older halo of ticks,
+  // arcs and coloured light belonged to the dark theme and is gone on the light page.)
   void _paintHud(Canvas canvas, double s) {
-    final glow = look.glow;
-    final busy = mood == AssistantMood.thinking ? 1.0 : 0.0;
-    final spin = clock.spin;
-    final head = Offset(s * 0.5, s * _headY);
-
-    final wash = s * 0.46;
-    canvas.drawCircle(
-      head,
-      wash,
-      Paint()
-        ..shader = ui.Gradient.radial(
-          head,
-          wash,
-          [glow.withValues(alpha: 0.11 + 0.05 * busy), glow.withValues(alpha: 0.03), glow.withValues(alpha: 0)],
-          const [0, 0.5, 1],
-        ),
-    );
-
-    // A watch bezel of hairline ticks, a longer one every 30 degrees.
-    final r = s * _haloRadius;
-    final hairline = math.max(0.75, s * 0.0016);
-    Paint tick(double alpha) => Paint()
-      ..color = glow.withValues(alpha: alpha)
-      ..strokeWidth = hairline
-      ..strokeCap = StrokeCap.round;
-    final minor = tick(0.07 + 0.03 * busy);
-    final major = tick(0.1 + 0.04 * busy);
-    const ticks = 60;
-    for (var i = 0; i < ticks; i++) {
-      final a = i / ticks * 2 * math.pi + spin * 0.25;
-      final long = i % 5 == 0;
-      final dir = Offset(math.cos(a), math.sin(a));
-      canvas.drawLine(head + dir * r, head + dir * (r + s * (long ? 0.013 : 0.006)), long ? major : minor);
-    }
-
-    // Two thin arcs turning slowly in opposite directions, each fading towards its tail.
-    final ring = Rect.fromCircle(center: Offset.zero, radius: r - s * 0.018);
-    final lit = glow.withValues(alpha: 0.24 + 0.12 * busy);
-    final unlit = glow.withValues(alpha: 0);
-    void arc(double from, double sweep, {required bool clockwise}) {
-      canvas.save();
-      canvas.translate(head.dx, head.dy);
-      // Drawn around pi so the round caps never cross the sweep gradient's seam at 0.
-      canvas.rotate(from - math.pi);
-      canvas.drawArc(
-        ring,
-        math.pi,
-        sweep,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..strokeWidth = math.max(1.0, s * 0.0026)
-          ..shader = ui.Gradient.sweep(
-            Offset.zero,
-            clockwise ? [unlit, lit] : [lit, unlit],
-            null,
-            TileMode.clamp,
-            math.pi,
-            math.pi + sweep,
-          ),
-      );
-      canvas.restore();
-    }
-
-    arc(-0.9 + spin, 0.8, clockwise: true);
-    arc(2.0 - spin * 0.6, 0.45, clockwise: false);
-
     final floor = Offset(s * 0.5, s * _floorY);
-    final rx = s * _floorRadius, ry = rx * _floorDepth;
-
-    // The robot's light falling on the floor: a radial glow squashed into the floor's perspective.
-    final pool = rx * 1.25;
-    canvas.save();
-    canvas.translate(floor.dx, floor.dy);
-    canvas.scale(1, _floorDepth);
-    canvas.drawCircle(
-      Offset.zero,
-      pool,
-      Paint()
-        ..shader = ui.Gradient.radial(
-          Offset.zero,
-          pool,
-          [glow.withValues(alpha: 0.16 + 0.05 * busy), glow.withValues(alpha: 0.05), glow.withValues(alpha: 0)],
-          const [0, 0.45, 1],
-        ),
-    );
-    canvas.restore();
 
     // A soft contact shadow (a wide penumbra and a tight core), a little tighter and darker as the
     // hover brings the robot down. Only once the robot is there to cast it.
@@ -733,19 +647,6 @@ class _AssistantPainter extends CustomPainter {
           ..color = Color.fromRGBO(255, 255, 255, dark / _ShadowCache.darkness),
       );
     }
-
-    // One faint floor line, fading from the front edge to nothing at the back.
-    final edge = Rect.fromCenter(center: floor, width: rx * 2, height: ry * 2);
-    canvas.drawOval(
-      edge,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = math.max(0.75, s * 0.0016)
-        ..shader = ui.Gradient.linear(edge.topCenter, edge.bottomCenter, [
-          glow.withValues(alpha: 0.02),
-          glow.withValues(alpha: 0.16 + 0.06 * busy),
-        ]),
-    );
   }
 
   // The face on the visor: eyes and mouth in the glow colour, with a soft bloom, clipped to the glass.
@@ -933,7 +834,7 @@ class _AssistantPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_AssistantPainter old) =>
-      old.layers != layers || old.look != look || old.mood != mood || old.hud != hud || old.pixelRatio != pixelRatio;
+      old.layers != layers || old.look != look || old.mood != mood || old.hud != hud || old.stage != stage || old.pixelRatio != pixelRatio;
 }
 
 /// Warms up the render layers for [look] (for example while onboarding shows the picker).

@@ -235,13 +235,10 @@ class _CoachCard extends StatelessWidget {
           excludeSemantics: true,
           onTap: onTap,
           child: FocusRing(
-            radius: Radii.card,
+            radius: Radii.sheet,
             child: Material(
-              color: PrepColors.surface1,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(Radii.card),
-                side: const BorderSide(color: PrepColors.line),
-              ),
+              color: PrepColors.accentSoft,
+              borderRadius: BorderRadius.circular(Radii.sheet),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 key: const ValueKey('home-assistant'),
@@ -255,14 +252,14 @@ class _CoachCard extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(look.name, style: PrepType.titleL),
+                            Text(look.name, style: PrepType.headline),
                             const SizedBox(height: Space.xs),
-                            Text('Your interview coach. Tap to ask me anything.', style: PrepType.body),
+                            Text('Your interview coach', style: PrepType.body),
                           ],
                         ),
                       ),
                       const SizedBox(width: Space.s),
-                      AssistantAvatar(look: look, size: size, mood: mood, level: level, hud: false),
+                      AssistantAvatar(look: look, size: size, mood: mood, level: level, hud: false, stage: false),
                     ],
                   ),
                 ),

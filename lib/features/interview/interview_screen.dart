@@ -36,8 +36,8 @@ enum _Phase {
 }
 
 /// Step two: one question at a time. The coach asks; the person answers out loud (up to two
-/// minutes, then checks the transcript) or types; the feedback comes back as short cards: what
-/// worked, the one thing to improve, and how it sounded. The next step is always in the bottom bar.
+/// minutes, then checks the transcript) or types; the feedback comes back as at most three short
+/// blocks: good, try, and voice. Few words on screen; the next step is always in the bottom bar.
 class InterviewScreen extends StatefulWidget {
   const InterviewScreen({super.key, required this.session});
 
@@ -442,23 +442,23 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     };
   }
 
-  /// What the coach is doing, in words beside it.
+  /// What the coach is doing, for screen readers (the robot's face shows it on screen).
   String get _status {
-    if (_asker.stage == AskStage.thinking) return 'Thinking about your question';
+    if (_asker.stage == AskStage.thinking) return 'Thinking';
     if (_read.current == Spoken.feedback) return 'Reading your feedback';
-    if (_read.current == Spoken.reply) return 'Answering your question';
+    if (_read.current == Spoken.reply) return 'Answering';
     return switch (_phase) {
-      _Phase.speaking => 'Asking the question',
+      _Phase.speaking => 'Asking',
       _Phase.ready || _Phase.typing => 'Your turn',
-      _Phase.preparing => 'Getting ready to listen',
+      _Phase.preparing => 'Getting ready',
       _Phase.recording => 'Listening',
-      _Phase.transcribing => 'Writing down what you said',
-      _Phase.review => 'Check what I heard',
+      _Phase.transcribing => 'Writing it down',
+      _Phase.review => 'Check your words',
       _Phase.unheard => "Didn't catch that",
-      _Phase.micOff => 'Waiting for the microphone',
+      _Phase.micOff => 'Microphone off',
       _Phase.checking => 'Reading your answer',
       _Phase.error => "Couldn't check that",
-      _Phase.feedback => 'Feedback on your answer',
+      _Phase.feedback => 'Feedback ready',
     };
   }
 
@@ -480,7 +480,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         onClose: _close,
         progress: done / total,
         progressLabel: 'Question ${_index + 1} of $total',
-        caption: 'Question ${_index + 1} of $total · ${_session.jobTitle}',
+        caption: '${_index + 1} of $total',
         actions: feedback ? _feedbackActions() : _answerActions(),
         children: feedback ? _feedbackContent() : _answerContent(),
       ),
@@ -494,12 +494,13 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       CoachLine(mood: _mood, status: _status, level: _level, size: 64),
       const SizedBox(height: Space.xl),
       FeedbackView(
-        question: _current.text,
         feedback: feedback,
         typed: _wasTyped,
         metrics: _wasTyped ? null : _metrics,
         listen: canHear
             ? ReadAloudButton(
+                key: const ValueKey('hear-feedback'),
+                iconOnly: true,
                 label: 'Hear feedback',
                 stopLabel: 'Stop reading the feedback',
                 speaking: _read.current == Spoken.feedback,
@@ -531,16 +532,11 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       _Phase.typing || _Phase.review || _Phase.checking || _Phase.error => true,
       _ => false,
     };
-    final focus = _current.focus.trim();
     final phase = _phaseContent();
     return [
       CoachLine(mood: _mood, status: _status, level: _level),
       const SizedBox(height: Space.xl),
       RevealText(controller: _question, style: compact ? PrepType.questionM : PrepType.question),
-      if (focus.isNotEmpty && !compact && _phase != _Phase.speaking) ...[
-        const SizedBox(height: Space.m),
-        _FocusLine(focus),
-      ],
       if (_session.set.mock) ...[
         const SizedBox(height: Space.s),
         Text('Sample questions', style: PrepType.caption),
@@ -558,29 +554,19 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       case _Phase.preparing:
       case _Phase.recording:
       case _Phase.transcribing:
+        // Nothing until the first words arrive; the dock under the page says what is happening.
         final live = _phase == _Phase.recording || _phase == _Phase.transcribing;
-        return [
-          TranscriptCard(
-            text: live && _partial.isNotEmpty ? _tail(_partial) : '',
-            placeholder: live ? 'Listening' : 'Your words will show up here as you talk.',
-          ),
-        ];
+        return [if (live && _partial.trim().isNotEmpty) TranscriptCard(text: _tail(_partial))];
       case _Phase.review:
-        final edited = _typed.text.trim() != _transcript;
         return [
           PrepTextField(
             fieldKey: const ValueKey('answer-review-field'),
             controller: _typed,
-            label: 'What I heard',
-            hint: 'Your recorded answer',
+            label: 'Check your words',
+            hint: '',
             minLines: 4,
             maxLines: 10,
             onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: Space.s),
-          Text(
-            edited ? 'Edited text gets no voice feedback.' : 'Fix any words I got wrong, then get feedback.',
-            style: PrepType.meta,
           ),
         ];
       case _Phase.unheard:
@@ -591,7 +577,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
             fieldKey: const ValueKey('answer-field'),
             controller: _typed,
             label: 'Your answer',
-            hint: 'Type your answer the way you would say it.',
+            hint: '',
             minLines: 5,
             maxLines: 12,
             autofocus: true,
@@ -664,30 +650,18 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     }
   }
 
-  /// The record button with "Type instead" and "Hear it again" beside it. Ready, recording and
-  /// the short waits around them share this layout, so nothing moves under a finger.
+  /// The record button with "Type" and "Repeat" beside it, and one line under it. Ready, recording
+  /// and the short waits around them share this layout, so nothing moves under a finger.
   Widget _dock() {
     final recording = _phase == _Phase.recording;
     final busy = _phase == _Phase.preparing || _phase == _Phase.transcribing;
-    final Widget status;
-    Widget? detail;
-    if (recording) {
-      status = ValueListenableBuilder<int>(
-        valueListenable: _elapsed,
-        builder: (context, ms, _) => Text(
-          'Recording ${clock(ms)} of ${clock(_maxAnswer.inMilliseconds)}',
-          style: PrepType.titleM.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
-        ),
-      );
-      detail = const Text('Tap to stop');
-    } else if (_phase == _Phase.preparing) {
-      status = const Text('Getting the microphone ready');
-    } else if (_phase == _Phase.transcribing) {
-      status = const Text('Turning your answer into text');
-    } else {
-      status = Text(_phase == _Phase.unheard ? 'Tap to try again' : 'Tap to answer');
-      detail = const Text('Up to 2 minutes');
-    }
+    final Widget status = switch (_phase) {
+      _Phase.recording => RecordClock(progress: _progress, limit: _maxAnswer),
+      _Phase.preparing => const Text('Getting ready'),
+      _Phase.transcribing => const Text('Writing it down'),
+      _Phase.unheard => const Text('Tap to try again'),
+      _ => const Text('Tap to answer'),
+    };
     return RecordDock(
       button: RecordButton(
         recording: recording,
@@ -696,12 +670,16 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         semanticLabel: recording ? 'Stop recording' : 'Start recording your answer',
       ),
       status: Semantics(liveRegion: !recording, child: status),
-      detail: detail,
       sidesVisible: !recording && !busy,
-      leading: DockAction(icon: PrepIcons.keyboard, label: 'Type instead', onPressed: _typeInstead),
+      leading: DockAction(
+        icon: PrepIcons.keyboard,
+        label: 'Type',
+        semanticLabel: 'Type your answer instead',
+        onPressed: _typeInstead,
+      ),
       trailing: DockAction(
         icon: PrepIcons.speaker,
-        label: 'Hear it again',
+        label: 'Repeat',
         semanticLabel: 'Hear the question again',
         onPressed: _phase == _Phase.ready || _phase == _Phase.unheard ? _ask : null,
       ),
@@ -713,37 +691,5 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     final cut = text.substring(text.length - max);
     final space = cut.indexOf(' ');
     return '…${space > 0 ? cut.substring(space + 1) : cut}';
-  }
-}
-
-/// What the question tests, said once under it.
-class _FocusLine extends StatelessWidget {
-  const _FocusLine(this.focus);
-
-  final String focus;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(top: 2),
-          child: PrepIcon(PrepIcons.target, color: PrepColors.text3, size: 18),
-        ),
-        const SizedBox(width: Space.s),
-        Expanded(
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: 'Focus  ', style: PrepType.label.copyWith(color: PrepColors.text2)),
-                TextSpan(text: focus),
-              ],
-            ),
-            style: PrepType.body,
-          ),
-        ),
-      ],
-    );
   }
 }

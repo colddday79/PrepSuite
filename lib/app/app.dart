@@ -40,7 +40,7 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
   void _applyAccent() {
     final look = widget.services.assistant.value;
     _kind = look.kind;
-    PrepColors.useAccent(look.tone);
+    PrepColors.useAccent(look.tone, look.soft);
   }
 
   /// A new assistant means a new accent everywhere: rebuild the whole tree once.
@@ -79,16 +79,16 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
           statusBarColor: Color(0x00000000),
-          statusBarIconBrightness: Brightness.light,
-          statusBarBrightness: Brightness.dark,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
           systemNavigationBarColor: Color(0x00000000),
-          systemNavigationBarIconBrightness: Brightness.light,
+          systemNavigationBarIconBrightness: Brightness.dark,
           systemNavigationBarContrastEnforced: false,
         ),
         child: MaterialApp(
           title: 'PrepSuite',
           debugShowCheckedModeBanner: false,
-          themeMode: ThemeMode.dark,
+          themeMode: ThemeMode.light,
           darkTheme: prepTheme(),
           theme: prepTheme(),
           home: const RootGate(),
@@ -98,7 +98,7 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
   }
 }
 
-/// Dark only. Mona Sans everywhere (every Material text role maps to a [PrepType] style, so no
+/// Light only. Mona Sans everywhere (every Material text role maps to a [PrepType] style, so no
 /// default leaks through at the variable font's thin default weight), gold as the one accent, a
 /// quiet press tint instead of ripples, and no hover effects. Dialogs, the date picker, sheets,
 /// snack bars and selection controls are drawn from the same palette as the custom components.
@@ -168,12 +168,12 @@ ThemeData prepTheme() {
 
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
+    brightness: Brightness.light,
     fontFamily: 'MonaSans',
     scaffoldBackgroundColor: PrepColors.bg,
     canvasColor: PrepColors.bg,
     colorScheme: ColorScheme(
-      brightness: Brightness.dark,
+      brightness: Brightness.light,
       primary: PrepColors.accent,
       onPrimary: PrepColors.bg,
       primaryContainer: PrepColors.accentTint,

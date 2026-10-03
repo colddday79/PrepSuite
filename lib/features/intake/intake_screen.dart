@@ -308,44 +308,34 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
         _ => AssistantMood.idle,
       };
 
-  /// What the coach is doing, in words beside it.
+  /// What the coach is doing, for screen readers (the robot's face shows it on screen).
   String get _status => switch (_phase) {
-        _Phase.settingUp => 'Getting my voice ready',
+        _Phase.settingUp => 'Getting ready',
         _Phase.asking => 'Asking',
         _Phase.ready => 'Your turn',
-        _Phase.preparing => 'Getting ready to listen',
+        _Phase.preparing => 'Getting ready',
         _Phase.recording => 'Listening',
-        _Phase.transcribing => 'Writing down what you said',
-        _Phase.review => _typing ? 'Your turn' : 'Check what I heard',
+        _Phase.transcribing => 'Writing it down',
+        _Phase.review => _typing ? 'Your turn' : 'Check your words',
         _Phase.unheard => "Didn't catch that",
-        _Phase.micOff => 'Waiting for the microphone',
+        _Phase.micOff => 'Microphone off',
         _Phase.loading => 'Writing your questions',
         _Phase.error => "Couldn't get your questions",
       };
 
-  String get _caption {
-    final count = widget.questionCount;
-    return count == 1 ? 'New practice · 1 question' : 'New practice · $count questions';
-  }
-
   @override
   Widget build(BuildContext context) {
     final phase = _phaseContent();
+    final count = widget.questionCount;
     return CoachScaffold(
       onClose: () => Navigator.of(context).maybePop(),
       progress: 0,
-      progressLabel: 'Setting up your practice',
-      caption: _caption,
+      progressLabel: 'New practice, $count ${count == 1 ? 'question' : 'questions'}',
       actions: _actions(),
       children: [
         CoachLine(mood: _mood, status: _status, level: _level),
         const SizedBox(height: Space.xl),
         RevealText(controller: _question, style: PrepType.question),
-        const SizedBox(height: Space.s),
-        Text(
-          '${_typing ? 'Type' : 'Say'} the role and where it is. You can add one thing the job asks for.',
-          style: PrepType.body,
-        ),
         if (phase.isNotEmpty) ...[const SizedBox(height: Space.xxl), ...phase],
       ],
     );
@@ -358,13 +348,9 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
       case _Phase.preparing:
       case _Phase.recording:
       case _Phase.transcribing:
+        // Nothing until the first words arrive; the dock under the page says what is happening.
         final live = _phase == _Phase.recording || _phase == _Phase.transcribing;
-        return [
-          TranscriptCard(
-            text: live ? _partial : '',
-            placeholder: live ? 'Listening' : 'Your words will show up here as you talk.',
-          ),
-        ];
+        return [if (live && _partial.trim().isNotEmpty) TranscriptCard(text: _partial)];
       case _Phase.settingUp:
         return [_SetupProgress(setup: _services.speechSetup.state.value)];
       case _Phase.review:
@@ -383,16 +369,12 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
           PrepTextField(
             fieldKey: const ValueKey('job-field'),
             controller: _job,
-            label: _typing ? 'The job' : 'What I heard',
-            hint: 'Junior data analyst at a hospital',
+            label: _typing ? 'Job' : 'Check your words',
+            hint: _typing ? 'Barista, City Cafe' : '',
             minLines: 2,
             autofocus: _typing && _job.text.isEmpty,
             onChanged: (_) => setState(() {}),
           ),
-          if (!_typing) ...[
-            const SizedBox(height: Space.s),
-            Text('Fix any words I got wrong.', style: PrepType.meta),
-          ],
         ];
       case _Phase.unheard:
         return const [ProblemNote(title: "We couldn't hear that.", body: 'Speak up, or type it.')];
@@ -411,7 +393,7 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
         return [
           AnswerQuote(_job.text.trim(), semanticPrefix: 'Your job'),
           const SizedBox(height: Space.xxl),
-          const LoadingLine('Writing questions for this role'),
+          const LoadingLine('Writing your questions'),
         ];
       case _Phase.error:
         return [
@@ -466,32 +448,17 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
     }
   }
 
-  /// The record button with "Type instead" and "Hear it again" beside it.
+  /// The record button with "Type" and "Repeat" beside it, and one line under it.
   Widget _dock() {
     final recording = _phase == _Phase.recording;
     final busy = _phase == _Phase.preparing || _phase == _Phase.transcribing;
-    final Widget status;
-    Widget? detail;
-    if (recording) {
-      status = ValueListenableBuilder<double>(
-        valueListenable: _progress,
-        builder: (context, p, _) {
-          final left = ((1 - p.clamp(0.0, 1.0)) * _maxJobRecording.inSeconds).ceil();
-          return Text(
-            'Recording, ${left}s left',
-            style: PrepType.titleM.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
-          );
-        },
-      );
-      detail = const Text('Tap to stop');
-    } else if (_phase == _Phase.preparing) {
-      status = const Text('Getting the microphone ready');
-    } else if (_phase == _Phase.transcribing) {
-      status = const Text('Turning your voice into text');
-    } else {
-      status = Text(_phase == _Phase.unheard ? 'Tap to try again' : 'Tap to answer');
-      detail = const Text('Up to 10 seconds');
-    }
+    final Widget status = switch (_phase) {
+      _Phase.recording => RecordClock(progress: _progress, limit: _maxJobRecording),
+      _Phase.preparing => const Text('Getting ready'),
+      _Phase.transcribing => const Text('Writing it down'),
+      _Phase.unheard => const Text('Tap to try again'),
+      _ => const Text('Tap to answer'),
+    };
     return RecordDock(
       button: RecordButton(
         recording: recording,
@@ -501,12 +468,16 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
         semanticLabel: recording ? 'Stop recording' : 'Start recording the job',
       ),
       status: Semantics(liveRegion: !recording, child: status),
-      detail: detail,
       sidesVisible: !recording && !busy,
-      leading: DockAction(icon: PrepIcons.keyboard, label: 'Type instead', onPressed: _typeInstead),
+      leading: DockAction(
+        icon: PrepIcons.keyboard,
+        label: 'Type',
+        semanticLabel: 'Type the job instead',
+        onPressed: _typeInstead,
+      ),
       trailing: DockAction(
         icon: PrepIcons.speaker,
-        label: 'Hear it again',
+        label: 'Repeat',
         semanticLabel: 'Hear the question again',
         onPressed: _phase == _Phase.ready || _phase == _Phase.unheard ? _ask : null,
       ),
@@ -529,13 +500,10 @@ class _SetupProgress extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(setup.copying ? 'Setting up the voice on this phone' : 'Getting the voice ready', style: PrepType.bodyLMedium),
-          const SizedBox(height: Space.xs),
-          Text(
-            setup.copying
-                ? 'First launch only: copying the offline speech files. $percent%'
-                : 'Loading offline speech. This takes a moment.',
-            style: PrepType.meta,
-          ),
+          if (setup.copying) ...[
+            const SizedBox(height: Space.xs),
+            Text('First launch only. $percent%', style: PrepType.meta),
+          ],
           const SizedBox(height: Space.m),
           ClipRRect(
             borderRadius: const BorderRadius.all(Radius.circular(2)),

@@ -4,7 +4,16 @@
 import { assert, assertEquals, assertMatch, assertStringIncludes } from "jsr:@std/assert@1";
 import Anthropic from "npm:@anthropic-ai/sdk@0.128.0";
 import { type ClaudeClient, type CoachProvider, createHandler, type RouteSpec, verifiedQuote } from "./index.ts";
-import { ASK_SCHEMA, FEEDBACK_SCHEMA, MODEL, QUESTIONS_SCHEMA, WRAPUP_SCHEMA } from "./prompts.ts";
+import {
+  ASK_SCHEMA,
+  ASK_SYSTEM,
+  FEEDBACK_SCHEMA,
+  FEEDBACK_SYSTEM,
+  MODEL,
+  QUESTIONS_SCHEMA,
+  WRAPUP_SCHEMA,
+  WRAPUP_SYSTEM,
+} from "./prompts.ts";
 import { deliverySummary } from "./delivery.ts";
 
 type Params = Anthropic.MessageCreateParamsNonStreaming;
@@ -749,4 +758,21 @@ Deno.test("verifiedQuote ignores case and punctuation but rejects invented text"
   );
   assertEquals(verifiedQuote("I asked what he wanted", t), "");
   assertEquals(verifiedQuote("ask", t), "", "whole words only");
+});
+
+Deno.test("prompts ask for few words: the app shows them on a phone between answers", () => {
+  const fb = FEEDBACK_SCHEMA.properties;
+  assertStringIncludes(fb.headline.description, "at most 8 words");
+  assertStringIncludes(fb.strength.description, "at most 14 words");
+  assertStringIncludes(fb.fix.description, "at most 16 words");
+  assertStringIncludes(fb.problem.description, "at most 16 words");
+  assertStringIncludes(FEEDBACK_SYSTEM, "headline: the blunt verdict in at most 8 words");
+  assertStringIncludes(WRAPUP_SCHEMA.properties.last_minute_notes.description, "at most 12 words each");
+  assertStringIncludes(WRAPUP_SYSTEM, "exactly 3 terse reminders for walking in, at most 12 words each");
+  assertStringIncludes(ASK_SCHEMA.properties.answer.description, "1 or 2 short plain sentences");
+  assertStringIncludes(ASK_SYSTEM, "1 or 2 short sentences, at most 40 words");
+  // The honesty rules stay.
+  assertStringIncludes(FEEDBACK_SYSTEM, "Never invent a flaw to fill the fields.");
+  assertStringIncludes(FEEDBACK_SYSTEM, "never from <candidate>");
+  assertStringIncludes(ASK_SYSTEM, "Never invent facts about the employer");
 });

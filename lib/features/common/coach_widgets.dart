@@ -147,8 +147,9 @@ double coachSize(BuildContext context) {
   return 56;
 }
 
-/// The coach and what it is doing: a small robot whose face follows [mood], its name, and the
-/// state in words ([status]), so the robot never has to carry the meaning alone.
+/// The coach: a small robot whose face follows [mood], and its name. What it is doing ([status])
+/// is not printed (the controls under the page already say it); screen readers hear it as a live
+/// region, so the robot never carries the meaning alone.
 class CoachLine extends StatelessWidget {
   const CoachLine({super.key, required this.mood, required this.status, this.level, this.size});
 
@@ -166,6 +167,7 @@ class CoachLine extends StatelessWidget {
       valueListenable: AppScope.of(context).assistant,
       builder: (context, look, _) => Row(
         children: [
+          // The avatar stands the white robot on its own pale disc in the coach's colour.
           SizedBox.square(
             dimension: side,
             child: AssistantAvatar(
@@ -179,14 +181,13 @@ class CoachLine extends StatelessWidget {
           ),
           const SizedBox(width: Space.m),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(look.name, style: PrepType.titleM),
-                const SizedBox(height: Space.xxs),
-                Semantics(liveRegion: true, child: Text(status, style: PrepType.meta)),
-              ],
+            // The avatar already says the name, so this node carries only the state.
+            child: Semantics(
+              container: true,
+              liveRegion: true,
+              label: status,
+              excludeSemantics: true,
+              child: Text(look.name, style: PrepType.titleM),
             ),
           ),
         ],
@@ -238,18 +239,16 @@ class CoachCard extends StatelessWidget {
   }
 }
 
-/// Where a spoken answer appears: a quiet placeholder before recording, the words as they are
-/// recognized while recording, and the last of them while they are turned into text. It keeps one
-/// place on the page through all three, so nothing jumps when recording starts.
+/// Where a spoken answer appears: the words as they are recognized while recording, and the last
+/// of them while they are turned into text. It sits at the end of the page and only appears once
+/// there are words, so nothing above it moves.
 class TranscriptCard extends StatelessWidget {
-  const TranscriptCard({super.key, required this.text, required this.placeholder});
+  const TranscriptCard({super.key, required this.text});
 
   final String text;
-  final String placeholder;
 
   @override
   Widget build(BuildContext context) {
-    final empty = text.trim().isEmpty;
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 112),
       child: DecoratedBox(
@@ -260,12 +259,35 @@ class TranscriptCard extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.all(Space.xl),
-          child: Text(
-            empty ? placeholder : text,
-            style: PrepType.bodyL.copyWith(color: empty ? PrepColors.text3 : PrepColors.text2),
-          ),
+          child: Text(text, style: PrepType.bodyL.copyWith(color: PrepColors.text2)),
         ),
       ),
+    );
+  }
+}
+
+/// Time recorded against the limit ("0:12 / 2:00"), from the record button's [progress] (0..1 of
+/// [limit]). Screen readers hear "Recording, 0:12 of 2:00".
+class RecordClock extends StatelessWidget {
+  const RecordClock({super.key, required this.progress, required this.limit, this.style});
+
+  final ValueListenable<double> progress;
+  final Duration limit;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final max = clock(limit.inMilliseconds);
+    return ValueListenableBuilder<double>(
+      valueListenable: progress,
+      builder: (context, p, _) {
+        final now = clock((p.clamp(0.0, 1.0) * limit.inMilliseconds).round());
+        return Text(
+          '$now / $max',
+          semanticsLabel: 'Recording, $now of $max',
+          style: (style ?? const TextStyle()).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+        );
+      },
     );
   }
 }
@@ -371,8 +393,8 @@ class RevealText extends StatelessWidget {
   }
 }
 
-/// The record control: a solid disc in the coach's color with a microphone, which turns the
-/// recording color with a stop square while it records. A thin ring around it shows time: it
+/// The record control: a solid ink disc with a microphone, which turns the recording color with a
+/// stop square while it records. A thin ring around it shows time: it
 /// fills during an answer, or empties during a short countdown recording.
 class RecordButton extends StatelessWidget {
   const RecordButton({
@@ -401,7 +423,7 @@ class RecordButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
-    final fill = !enabled ? PrepColors.surface2 : (recording ? PrepColors.recording : PrepColors.accent);
+    final fill = !enabled ? PrepColors.surface2 : (recording ? PrepColors.recording : PrepColors.ink);
     final ink = enabled ? PrepColors.bg : PrepColors.text3;
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     return Semantics(
@@ -441,7 +463,7 @@ class RecordButton extends StatelessWidget {
                   onTap: onPressed,
                   customBorder: const CircleBorder(),
                   splashFactory: NoSplash.splashFactory,
-                  highlightColor: PrepColors.bg.withValues(alpha: 0.16),
+                  highlightColor: PrepColors.bg.withValues(alpha: 0.18),
                   focusColor: Colors.transparent,
                   hoverColor: Colors.transparent,
                   child: SizedBox.square(
@@ -511,16 +533,15 @@ class _TimeRing extends CustomPainter {
 }
 
 /// The answer controls in the bottom bar: the record button in the middle with one secondary
-/// action on each side (like a camera), and what is happening in words underneath. The sides fade
-/// while recording but keep their space, so the record button never moves under a finger. When a
-/// side label would not fit in two lines beside the button (very large text, a narrow phone), the
-/// sides move under the words as full-width buttons.
+/// action on each side (like a camera), and one line underneath. The sides fade while recording
+/// but keep their space, so the record button never moves under a finger. When a side label would
+/// not fit in two lines beside the button (very large text, a narrow phone), the sides move under
+/// the line as full-width buttons.
 class RecordDock extends StatelessWidget {
   const RecordDock({
     super.key,
     required this.button,
     required this.status,
-    this.detail,
     this.leading,
     this.trailing,
     this.sidesVisible = true,
@@ -531,11 +552,8 @@ class RecordDock extends StatelessWidget {
   final Widget button;
   final double buttonExtent;
 
-  /// What is happening ("Tap to answer", "Recording 0:12 of 2:00").
+  /// One line: "Tap to answer", or the [RecordClock] while recording.
   final Widget status;
-
-  /// A quieter second line ("Up to 2 minutes", "Tap to stop").
-  final Widget? detail;
   final DockAction? leading;
   final DockAction? trailing;
   final bool sidesVisible;
@@ -561,16 +579,7 @@ class RecordDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final words = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        DefaultTextStyle.merge(textAlign: TextAlign.center, style: PrepType.titleM, child: status),
-        if (detail != null) ...[
-          const SizedBox(height: Space.xxs),
-          DefaultTextStyle.merge(textAlign: TextAlign.center, style: PrepType.meta, child: detail!),
-        ],
-      ],
-    );
+    final words = DefaultTextStyle.merge(textAlign: TextAlign.center, style: PrepType.titleM, child: status);
     final sides = [leading, trailing].nonNulls.toList();
     Widget side(Widget? child) => Visibility(
           visible: sidesVisible && child != null,
@@ -654,7 +663,7 @@ class DockAction extends StatelessWidget {
       body = DecoratedBox(
         decoration: BoxDecoration(
           color: PrepColors.surface1,
-          border: Border.all(color: enabled ? PrepColors.lineStrong : PrepColors.line),
+          border: Border.all(color: enabled ? PrepColors.text3 : PrepColors.line),
           borderRadius: BorderRadius.circular(Radii.control),
         ),
         child: ConstrainedBox(
@@ -683,7 +692,8 @@ class DockAction extends StatelessWidget {
               DecoratedBox(
                 decoration: ShapeDecoration(
                   color: PrepColors.surface1,
-                  shape: CircleBorder(side: BorderSide(color: enabled ? PrepColors.lineStrong : PrepColors.line)),
+                  // The outline is the only edge on the page, so it uses text3 (3:1 or better).
+                  shape: CircleBorder(side: BorderSide(color: enabled ? PrepColors.text3 : PrepColors.line)),
                 ),
                 child: SizedBox.square(dimension: 48, child: Center(child: PrepIcon(icon, color: tint, size: 22))),
               ),

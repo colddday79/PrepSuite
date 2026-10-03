@@ -184,7 +184,7 @@ Future<void> _openIntake(WidgetTester tester, _Rig rig) async {
 
 Future<void> _openInterview(WidgetTester tester, _Rig rig) async {
   await _openIntake(tester, rig);
-  await _tap(tester, find.text('Type instead'));
+  await _tap(tester, find.text('Type'));
   await _settle(tester, 300);
   await tester.enterText(find.byKey(const ValueKey('job-field')), 'Barista at a busy cafe');
   await tester.pump();
@@ -235,7 +235,9 @@ void main() {
     await _tap(tester, _record());
     expect(rig.micPermission.requests, 1);
     await _settle(tester, 2000);
-    expect(find.textContaining('s left'), findsOneWidget);
+    // One line under the button while recording: the time against the 10 second limit.
+    expect(find.textContaining(RegExp(r'^0:0[12] / 0:10$')), findsOneWidget);
+    expect(find.text('Tap to answer'), findsNothing);
     await _tap(tester, _record());
     await _settle(tester, 300);
     expect(find.byKey(const ValueKey('job-field')), findsOneWidget);
@@ -243,34 +245,38 @@ void main() {
     expect(field.controller!.text, contains('barista'));
 
     await _tap(tester, find.text('Use this'));
-    expect(find.text('Writing questions for this role'), findsOneWidget);
+    expect(find.text('Writing your questions'), findsOneWidget);
     await _settle(tester, 1000);
     expect(rig.coach.counts, [_sessionLength]);
 
-    // Interview: three questions, with feedback in order: what worked, what to improve, how it sounded.
+    // Interview: three questions, with feedback in order: good, try, voice.
     for (var i = 1; i <= _sessionLength; i++) {
-      expect(find.textContaining('Question $i of $_sessionLength'), findsOneWidget);
+      expect(find.text('$i of $_sessionLength'), findsOneWidget);
       expect(find.textContaining('Sample questions'), findsOneWidget);
       await _answerOutLoud(tester);
-      expect(find.text('What worked'), findsOneWidget);
-      expect(find.text('Improve this'), findsOneWidget);
-      expect(find.text('How it sounded'), findsOneWidget);
-      expect(tester.getTopLeft(find.text('What worked')).dy, lessThan(tester.getTopLeft(find.text('Improve this')).dy));
-      expect(tester.getTopLeft(find.text('Improve this')).dy, lessThan(tester.getTopLeft(find.text('How it sounded')).dy));
+      expect(find.text('Good'), findsOneWidget);
+      expect(find.text('Try'), findsOneWidget);
+      expect(find.text('Voice'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('Good')).dy, lessThan(tester.getTopLeft(find.text('Try')).dy));
+      expect(tester.getTopLeft(find.text('Try')).dy, lessThan(tester.getTopLeft(find.text('Voice')).dy));
       if (i == 1) {
         // Practice it once more: the question comes back ready to record.
         await _tap(tester, find.text('Practice this'));
         await _settle(tester, 300);
-        expect(find.text('Up to 2 minutes'), findsOneWidget);
+        expect(find.text('Tap to answer'), findsOneWidget);
+        expect(_record(), findsOneWidget);
         await _answerOutLoud(tester);
       }
       await _tap(tester, find.text(i == _sessionLength ? 'See your notes' : 'Next question'));
       await _settle(tester, 800);
     }
 
-    // Wrap-up.
+    // Wrap-up: the notes, with tips and stories folded under More.
     expect(find.text('Before your interview'), findsOneWidget);
     await _settle(tester, 600);
+    expect(find.textContaining('Have one sentence ready'), findsOneWidget);
+    expect(find.text('Tips'), findsNothing);
+    await _tap(tester, find.text('More'));
     expect(find.text('Tips'), findsOneWidget);
     expect(find.textContaining('Start every answer with the point'), findsOneWidget);
     expect(find.text('Stories to use'), findsOneWidget);
@@ -302,14 +308,16 @@ void main() {
     await _settle(tester, 300);
     expect(find.text("We couldn't hear your answer."), findsOneWidget);
 
-    await _tap(tester, find.text('Type instead'));
+    await _tap(tester, find.text('Type'));
     await _settle(tester, 300);
     await tester.enterText(find.byKey(const ValueKey('answer-field')), 'I kept the queue moving by taking orders while my coworker made drinks.');
     await tester.pump();
     await _tap(tester, find.text('Send answer'));
     await _settle(tester, 600);
     expect(find.text('Next question'), findsOneWidget);
-    expect(find.textContaining('Typed'), findsWidgets);
+    // A typed answer has no voice to judge, so there is no voice block (and no sentence saying so).
+    expect(find.text('Voice'), findsNothing);
+    expect(find.textContaining('no voice'), findsNothing);
   });
 
   testWidgets('coach unreachable: honest error, then retry works', (tester) async {
@@ -317,7 +325,7 @@ void main() {
     await _boot(tester, rig);
     await _tap(tester, find.text('Start practice'));
     await _settle(tester, 1400);
-    await _tap(tester, find.text('Type instead'));
+    await _tap(tester, find.text('Type'));
     await _settle(tester, 300);
     await tester.enterText(find.byKey(const ValueKey('job-field')), 'Junior web developer');
     await tester.pump();
@@ -328,7 +336,7 @@ void main() {
 
     await _tap(tester, find.text('Try again'));
     await _settle(tester, 1200);
-    expect(find.textContaining('Question 1 of $_sessionLength'), findsOneWidget);
+    expect(find.text('1 of $_sessionLength'), findsOneWidget);
   });
 
   testWidgets('Not now keeps you on Home; microphone off offers typing', (tester) async {
@@ -370,7 +378,7 @@ void main() {
     await _tap(tester, find.text('Use this'));
     await _settle(tester, 1000);
     expect(rig.coach.jobs, ['Graduate civil engineer designing bridges']);
-    expect(find.textContaining('Question 1 of $_sessionLength'), findsOneWidget);
+    expect(find.text('1 of $_sessionLength'), findsOneWidget);
   });
 
   testWidgets('silent job is not sent to the coach and can be re-recorded', (tester) async {
@@ -403,7 +411,7 @@ void main() {
     await _settle(tester, 600);
     expect(rig.coach.feedbackCalls.single.transcript, reviewed);
     expect(rig.coach.feedbackCalls.single.delivery, isNotNull);
-    expect(find.text('How it sounded'), findsOneWidget);
+    expect(find.text('Voice'), findsOneWidget);
   });
 
   testWidgets('correcting an answer sends the correction without mismatched voice metrics', (tester) async {
@@ -419,7 +427,7 @@ void main() {
 
     expect(rig.coach.feedbackCalls.single.transcript, corrected);
     expect(rig.coach.feedbackCalls.single.delivery, isNull);
-    expect(find.textContaining('Typed'), findsWidgets);
+    expect(find.text('Voice'), findsNothing);
     expect(find.textContaining('words a minute'), findsNothing);
   });
 
@@ -520,6 +528,7 @@ void main() {
     expect(rig.coach.wrapupCalls, hasLength(2));
     expect(rig.coach.wrapupCalls.last.map((a) => a.transcript), originals);
     expect(rig.coach.feedbackCalls, hasLength(_sessionLength));
+    await _tap(tester, find.text('More'));
     expect(find.text('Tips'), findsOneWidget);
     expect(rig.services.sessions.last!.wrapup, isNotNull);
   });

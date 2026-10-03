@@ -680,7 +680,7 @@ export function mockWrapup(input: WrapupInput): WrapupResult {
     stories.push(`Your example from "${q}": "${quote(t, toks, from, 14)}"`);
   }
 
-  return { tips: tips.slice(0, 5), last_minute_notes: notes.slice(0, 6), stories_to_use: stories };
+  return { tips: tips.slice(0, 3), last_minute_notes: notes.slice(0, 3), stories_to_use: stories };
 }
 
 // ---------------------------------------------------------------------------
@@ -692,23 +692,23 @@ const ASK_TOPICS: { test: RegExp; reply: (job: string, onScreen: boolean) => str
   {
     test: /\b(salary|salaries|pay|pays|paid|wage|wages|earn|money)\b/,
     reply: () =>
-      "I do not know what this employer pays, so I will not guess a number. Check the job advert and similar adverts near you. If it is not listed, ask the recruiter before the interview.",
+      "I do not know what this employer pays, so I will not guess a number. Check the job advert, or ask the recruiter before the interview.",
   },
   {
     test: /\b(company|employer|business|culture|values|about them)\b/,
     reply: () =>
-      "I only know what you told me, so I cannot tell you about the employer itself. Read their website and the job advert before you go, and pick one thing you like about them to mention.",
+      "I only know what you told me, so I cannot tell you about the employer. Read their website and the advert, and pick one thing you like to mention.",
   },
   {
     test:
       /\b(no (?:work )?experience|never (?:worked|had a job)|(?:don'?t|do not) have (?:any |an? )?(?:experience|example|job)|haven'?t (?:worked|had a job)|first job)\b/,
     reply: () =>
-      "That is fine. Use an example from school, a hobby, volunteering or helping someone at home. Say what happened, what you did yourself, and how it ended.",
+      "That is fine: use an example from school, a hobby, volunteering or helping at home. Say what happened, what you did yourself, and how it ended.",
   },
   {
     test: /\b(how long|long|length|short|minutes?|seconds?)\b/,
     reply: (_job, onScreen) =>
-      `Aim for about 45 to 90 seconds ${onScreen ? "for this one" : "per answer"}. Make one point, back it with one real example, and finish with how it ended. Then stop.`,
+      `Aim for about 45 to 90 seconds ${onScreen ? "for this one" : "per answer"}. Make one point, give one real example, and finish with how it ended.`,
   },
   {
     test: /\b(looking for|look for|want to hear|want from|why (?:do|would) they ask|point of|testing)\b/,
@@ -720,7 +720,7 @@ const ASK_TOPICS: { test: RegExp; reply: (job: string, onScreen: boolean) => str
   {
     test: /\b(nervous|nerves|anxious|scared|panic|blank|freeze)\b/,
     reply: () =>
-      "If your mind goes blank, it is fine to pause and say you need a second to think. Take a breath, go back to the question, and start with the part you are sure of.",
+      "If your mind goes blank, it is fine to pause and say you need a second. Breathe, then start with the part you are sure of.",
   },
 ];
 
@@ -733,6 +733,6 @@ export function mockAsk(input: AskInput): AskResult {
   const note = role.note ? ` ${role.note}` : "";
   return {
     answer:
-      `For ${job}, keep each answer to one clear point and one real example. Say what happened, what you did yourself, and how it ended.${note}`,
+      `For ${job}, give one clear point and one real example: what happened, what you did, and how it ended.${note}`,
   };
 }

@@ -89,7 +89,7 @@ void main() {
 
     test('button labels, selection and focus', () {
       expect(contrast(PrepColors.bg, PrepColors.text), greaterThanOrEqualTo(4.5)); // primary label
-      expect(contrast(PrepColors.bg, const Color(0xFFDED8D0)), greaterThanOrEqualTo(4.5)); // pressed
+      expect(contrast(PrepColors.bg, Color.lerp(PrepColors.ink, PrepColors.bg, 0.18)!), greaterThanOrEqualTo(4.5)); // pressed
       expect(contrast(PrepColors.text3, PrepColors.surface2), greaterThanOrEqualTo(4.5)); // disabled
       expect(contrast(PrepColors.bg, PrepColors.accent), greaterThanOrEqualTo(4.5)); // selected day
       // Non-text: focus ring and the outline of unselected controls need 3:1.
@@ -106,15 +106,15 @@ void main() {
   });
 
   group('PrimaryButton', () {
-    testWidgets('enabled: solid accent fill, dark label, 56 dp', (tester) async {
+    testWidgets('enabled: solid ink fill, light label, 56 dp', (tester) async {
       await _pump(tester, PrimaryButton('Start practice', onPressed: () {}));
-      expect(_fill(tester), PrepColors.accent);
+      expect(_fill(tester), PrepColors.ink);
       expect(_labelColor(tester, 'Start practice'), PrepColors.bg);
       expect(tester.getSize(find.byType(PrimaryButton)).height, greaterThanOrEqualTo(56));
       expect(_scale(tester), 1);
     });
 
-    testWidgets('disabled: dark slab with a readable label, taps do nothing', (tester) async {
+    testWidgets('disabled: quiet slab with a readable label, taps do nothing', (tester) async {
       await _pump(tester, const PrimaryButton('Use this', onPressed: null));
       expect(_fill(tester), PrepColors.surface2);
       expect(_labelColor(tester, 'Use this'), PrepColors.text3);
@@ -124,20 +124,20 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('pressed: darker fill and 0.98 scale, released on lift', (tester) async {
+    testWidgets('pressed: lighter fill and 0.98 scale, released on lift', (tester) async {
       var taps = 0;
       await _pump(tester, PrimaryButton('Next question', onPressed: () => taps++));
       final gesture = await tester.startGesture(tester.getCenter(find.byType(PrimaryButton)));
       await tester.pump();
       await tester.pump(Motion.press);
       expect(_scale(tester), Motion.pressScale);
-      expect(_fill(tester), Color.lerp(PrepColors.accent, PrepColors.bg, 0.14));
+      expect(_fill(tester), Color.lerp(PrepColors.ink, PrepColors.bg, 0.18));
 
       await gesture.up();
       await tester.pump();
       await tester.pump(Motion.fade);
       expect(_scale(tester), 1);
-      expect(_fill(tester), PrepColors.accent);
+      expect(_fill(tester), PrepColors.ink);
       expect(taps, 1);
     });
 

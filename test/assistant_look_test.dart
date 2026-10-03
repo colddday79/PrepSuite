@@ -7,10 +7,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'design_test.dart' show contrast;
 
 void main() {
-  test('every coach colour carries dark button text at 7:1 and reads on the page', () {
+  test('every coach colour reads on the light page, on its own stage and under light text', () {
     for (final look in AssistantLook.all) {
-      expect(contrast(PrepColors.bg, look.tone), greaterThanOrEqualTo(7), reason: look.name);
+      expect(contrast(look.tone, PrepColors.bg), greaterThanOrEqualTo(4.5), reason: look.name);
       expect(contrast(look.tone, PrepColors.surface2), greaterThanOrEqualTo(4.5), reason: look.name);
+      expect(contrast(look.tone, look.soft), greaterThanOrEqualTo(4.5), reason: look.name);
+      expect(contrast(PrepColors.bg, look.tone), greaterThanOrEqualTo(4.5), reason: look.name);
+      expect(contrast(PrepColors.text, look.soft), greaterThanOrEqualTo(7), reason: look.name);
     }
   });
 

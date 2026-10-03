@@ -90,8 +90,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
               padding: const EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, Space.x4),
               children: [
                 Semantics(header: true, child: Text('Practice', style: PrepType.display)),
-                const SizedBox(height: Space.xs),
-                Text('Answer out loud, or sharpen one skill at a time.', style: PrepType.body),
                 const SizedBox(height: Space.xxl),
                 const _SectionTitle('Out loud'),
                 const SizedBox(height: Space.m),
@@ -136,8 +134,6 @@ class _PracticeScreenState extends State<PracticeScreen> {
                 ),
                 const SizedBox(height: Space.x3),
                 const _SectionTitle('Skills'),
-                const SizedBox(height: Space.xs),
-                Text('Short drills: tap the best answer, then check.', style: PrepType.body),
                 const SizedBox(height: Space.m),
                 SkillPath(progress: services.drills, onOpenLesson: _openLesson),
               ],

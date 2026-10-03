@@ -339,14 +339,8 @@ class AskCoachPanel extends StatelessWidget {
           const SizedBox(height: Space.m),
           Center(
             child: recording
-                ? ValueListenableBuilder<double>(
-                    valueListenable: c.progress,
-                    builder: (context, p, _) {
-                      final left = ((1 - p.clamp(0.0, 1.0)) * askMaxRecording.inSeconds).ceil();
-                      return Text('${left}s left', style: PrepType.meta);
-                    },
-                  )
-                : Text('15 seconds', style: PrepType.meta),
+                ? RecordClock(progress: c.progress, limit: askMaxRecording, style: PrepType.meta)
+                : Text('Tap to ask', style: PrepType.meta),
           ),
           const SizedBox(height: Space.s),
           if (recording)
@@ -362,9 +356,9 @@ class AskCoachPanel extends StatelessWidget {
             Center(child: QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: c.typeInstead)),
         ];
       case AskStage.preparing:
-        return const [SizedBox(height: Space.s), LoadingLine('Preparing microphone')];
+        return const [SizedBox(height: Space.s), LoadingLine('Getting ready')];
       case AskStage.transcribing:
-        return const [SizedBox(height: Space.s), LoadingLine('Turning your question into text')];
+        return const [SizedBox(height: Space.s), LoadingLine('Writing it down')];
       case AskStage.unheard:
         return [
           const ProblemNote(
@@ -412,7 +406,7 @@ class AskCoachPanel extends StatelessWidget {
           PrepTextField(
             fieldKey: const ValueKey('ask-field'),
             controller: c.typed,
-            hint: 'For example: how long should this answer be?',
+            hint: 'How long should my answer be?',
             minLines: 2,
             maxLines: 5,
             autofocus: true,
@@ -426,7 +420,7 @@ class AskCoachPanel extends StatelessWidget {
               alignment: WrapAlignment.center,
               children: [
                 QuietButton('Send question', icon: PrepIcons.chat, onPressed: value.text.trim().isEmpty ? null : send),
-                if (c.voiceAvailable) QuietButton('Ask out loud instead', icon: PrepIcons.mic, onPressed: c.record),
+                if (c.voiceAvailable) QuietButton('Ask out loud', icon: PrepIcons.mic, onPressed: c.record),
               ],
             ),
           ),

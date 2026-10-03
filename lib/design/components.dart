@@ -86,7 +86,7 @@ class _RingPainter extends CustomPainter {
   bool shouldRepaint(_RingPainter old) => old.radius != radius || old.gap != gap;
 }
 
-/// The one primary action on a screen: a solid warm light slab with dark text.
+/// The one primary action on a screen: a solid ink slab with light text.
 ///
 /// Pressing darkens the fill and settles it to [Motion.pressScale] within [Motion.press]
 /// (no scale when the system asks for less motion). Disabled keeps a readable label on a dark slab.
@@ -106,11 +106,9 @@ class PrimaryButton extends StatefulWidget {
 }
 
 class _PrimaryButtonState extends State<PrimaryButton> {
-  static const _shape = RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(Radii.control)));
-  static const _disabledShape = RoundedRectangleBorder(
-    borderRadius: BorderRadius.all(Radius.circular(Radii.control)),
-    side: BorderSide(color: PrepColors.lineStrong),
-  );
+  // A full pill: the one rounded-everything shape in the app, so the main action is recognisable.
+  static const _shape = StadiumBorder();
+  static const _disabledShape = StadiumBorder(side: BorderSide(color: PrepColors.lineStrong));
 
   bool _pressed = false;
 
@@ -126,10 +124,10 @@ class _PrimaryButtonState extends State<PrimaryButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    // The assistant's colour, dipped a little toward the page while pressed.
+    // Solid ink, lifted a little toward the page while pressed.
     final fill = !enabled
         ? PrepColors.surface2
-        : (_pressed ? Color.lerp(PrepColors.accent, PrepColors.bg, 0.14)! : PrepColors.accent);
+        : (_pressed ? Color.lerp(PrepColors.ink, PrepColors.bg, 0.18)! : PrepColors.ink);
     final ink = enabled ? PrepColors.bg : PrepColors.text3;
     final duration = _pressed ? Motion.press : Motion.fade;
     return Semantics(

@@ -195,6 +195,8 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 
 Finder _record() => find.byKey(const ValueKey('record-button'));
 
+Finder _hear() => find.byKey(const ValueKey('hear-feedback'));
+
 Future<void> _recordAnswer(WidgetTester tester) async {
   await _settle(tester, 600); // Norman reads the question
   await _tap(tester, _record());
@@ -207,7 +209,7 @@ Future<void> _recordAnswer(WidgetTester tester) async {
 
 Future<void> _typeAnswer(WidgetTester tester) async {
   if (find.byKey(const ValueKey('answer-field')).evaluate().isEmpty) {
-    await _tap(tester, find.text('Type instead'));
+    await _tap(tester, find.text('Type'));
   }
   await tester.enterText(find.byKey(const ValueKey('answer-field')), _typedAnswer);
   await tester.pump();
@@ -259,17 +261,19 @@ void main() {
     await _open(tester, rig);
     await _recordAnswer(tester);
 
-    expect(find.text('Improve this'), findsOneWidget);
+    expect(find.text('Try'), findsOneWidget);
     expect(rig.voice.spoken, ['Tell me about yourself.', _feedbackLine]);
-    expect(find.text('Stop'), findsOneWidget);
+    expect(find.bySemanticsLabel('Stop reading the feedback'), findsOneWidget);
     await _settle(tester, 2000);
     expect(rig.voice.spoken.where((line) => line == _feedbackLine), hasLength(1));
-    expect(find.text('Hear feedback'), findsOneWidget);
+    expect(find.bySemanticsLabel('Hear feedback'), findsOneWidget);
+    // A small speaker icon, not a text button.
+    expect(find.text('Hear feedback'), findsNothing);
 
-    await _tap(tester, find.text('Hear feedback'));
+    await _tap(tester, _hear());
     await _settle(tester, 100);
     expect(rig.voice.spoken.where((line) => line == _feedbackLine), hasLength(2));
-    expect(find.text('Stop'), findsOneWidget);
+    expect(find.bySemanticsLabel('Stop reading the feedback'), findsOneWidget);
   });
 
   testWidgets('a typing session stays quiet until Hear feedback, which Stop cuts off', (tester) async {
@@ -277,18 +281,19 @@ void main() {
     await _open(tester, rig);
     await _typeAnswer(tester);
 
-    expect(find.text('Improve this'), findsOneWidget);
+    expect(find.text('Try'), findsOneWidget);
     await _settle(tester, 2000);
     expect(rig.voice.spoken, isEmpty);
 
-    await _tap(tester, find.text('Hear feedback'));
+    await _tap(tester, _hear());
     await _settle(tester, 100);
     expect(rig.voice.spoken, [_feedbackLine]);
     expect(rig.voice.speaking, isTrue);
+    expect(find.bySemanticsLabel('Stop reading the feedback'), findsOneWidget);
 
-    await _tap(tester, find.text('Stop'));
+    await _tap(tester, _hear());
     expect(rig.voice.speaking, isFalse);
-    expect(find.text('Hear feedback'), findsOneWidget);
+    expect(find.bySemanticsLabel('Hear feedback'), findsOneWidget);
   });
 
   testWidgets('asking by typing sends the context, shows the reply and reads it aloud', (tester) async {
@@ -333,7 +338,7 @@ void main() {
     expect(rig.mic.requests, 1);
     expect(rig.speech.durations.last, const Duration(seconds: 15));
     expect(rig.voice.speaking, isFalse); // recording cut the feedback off
-    expect(find.textContaining('s left'), findsOneWidget);
+    expect(find.textContaining(' / 0:15'), findsOneWidget);
     expect(find.textContaining('How long should'), findsOneWidget);
 
     await _tap(tester, _record()); // stop
@@ -377,7 +382,7 @@ void main() {
 
     await _settle(tester, 800);
     expect(rig.coach.asks, hasLength(1));
-    expect(find.textContaining('Question 2 of 2'), findsOneWidget);
+    expect(find.text('2 of 2'), findsOneWidget);
     expect(rig.voice.spoken.last, 'Why do you want this job?');
     expect(rig.voice.spoken.where((line) => line.startsWith('For this one')), isEmpty);
   });
@@ -399,6 +404,6 @@ void main() {
     expect(rig.speech.cancels, greaterThanOrEqualTo(1));
     expect(rig.coach.asks, isEmpty);
     expect(rig.voice.speaking, isFalse);
-    expect(find.text('15 seconds'), findsOneWidget);
+    expect(find.text('Tap to ask'), findsOneWidget);
   });
 }

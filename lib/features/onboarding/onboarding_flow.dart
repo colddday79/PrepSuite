@@ -562,7 +562,7 @@ class _VoiceBar extends StatelessWidget {
               key: const ValueKey('onboarding-mic'),
               icon: recording ? PrepIcons.stop : PrepIcons.mic,
               label: recording ? 'Stop recording' : 'Answer by voice',
-              fill: recording ? PrepColors.recording : PrepColors.accent,
+              fill: recording ? PrepColors.recording : PrepColors.ink,
               ink: PrepColors.bg,
               size: 76,
               iconSize: 32,

@@ -9,7 +9,7 @@ enum AssistantKind { nova, sol, iris, mint }
 
 @immutable
 class AssistantLook {
-  const AssistantLook._(this.kind, this.name, this.colour, this.glow, this.tone);
+  const AssistantLook._(this.kind, this.name, this.colour, this.glow, this.tone, this.soft);
 
   final AssistantKind kind;
 
@@ -22,10 +22,14 @@ class AssistantLook {
   /// The face and lights colour, matched to the render's emission colour.
   final Color glow;
 
-  /// The coach's own colour for buttons, selection and progress. Each coach has a clearly different
-  /// hue (blue, amber, violet, green, gold), softer than the [glow] so the chrome never looks neon.
-  /// Dark text on it clears 7:1 (asserted in test/design_test.dart).
+  /// The coach's deep colour on the light app: progress, selection, focus and small labels. Each
+  /// coach has a clearly different hue (blue, amber, violet, green). It clears 4.5:1 on the page,
+  /// on surface2 and on [soft] (asserted in test/assistant_look_test.dart).
   final Color tone;
+
+  /// The coach's pale colour: the stage the robot stands on, so the white robot reads on the light
+  /// page and each coach has its own world.
+  final Color soft;
 
   /// Every look is a rendered robot. Kept so the avatar's older hologram path still compiles.
   bool get isRobot => true;
@@ -34,10 +38,10 @@ class AssistantLook {
   String get glassAsset => 'assets/assistant/${kind.name}_glass.webp';
   String get glowAsset => 'assets/assistant/${kind.name}_glow.webp';
 
-  static const nova = AssistantLook._(AssistantKind.nova, 'Tide', 'Blue', Color(0xFF45D0FF), Color(0xFF78A6F0));
-  static const sol = AssistantLook._(AssistantKind.sol, 'Ember', 'Amber', Color(0xFFFFA45E), Color(0xFFF39A5E));
-  static const iris = AssistantLook._(AssistantKind.iris, 'Echo', 'Violet', Color(0xFFC09CFF), Color(0xFFB39DF5));
-  static const mint = AssistantLook._(AssistantKind.mint, 'Sprout', 'Green', Color(0xFF4DF7CF), Color(0xFF63CC98));
+  static const nova = AssistantLook._(AssistantKind.nova, 'Tide', 'Blue', Color(0xFF45D0FF), Color(0xFF2B5BBE), Color(0xFFD8E4FB));
+  static const sol = AssistantLook._(AssistantKind.sol, 'Ember', 'Amber', Color(0xFFFFA45E), Color(0xFFA8480F), Color(0xFFF8DECD));
+  static const iris = AssistantLook._(AssistantKind.iris, 'Echo', 'Violet', Color(0xFFC09CFF), Color(0xFF5F45C4), Color(0xFFE5DDFB));
+  static const mint = AssistantLook._(AssistantKind.mint, 'Sprout', 'Green', Color(0xFF4DF7CF), Color(0xFF17703F), Color(0xFFD4EEDF));
   static const all = [nova, sol, iris, mint];
 
   static AssistantLook of(AssistantKind kind) => all.firstWhere((l) => l.kind == kind);

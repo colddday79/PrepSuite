@@ -11,9 +11,9 @@ import '../../design/tokens.dart';
 import '../common/coach_widgets.dart';
 import '../interview/read_aloud.dart';
 
-/// The end of a practice: what to remember. The last-minute notes come first and largest, then
-/// tips and the stories worth telling, each in its own card, and one obvious way out. [review]
-/// opens notes that were already written (from Home, Practice or History).
+/// The end of a practice: what to remember. A heading and the numbered last-minute notes; tips and
+/// the stories worth telling wait under "More"; one obvious way out. [review] opens notes that were
+/// already written (from Home, Practice or History).
 class WrapupScreen extends StatefulWidget {
   const WrapupScreen({super.key, required this.session, this.review = false});
 
@@ -154,49 +154,49 @@ class _WrapupScreenState extends State<WrapupScreen> with WidgetsBindingObserver
       listenable: Listenable.merge([reader, _services.sessions]),
       builder: (context, _) {
         final wrapup = _wrapup;
-        final answered = widget.session.answers.length;
         final status = _loading
             ? 'Writing your notes'
             : reader.current == Spoken.notes
                 ? 'Reading your notes'
                 : wrapup != null
-                    ? 'Your notes are ready'
+                    ? 'Notes ready'
                     : "Couldn't write your notes";
+        final canHear = wrapup != null && wrapup.lastMinuteNotes.isNotEmpty;
         return CoachScaffold(
           onClose: _done,
           progress: 1,
           progressLabel: 'Practice complete',
-          caption: '${widget.session.jobTitle} · $answered ${answered == 1 ? 'answer' : 'answers'}',
           actions: _actions(wrapup),
           children: [
             CoachLine(mood: _mood, status: status, level: _voiceLevel),
             const SizedBox(height: Space.xl),
-            Semantics(header: true, child: Text('Before your interview', style: PrepType.headline)),
-            if (wrapup?.mock ?? false) ...[
-              const SizedBox(height: Space.xs),
-              Text('Sample notes', style: PrepType.caption),
-            ],
-            if (wrapup != null && wrapup.lastMinuteNotes.isNotEmpty) ...[
-              const SizedBox(height: Space.xs),
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Transform.translate(
-                  offset: const Offset(-Space.m, 0),
-                  child: ReadAloudButton(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Semantics(header: true, child: Text('Before your interview', style: PrepType.headline)),
+                ),
+                if (canHear) ...[
+                  const SizedBox(width: Space.s),
+                  ReadAloudButton(
+                    key: const ValueKey('hear-notes'),
+                    iconOnly: true,
                     label: 'Hear your notes',
                     stopLabel: 'Stop reading your notes',
                     speaking: reader.current == Spoken.notes,
                     onPressed: () => _toggleNotes(wrapup),
                   ),
-                ),
-              ),
-              const SizedBox(height: Space.s),
-            ] else
-              const SizedBox(height: Space.l),
+                ],
+              ],
+            ),
+            if (wrapup?.mock ?? false) ...[
+              const SizedBox(height: Space.xs),
+              Text('Sample notes', style: PrepType.caption),
+            ],
+            const SizedBox(height: Space.l),
             if (wrapup != null) ...[
               CoachCard(child: _Notes(wrapup.lastMinuteNotes)),
-              _ListSection(title: 'Tips', icon: PrepIcons.check, items: wrapup.tips),
-              _ListSection(title: 'Stories to use', icon: PrepIcons.chat, items: wrapup.storiesToUse),
+              _More(tips: wrapup.tips, stories: wrapup.storiesToUse),
             ] else if (_error != null)
               ProblemNote(title: "Couldn't write your notes.", body: _error!.userMessage)
             else if (_loading)
@@ -266,6 +266,53 @@ class _Notes extends StatelessWidget {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// Tips and stories, folded away under one "More" so the notes stand alone.
+class _More extends StatefulWidget {
+  const _More({required this.tips, required this.stories});
+
+  final List<String> tips;
+  final List<String> stories;
+
+  @override
+  State<_More> createState() => _MoreState();
+}
+
+class _MoreState extends State<_More> {
+  bool _open = false;
+
+  void _toggle() => setState(() => _open = !_open);
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.tips.isEmpty && widget.stories.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: Space.s),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Transform.translate(
+            offset: const Offset(-Space.m, 0),
+            child: Semantics(
+              container: true,
+              button: true,
+              expanded: _open,
+              label: 'More: tips and stories',
+              onTap: _toggle,
+              excludeSemantics: true,
+              child: QuietButton(_open ? 'Less' : 'More', icon: PrepIcons.layers, onPressed: _toggle),
+            ),
+          ),
+        ),
+        if (_open) ...[
+          _ListSection(title: 'Tips', icon: PrepIcons.check, items: widget.tips),
+          _ListSection(title: 'Stories to use', icon: PrepIcons.chat, items: widget.stories),
+        ],
       ],
     );
   }
