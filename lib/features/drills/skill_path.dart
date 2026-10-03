@@ -181,7 +181,7 @@ class _LessonRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: Space.m),
-                  const PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
+                  PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
                 ],
               ),
             ),
@@ -221,7 +221,7 @@ class _Marker extends StatelessWidget {
             ),
           ),
         ),
-        _LessonState.open => const DecoratedBox(
+        _LessonState.open => DecoratedBox(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.fromBorderSide(BorderSide(color: PrepColors.lineStrong, width: 1.5)),
@@ -318,7 +318,7 @@ class _NextLessonCardState extends State<NextLessonCard> {
                             ),
                           ),
                           const SizedBox(width: Space.m),
-                          const PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
+                          PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
                         ],
                       ),
                       const SizedBox(height: Space.l),

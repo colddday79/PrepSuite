@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 
 import '../app/assistant.dart';
 import 'hologram.dart';
+import 'tokens.dart';
 
 /// What the assistant is doing, which sets its face.
 enum AssistantMood {
@@ -47,7 +48,7 @@ class AssistantAvatar extends StatefulWidget {
     this.mood = AssistantMood.idle,
     this.level,
     this.hud = true,
-    this.stage = true,
+    this.stage = false,
     this.animate = true,
     this.semanticLabel,
   });
@@ -619,13 +620,26 @@ class _AssistantPainter extends CustomPainter {
     canvas.drawImageRect(image, src, dst, paint);
   }
 
-  // The Jarvis hint, kept quiet: a soft wash, a faint bezel of ticks and two thin slow arcs behind
-  // the head. Under the robot a product-shot stage: its light on the floor, a soft contact shadow
-  // and one faint floor line. Everything uses the robot's light colour at low strength.
-  // Under the robot, a soft contact shadow so it stands on its stage. (The older halo of ticks,
-  // arcs and coloured light belonged to the dark theme and is gone on the light page.)
+  // The robot stands on a lit floor, like a lamp in a product shot: a warm pool of the theme
+  // accent spread flat under it, then a soft contact shadow. No halo, rings or glows around it.
   void _paintHud(Canvas canvas, double s) {
     final floor = Offset(s * 0.5, s * _floorY);
+
+    final pool = s * 0.34;
+    canvas.save();
+    canvas.translate(floor.dx, floor.dy);
+    canvas.scale(1, 0.2);
+    canvas.drawCircle(
+      Offset.zero,
+      pool,
+      Paint()
+        ..shader = ui.Gradient.radial(Offset.zero, pool, [
+          PrepColors.accent.withValues(alpha: 0.24),
+          PrepColors.accent.withValues(alpha: 0.07),
+          PrepColors.accent.withValues(alpha: 0),
+        ], const [0, 0.5, 1]),
+    );
+    canvas.restore();
 
     // A soft contact shadow (a wide penumbra and a tight core), a little tighter and darker as the
     // hover brings the robot down. Only once the robot is there to cast it.

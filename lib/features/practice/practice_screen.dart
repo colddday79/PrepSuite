@@ -166,13 +166,13 @@ class _Group extends StatelessWidget {
       color: PrepColors.surface1,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(Radii.card),
-        side: const BorderSide(color: PrepColors.line),
+        side: BorderSide(color: PrepColors.line),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) const Divider(height: 1, thickness: 1, indent: Space.gutter + 24 + Space.l, color: PrepColors.line),
+            if (i > 0) Divider(height: 1, thickness: 1, indent: Space.gutter + 24 + Space.l, color: PrepColors.line),
             children[i],
           ],
         ],

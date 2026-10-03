@@ -11,6 +11,7 @@ import 'app/app.dart';
 import 'app/assistant.dart';
 import 'app/profile.dart';
 import 'app/services.dart';
+import 'app/theme_store.dart';
 import 'app/session.dart';
 import 'coach/coach_api.dart';
 import 'coach/coach_config.dart';
@@ -80,6 +81,7 @@ AppServices createServices() {
       profile: ProfileStore(persist: true),
       assistant: AssistantStore(persist: true),
       drills: DrillProgressStore.instance,
+      theme: ThemeStore(persist: true),
       mic: PluginMicPermission(),
       coachLabel: coachLabel,
       speechLabel: 'Demo voice input (SPEECH_FAKE): it plays back a sample answer instead of listening.',
@@ -113,6 +115,7 @@ AppServices createServices() {
     profile: ProfileStore(persist: true),
     assistant: AssistantStore(persist: true),
     drills: DrillProgressStore.instance,
+    theme: ThemeStore(persist: true),
     mic: PluginMicPermission(),
     speechSetup: setup,
     coachLabel: coachLabel,

@@ -617,7 +617,7 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _FeedbackTitle(icon: PrepIcons.edit, color: PrepColors.text2, ink: PrepColors.text, title: 'Compare yours'),
+            _FeedbackTitle(icon: PrepIcons.edit, color: PrepColors.text2, ink: PrepColors.text, title: 'Compare yours'),
             const SizedBox(height: Space.s),
             Text(rewriteTip(exercise, _text.text), style: PrepType.body),
           ],
@@ -788,7 +788,7 @@ class _Takeaway extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 1),
               child: PrepIcon(PrepIcons.target, color: PrepColors.text2, size: 20),
             ),

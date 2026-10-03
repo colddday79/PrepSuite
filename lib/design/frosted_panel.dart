@@ -55,7 +55,7 @@ class _EdgeLight extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [PrepColors.cardHighlight, Color(0x00FFF4E0)],

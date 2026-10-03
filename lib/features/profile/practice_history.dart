@@ -127,7 +127,7 @@ class _HistoryRow extends StatelessWidget {
                   ),
                   if (onTap != null) ...[
                     const SizedBox(width: Space.m),
-                    const PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
+                    PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
                   ],
                 ],
               ),

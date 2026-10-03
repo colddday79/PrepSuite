@@ -27,26 +27,37 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
     unawaited(widget.services.profile.restore());
     unawaited(widget.services.assistant.restore());
     unawaited(widget.services.drills.restore());
+    unawaited(widget.services.theme.restore());
     widget.services.assistant.addListener(_onAssistant);
+    widget.services.theme.addListener(_onTheme);
     _applyAccent();
   }
 
   @override
   void dispose() {
     widget.services.assistant.removeListener(_onAssistant);
+    widget.services.theme.removeListener(_onTheme);
     super.dispose();
   }
 
   void _applyAccent() {
-    final look = widget.services.assistant.value;
-    _kind = look.kind;
-    PrepColors.useAccent(look.tone, look.soft);
+    _kind = widget.services.assistant.value.kind;
+    PrepColors.useTheme(widget.services.theme.value);
   }
 
-  /// A new assistant means a new accent everywhere: rebuild the whole tree once.
+  void _onTheme() {
+    PrepColors.useTheme(widget.services.theme.value);
+    _rebuildAll();
+  }
+
+  /// A new assistant can change robot colours on every screen: rebuild the whole tree once.
   void _onAssistant() {
     if (widget.services.assistant.value.kind == _kind) return;
     _applyAccent();
+    _rebuildAll();
+  }
+
+  void _rebuildAll() {
     setState(() {});
     void rebuild(Element element) {
       element.markNeedsBuild();
@@ -79,16 +90,16 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
           statusBarColor: Color(0x00000000),
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
           systemNavigationBarColor: Color(0x00000000),
-          systemNavigationBarIconBrightness: Brightness.dark,
+          systemNavigationBarIconBrightness: Brightness.light,
           systemNavigationBarContrastEnforced: false,
         ),
         child: MaterialApp(
           title: 'PrepSuite',
           debugShowCheckedModeBanner: false,
-          themeMode: ThemeMode.light,
+          themeMode: ThemeMode.dark,
           darkTheme: prepTheme(),
           theme: prepTheme(),
           home: const RootGate(),
@@ -98,7 +109,7 @@ class _PrepSuiteAppState extends State<PrepSuiteApp> {
   }
 }
 
-/// Light only. Mona Sans everywhere (every Material text role maps to a [PrepType] style, so no
+/// Dark only, from the current [PrepThemeData]. Mona Sans everywhere (every Material text role maps to a [PrepType] style, so no
 /// default leaks through at the variable font's thin default weight), gold as the one accent, a
 /// quiet press tint instead of ripples, and no hover effects. Dialogs, the date picker, sheets,
 /// snack bars and selection controls are drawn from the same palette as the custom components.
@@ -168,18 +179,18 @@ ThemeData prepTheme() {
 
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.light,
+    brightness: Brightness.dark,
     fontFamily: 'MonaSans',
     scaffoldBackgroundColor: PrepColors.bg,
     canvasColor: PrepColors.bg,
     colorScheme: ColorScheme(
-      brightness: Brightness.light,
+      brightness: Brightness.dark,
       primary: PrepColors.accent,
-      onPrimary: PrepColors.bg,
+      onPrimary: PrepColors.onAccent,
       primaryContainer: PrepColors.accentTint,
       onPrimaryContainer: PrepColors.text,
       secondary: PrepColors.accent,
-      onSecondary: PrepColors.bg,
+      onSecondary: PrepColors.onAccent,
       secondaryContainer: PrepColors.accentTint,
       onSecondaryContainer: PrepColors.text,
       tertiary: PrepColors.text2,
@@ -223,7 +234,7 @@ ThemeData prepTheme() {
       labelMedium: PrepType.meta,
       labelSmall: PrepType.caption,
     ),
-    iconTheme: const IconThemeData(color: PrepColors.text2, size: 24),
+    iconTheme: IconThemeData(color: PrepColors.text2, size: 24),
     splashFactory: NoSplash.splashFactory,
     highlightColor: PrepColors.press.withValues(alpha: 0.14),
     // Material widgets without a FocusRing (date cells, stray InkWells) still show keyboard focus.
@@ -231,7 +242,7 @@ ThemeData prepTheme() {
     hoverColor: clear,
     materialTapTargetSize: MaterialTapTargetSize.padded,
     visualDensity: VisualDensity.standard,
-    dividerTheme: const DividerThemeData(color: PrepColors.line, thickness: 1, space: 1),
+    dividerTheme: DividerThemeData(color: PrepColors.line, thickness: 1, space: 1),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: PrepColors.accent,
       selectionColor: PrepColors.accent.withValues(alpha: 0.35),
@@ -264,7 +275,7 @@ ThemeData prepTheme() {
       style: OutlinedButton.styleFrom(
         foregroundColor: PrepColors.text,
         disabledForegroundColor: PrepColors.text3,
-        side: const BorderSide(color: PrepColors.lineStrong),
+        side: BorderSide(color: PrepColors.lineStrong),
         textStyle: PrepType.label,
         minimumSize: const Size(48, 48),
         shape: controlShape,
@@ -329,7 +340,7 @@ ThemeData prepTheme() {
       cancelButtonStyle: textAction(PrepColors.text2),
       confirmButtonStyle: textAction(PrepColors.accent),
     ),
-    bottomSheetTheme: const BottomSheetThemeData(
+    bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: PrepColors.surface1,
       modalBackgroundColor: PrepColors.surface1,
       surfaceTintColor: clear,
@@ -350,7 +361,7 @@ ThemeData prepTheme() {
       disabledActionTextColor: PrepColors.text3,
       closeIconColor: PrepColors.text2,
       elevation: 0,
-      shape: const RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: PrepColors.lineStrong)),
+      shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: PrepColors.lineStrong)),
       insetPadding: const EdgeInsets.fromLTRB(Space.gutter, 0, Space.gutter, Space.l),
     ),
     switchTheme: SwitchThemeData(
@@ -373,7 +384,7 @@ ThemeData prepTheme() {
         if (!states.contains(WidgetState.selected)) return clear;
         return PrepColors.accent.withValues(alpha: states.contains(WidgetState.disabled) ? 0.38 : 1);
       }),
-      checkColor: const WidgetStatePropertyAll(PrepColors.bg),
+      checkColor: WidgetStatePropertyAll(PrepColors.bg),
       side: WidgetStateBorderSide.resolveWith((states) {
         if (states.contains(WidgetState.selected)) return const BorderSide(color: clear, width: 0);
         return BorderSide(color: PrepColors.text3.withValues(alpha: states.contains(WidgetState.disabled) ? 0.38 : 1), width: 1.5);
@@ -382,7 +393,7 @@ ThemeData prepTheme() {
       overlayColor: tint(PrepColors.accent, pressed: 0.12, focused: 0.24),
       materialTapTargetSize: MaterialTapTargetSize.padded,
     ),
-    listTileTheme: const ListTileThemeData(
+    listTileTheme: ListTileThemeData(
       contentPadding: EdgeInsets.symmetric(horizontal: Space.gutter),
       minVerticalPadding: Space.m,
       iconColor: PrepColors.text2,
@@ -394,7 +405,7 @@ ThemeData prepTheme() {
       color: PrepColors.surface2,
       surfaceTintColor: clear,
       elevation: 0,
-      shape: const RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: PrepColors.lineStrong)),
+      shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: PrepColors.lineStrong)),
       textStyle: PrepType.bodyL,
     ),
     tooltipTheme: TooltipThemeData(

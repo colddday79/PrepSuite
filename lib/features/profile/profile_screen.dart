@@ -365,7 +365,7 @@ class _DateField extends StatelessWidget {
               color: PrepColors.surface1,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(Radii.control),
-                side: const BorderSide(color: PrepColors.lineStrong),
+                side: BorderSide(color: PrepColors.lineStrong),
               ),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
@@ -379,7 +379,7 @@ class _DateField extends StatelessWidget {
                     padding: EdgeInsets.fromLTRB(Space.l, Space.m, value == null ? Space.l : 48 + Space.xs, Space.m),
                     child: Row(
                       children: [
-                        const PrepIcon(PrepIcons.calendar, color: PrepColors.text2, size: 20),
+                        PrepIcon(PrepIcons.calendar, color: PrepColors.text2, size: 20),
                         const SizedBox(width: Space.m),
                         Expanded(
                           child: Text(

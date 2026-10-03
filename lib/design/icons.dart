@@ -45,10 +45,10 @@ enum PrepIcons {
 
 /// Paints one hairline icon. Decorative by default; pass [semanticLabel] when it stands alone.
 class PrepIcon extends StatelessWidget {
-  const PrepIcon(this.icon, {super.key, this.color = PrepColors.text, this.size = 24, this.semanticLabel});
+  const PrepIcon(this.icon, {super.key, this.color, this.size = 24, this.semanticLabel});
 
   final PrepIcons icon;
-  final Color color;
+  final Color? color;
   final double size;
   final String? semanticLabel;
 
@@ -56,7 +56,7 @@ class PrepIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final painted = SizedBox.square(
       dimension: size,
-      child: CustomPaint(painter: _IconPainter(icon.path, color)),
+      child: CustomPaint(painter: _IconPainter(icon.path, color ?? PrepColors.text)),
     );
     if (semanticLabel == null) return ExcludeSemantics(child: painted);
     return Semantics(label: semanticLabel, image: true, child: painted);

@@ -30,7 +30,7 @@ class ProgressTrack extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              const ColoredBox(color: PrepColors.surface2),
+              ColoredBox(color: PrepColors.surface2),
               TweenAnimationBuilder<double>(
                 tween: Tween(end: value.clamp(0.0, 1.0)),
                 duration: reduce ? Duration.zero : Motion.enter,
@@ -98,17 +98,17 @@ class StepTopBar extends StatelessWidget {
 /// above the system gesture area. Put it in `Scaffold.bottomNavigationBar` or the last slot of a
 /// Column so it never scrolls away.
 class BottomActionBar extends StatelessWidget {
-  const BottomActionBar({super.key, required this.children, this.color = PrepColors.bg});
+  const BottomActionBar({super.key, required this.children, this.color});
 
   final List<Widget> children;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: color,
-        border: const Border(top: BorderSide(color: PrepColors.line)),
+        color: color ?? PrepColors.bg,
+        border: Border(top: BorderSide(color: PrepColors.line)),
       ),
       child: SafeArea(
         top: false,

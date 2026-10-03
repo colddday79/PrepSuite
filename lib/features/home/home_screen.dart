@@ -304,7 +304,7 @@ class _RecentCard extends StatelessWidget {
         color: PrepColors.surface1,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(Radii.card),
-          side: const BorderSide(color: PrepColors.line),
+          side: BorderSide(color: PrepColors.line),
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(Radii.card),
@@ -329,7 +329,7 @@ class _RecentCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: Space.l),
-                const PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 20),
+                PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 20),
               ],
             ),
           ),

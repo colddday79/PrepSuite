@@ -70,34 +70,24 @@ Color? _labelColor(WidgetTester tester, String label) => tester.widget<Text>(fin
 
 void main() {
   group('contrast', () {
-    const surfaces = {'bg': PrepColors.bg, 'surface1': PrepColors.surface1, 'surface2': PrepColors.surface2};
-    final texts = {
-      'text': PrepColors.text,
-      'text2': PrepColors.text2,
-      'text3': PrepColors.text3,
-      'accent': PrepColors.accent,
-      'danger': PrepColors.danger,
-    };
-
-    for (final t in texts.entries) {
-      for (final s in surfaces.entries) {
-        test('${t.key} on ${s.key} is at least 4.5:1', () {
-          expect(contrast(t.value, s.value), greaterThanOrEqualTo(4.5));
-        });
-      }
+    for (final theme in PrepThemes.all) {
+      test('${theme.name}: text, accent and controls are readable on metal', () {
+        PrepColors.useTheme(theme);
+        addTearDown(() => PrepColors.useTheme(PrepThemes.ember));
+        for (final surface in [theme.canvas, theme.metalTop, theme.metalBottom, theme.metalRaised]) {
+          expect(contrast(theme.text, surface), greaterThanOrEqualTo(7), reason: 'text');
+          expect(contrast(theme.text2, surface), greaterThanOrEqualTo(7), reason: 'text2');
+          expect(contrast(theme.text3, surface), greaterThanOrEqualTo(4.5), reason: 'text3');
+          expect(contrast(theme.accentDeep, surface), greaterThanOrEqualTo(4.5), reason: 'accentDeep');
+          expect(contrast(PrepColors.danger, surface), greaterThanOrEqualTo(4.5), reason: 'danger');
+          expect(contrast(PrepColors.success, surface), greaterThanOrEqualTo(4.5), reason: 'success');
+          expect(contrast(PrepColors.warning, surface), greaterThanOrEqualTo(4.5), reason: 'warning');
+          expect(contrast(theme.accent, surface), greaterThanOrEqualTo(3), reason: 'accent as a control');
+        }
+        expect(contrast(theme.onAccent, theme.accent), greaterThanOrEqualTo(4.5), reason: 'button label');
+        expect(contrast(PrepColors.text3, PrepColors.surface2), greaterThanOrEqualTo(4.5), reason: 'disabled');
+      });
     }
-
-    test('button labels, selection and focus', () {
-      expect(contrast(PrepColors.bg, PrepColors.text), greaterThanOrEqualTo(4.5)); // primary label
-      expect(contrast(PrepColors.bg, Color.lerp(PrepColors.ink, PrepColors.bg, 0.18)!), greaterThanOrEqualTo(4.5)); // pressed
-      expect(contrast(PrepColors.text3, PrepColors.surface2), greaterThanOrEqualTo(4.5)); // disabled
-      expect(contrast(PrepColors.bg, PrepColors.accent), greaterThanOrEqualTo(4.5)); // selected day
-      // Non-text: focus ring and the outline of unselected controls need 3:1.
-      for (final s in surfaces.values) {
-        expect(contrast(PrepColors.focus, s), greaterThanOrEqualTo(3));
-        expect(contrast(PrepColors.text3, s), greaterThanOrEqualTo(3));
-      }
-    });
 
     test('the WCAG function matches known values', () {
       expect(contrast(const Color(0xFF000000), const Color(0xFFFFFFFF)), closeTo(21, 0.01));
@@ -106,10 +96,10 @@ void main() {
   });
 
   group('PrimaryButton', () {
-    testWidgets('enabled: solid ink fill, light label, 56 dp', (tester) async {
+    testWidgets('enabled: solid accent fill, dark label, 56 dp', (tester) async {
       await _pump(tester, PrimaryButton('Start practice', onPressed: () {}));
-      expect(_fill(tester), PrepColors.ink);
-      expect(_labelColor(tester, 'Start practice'), PrepColors.bg);
+      expect(_fill(tester), PrepColors.accent);
+      expect(_labelColor(tester, 'Start practice'), PrepColors.onAccent);
       expect(tester.getSize(find.byType(PrimaryButton)).height, greaterThanOrEqualTo(56));
       expect(_scale(tester), 1);
     });
@@ -124,20 +114,20 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('pressed: lighter fill and 0.98 scale, released on lift', (tester) async {
+    testWidgets('pressed: darker fill and 0.98 scale, released on lift', (tester) async {
       var taps = 0;
       await _pump(tester, PrimaryButton('Next question', onPressed: () => taps++));
       final gesture = await tester.startGesture(tester.getCenter(find.byType(PrimaryButton)));
       await tester.pump();
       await tester.pump(Motion.press);
       expect(_scale(tester), Motion.pressScale);
-      expect(_fill(tester), Color.lerp(PrepColors.ink, PrepColors.bg, 0.18));
+      expect(_fill(tester), Color.lerp(PrepColors.accent, const Color(0xFF000000), 0.12));
 
       await gesture.up();
       await tester.pump();
       await tester.pump(Motion.fade);
       expect(_scale(tester), 1);
-      expect(_fill(tester), PrepColors.ink);
+      expect(_fill(tester), PrepColors.accent);
       expect(taps, 1);
     });
 

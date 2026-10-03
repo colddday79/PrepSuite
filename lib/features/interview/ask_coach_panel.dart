@@ -295,7 +295,7 @@ class AskCoachPanel extends StatelessWidget {
           children: [
             Row(
               children: [
-                const PrepIcon(PrepIcons.chat, color: PrepColors.text2, size: 20),
+                PrepIcon(PrepIcons.chat, color: PrepColors.text2, size: 20),
                 const SizedBox(width: Space.s),
                 Expanded(
                   child: Semantics(

@@ -86,7 +86,7 @@ class _RingPainter extends CustomPainter {
   bool shouldRepaint(_RingPainter old) => old.radius != radius || old.gap != gap;
 }
 
-/// The one primary action on a screen: a solid ink slab with light text.
+/// The one primary action on a screen: an accent pill with dark text.
 ///
 /// Pressing darkens the fill and settles it to [Motion.pressScale] within [Motion.press]
 /// (no scale when the system asks for less motion). Disabled keeps a readable label on a dark slab.
@@ -108,7 +108,7 @@ class PrimaryButton extends StatefulWidget {
 class _PrimaryButtonState extends State<PrimaryButton> {
   // A full pill: the one rounded-everything shape in the app, so the main action is recognisable.
   static const _shape = StadiumBorder();
-  static const _disabledShape = StadiumBorder(side: BorderSide(color: PrepColors.lineStrong));
+  static final _disabledShape = StadiumBorder(side: BorderSide(color: PrepColors.lineStrong));
 
   bool _pressed = false;
 
@@ -124,11 +124,11 @@ class _PrimaryButtonState extends State<PrimaryButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    // Solid ink, lifted a little toward the page while pressed.
+    // The theme accent, dipped a little toward black while pressed.
     final fill = !enabled
         ? PrepColors.surface2
-        : (_pressed ? Color.lerp(PrepColors.ink, PrepColors.bg, 0.18)! : PrepColors.ink);
-    final ink = enabled ? PrepColors.bg : PrepColors.text3;
+        : (_pressed ? Color.lerp(PrepColors.accent, const Color(0xFF000000), 0.12)! : PrepColors.accent);
+    final ink = enabled ? PrepColors.onAccent : PrepColors.text3;
     final duration = _pressed ? Motion.press : Motion.fade;
     return Semantics(
       container: true,
@@ -196,18 +196,18 @@ class _PrimaryButtonState extends State<PrimaryButton> {
 /// A text action with an optional hairline icon. No fill, so it never competes with the primary.
 /// At least 48 by 48 dp; pressing lays a warm tint under the label.
 class QuietButton extends StatelessWidget {
-  const QuietButton(this.label, {super.key, required this.onPressed, this.icon, this.color = PrepColors.text2});
+  const QuietButton(this.label, {super.key, required this.onPressed, this.icon, this.color});
 
   final String label;
   final VoidCallback? onPressed;
   final PrepIcons? icon;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     // Disabled stays readable (text3 is 5.3:1 or better on every surface) and semantics say why.
-    final tint = enabled ? color : PrepColors.text3;
+    final tint = enabled ? (color ?? PrepColors.text2) : PrepColors.text3;
     return Semantics(
       container: true,
       button: true,
@@ -263,7 +263,7 @@ class IconAction extends StatelessWidget {
         radius: 24,
         child: Material(
           color: plain ? Colors.transparent : PrepColors.surface1.withValues(alpha: 0.7),
-          shape: CircleBorder(side: plain ? BorderSide.none : const BorderSide(color: PrepColors.glassBorder)),
+          shape: CircleBorder(side: plain ? BorderSide.none : BorderSide(color: PrepColors.glassBorder)),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onPressed,
@@ -281,16 +281,16 @@ class IconAction extends StatelessWidget {
 }
 
 class Hairline extends StatelessWidget {
-  const Hairline({super.key, this.indent = 0, this.color = PrepColors.line});
+  const Hairline({super.key, this.indent = 0, this.color});
 
   final double indent;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(left: indent),
-      child: SizedBox(height: 1, width: double.infinity, child: ColoredBox(color: color)),
+      child: SizedBox(height: 1, width: double.infinity, child: ColoredBox(color: color ?? PrepColors.line)),
     );
   }
 }
@@ -461,7 +461,7 @@ class LinkRow extends StatelessWidget {
                     ),
                     if (onTap != null) ...[
                       const SizedBox(width: Space.m),
-                      const PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
+                      PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
                     ],
                   ],
                 ),

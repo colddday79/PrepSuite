@@ -1,3 +1,4 @@
+import 'theme_store.dart';
 import '../features/drills/drill_progress.dart';
 import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -24,11 +25,13 @@ class AppServices {
     ProfileStore? profile,
     AssistantStore? assistant,
     DrillProgressStore? drills,
+    ThemeStore? theme,
     SpeechSetup? speechSetup,
   }) : sessions = sessions ?? SessionStore(),
        profile = profile ?? ProfileStore(),
        assistant = assistant ?? AssistantStore(),
        drills = drills ?? DrillProgressStore(),
+       theme = theme ?? ThemeStore(),
        speechSetup = speechSetup ?? SpeechSetup.ready();
 
   final CoachApi coach;
@@ -53,6 +56,9 @@ class AppServices {
 
   /// Which skill drills are done (the Duolingo-style lessons on the Practice tab).
   final DrillProgressStore drills;
+
+  /// The colour theme picked in Profile, Appearance.
+  final ThemeStore theme;
 
   /// Offline speech preparation (model copy on first launch, then loading), started at launch.
   final SpeechSetup speechSetup;

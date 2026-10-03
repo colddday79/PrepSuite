@@ -109,7 +109,7 @@ class _ShellBar extends StatelessWidget {
           return Container(
             height: height + bottomInset,
             padding: EdgeInsets.only(bottom: bottomInset),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: PrepColors.bg,
               border: Border(top: BorderSide(color: PrepColors.line)),
             ),

@@ -24,11 +24,11 @@ class _Paint {
 }
 
 _Paint _paintFor(BoxTone tone) => switch (tone) {
-  BoxTone.idle => const _Paint(PrepColors.surface1, PrepColors.line, 1, PrepColors.text),
+  BoxTone.idle => _Paint(PrepColors.surface1, PrepColors.line, 1, PrepColors.text),
   BoxTone.selected => _Paint(PrepColors.accentTint, PrepColors.accent, 2, PrepColors.text),
-  BoxTone.correct => const _Paint(PrepColors.successTint, PrepColors.success, 2, PrepColors.text),
-  BoxTone.wrong => const _Paint(PrepColors.warningTint, PrepColors.warning, 2, PrepColors.text),
-  BoxTone.muted => const _Paint(PrepColors.surface1, PrepColors.line, 1, PrepColors.text2),
+  BoxTone.correct => _Paint(PrepColors.successTint, PrepColors.success, 2, PrepColors.text),
+  BoxTone.wrong => _Paint(PrepColors.warningTint, PrepColors.warning, 2, PrepColors.text),
+  BoxTone.muted => _Paint(PrepColors.surface1, PrepColors.line, 1, PrepColors.text2),
 };
 
 PrepIcons? _markFor(BoxTone tone) => switch (tone) {
@@ -204,7 +204,7 @@ class WordTile extends StatelessWidget {
     if (ghost) {
       return ExcludeSemantics(
         child: DecoratedBox(
-          decoration: const ShapeDecoration(
+          decoration: ShapeDecoration(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(_radius)),
               side: BorderSide(color: PrepColors.line),
@@ -276,7 +276,7 @@ class BlankGap extends StatelessWidget {
     if (word == null) {
       return Semantics(
         label: 'Blank',
-        child: const Padding(
+        child: Padding(
           padding: EdgeInsets.symmetric(horizontal: Space.xxs, vertical: Space.xs),
           child: SizedBox(
             width: 88,
@@ -330,7 +330,7 @@ class OrderSlot extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 56, minWidth: double.infinity),
           child: DecoratedBox(
-            decoration: const ShapeDecoration(
+            decoration: ShapeDecoration(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.all(Radius.circular(Radii.control)),
                 side: BorderSide(color: PrepColors.lineStrong),
@@ -378,7 +378,7 @@ class QuoteBlock extends StatelessWidget {
       label: '$label: $text',
       excludeSemantics: true,
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(left: BorderSide(color: PrepColors.lineStrong, width: 2)),
         ),
         child: Padding(
@@ -413,7 +413,7 @@ class ThinTrack extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              const ColoredBox(color: PrepColors.surface2),
+              ColoredBox(color: PrepColors.surface2),
               FractionallySizedBox(
                 alignment: Alignment.centerLeft,
                 widthFactor: value.clamp(0.0, 1.0),

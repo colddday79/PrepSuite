@@ -198,12 +198,12 @@ class CoachLine extends StatelessWidget {
 
 /// A calm surface for one idea: surface fill, a hairline border, an icon and a short title.
 class CoachCard extends StatelessWidget {
-  const CoachCard({super.key, required this.child, this.title, this.icon, this.iconColor = PrepColors.text2, this.padding});
+  const CoachCard({super.key, required this.child, this.title, this.icon, this.iconColor, this.padding});
 
   final Widget child;
   final String? title;
   final PrepIcons? icon;
-  final Color iconColor;
+  final Color? iconColor;
   final EdgeInsetsGeometry? padding;
 
   @override
@@ -224,7 +224,7 @@ class CoachCard extends StatelessWidget {
                 header: true,
                 child: Row(
                   children: [
-                    if (icon != null) ...[PrepIcon(icon!, color: iconColor, size: 20), const SizedBox(width: Space.s)],
+                    if (icon != null) ...[PrepIcon(icon!, color: iconColor ?? PrepColors.text2, size: 20), const SizedBox(width: Space.s)],
                     Expanded(child: Text(title!, style: PrepType.label.copyWith(color: PrepColors.text))),
                   ],
                 ),
@@ -305,7 +305,7 @@ class AnswerQuote extends StatelessWidget {
       label: '$semanticPrefix: $text',
       excludeSemantics: true,
       child: DecoratedBox(
-        decoration: const BoxDecoration(border: Border(left: BorderSide(color: PrepColors.lineStrong, width: 2))),
+        decoration: BoxDecoration(border: Border(left: BorderSide(color: PrepColors.lineStrong, width: 2))),
         child: Padding(
           padding: const EdgeInsets.only(left: Space.m, top: Space.xxs, bottom: Space.xxs),
           child: Text('“$text”', style: PrepType.quote.copyWith(color: PrepColors.text2)),
