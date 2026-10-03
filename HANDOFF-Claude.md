@@ -567,3 +567,47 @@ The owner's Galaxy S26 (SM-S942N, serial `R3KL708EVEH`) has the debug APK instal
 - After `pm clear`, the coach starts as Ember instead of Tide (possibly Android backup restoring old prefs).
 - The This week bars sit under the floating tab bar until you scroll.
 - `DESIGN.md` hasn't been written yet. The impeccable documenter should write it from the built app.
+
+---
+
+## Session 10 (2026-10-03): dark glass metal redesign, three themes, impeccable installed
+
+**Owner's direction:**
+- The light theme was rejected ("white screens, too many words, robot too small, looks like shit").
+- Use the owner's dark smart-home and drone references: glassy metallic cards, one warm accent, a big lit hero object, big thin numbers, very few words, and none of the 20 vibe-coded tells (now listed in `CLAUDE.md`).
+- **The approved plan:** `~/.claude/plans/the-current-app-that-tender-frog.md`.
+
+**Tooling (keep using):**
+- impeccable is installed in the project: `.claude/skills/impeccable/`, plus a hook in `.claude/settings.local.json`.
+- `PRODUCT.md` holds the product truth; `CLAUDE.md` holds the design and workflow rules.
+- A memory note says to always use impeccable for UI work.
+- `DESIGN.md` has not been written yet. Next step: `/impeccable document` from the built app.
+
+**Theme engine** (`lib/design/tokens.dart`):
+- `PrepThemeData` and `PrepThemes.ember` (default), `signal` and `brass`.
+- `PrepColors` and `PrepType` are now **getters** that read the current theme, so most `const` was removed from widgets that use colours.
+- `ThemeStore` (`lib/app/theme_store.dart`, key `theme.v1`) lives in `AppServices.theme`, and the app root repaints on change.
+- The coach colour now lives only in the robot (face and ear rings); the UI uses the theme accent.
+
+**Kit:**
+- **`lib/design/metal.dart`:** `MetalCard`/`MetalTile` (smoked glass via `paintGlass`), `MetalSegments`, `MetalDisc`, `ArcGauge`, and `FloatingTabBar` (glass, real blur; the active tab is an accent pill with a label).
+- **`lib/design/glass.dart`:** `AmbientBackdrop` (lit room: warm key light, bounce, vignette) and `paintGlass`.
+- **`lib/design/robot_stage.dart`:** `RobotStage` (tick-dial bezel with a real-progress arc and bead, metal pedestal, accent floor light).
+- **`AssistantAvatar`:** `stage` now defaults to false, and `hud` draws the accent floor light plus the contact shadow.
+
+**Screens rebuilt** (three agents, disjoint files):
+- **Home:** greeting with the date, a hero glass card with the robot on `RobotStage`, "x/8 Skills", a richer Start pill, a This week card (Sessions/Answers/Days plus 7-day bars, all real data), and Next skill / Last tiles.
+- **Practice:** Speak or Skills segments.
+- **Profile:** an Appearance switch.
+- **History.**
+- **Session:** the robot on its stage, a record dial with a live waveform, labels Next/Again/Ask and "1/3", and a wrap-up "More" sheet.
+- **Drills, onboarding and Talk.**
+- Server prompts have shorter word limits.
+
+**State:** analyze clean, 237 Flutter tests pass, 35 Deno tests pass. Pushed to main.
+
+**Known issues seen on the emulator (fix next):**
+1. Switching to Signal or Brass in Profile did **not** visibly change Home (it stayed orange). Check that the swatch calls `services.theme.choose` and that `_onTheme` in `app.dart` rebuilds the cached painters and widgets.
+2. A fresh install opens with **Ember** pre-selected in onboarding instead of the default coach (Tide). Check the picker and onboarding default.
+3. On Home, the This week bar chart sits under the floating tab bar when the page isn't scrolled. Check the bottom padding (`floatingTabBarInset`).
+4. The PRD's P0 items are still open: Original-vs-Retry comparison, the reviewed 12-question pack, and a real-phone audio check.
