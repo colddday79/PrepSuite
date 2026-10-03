@@ -377,7 +377,7 @@ void main() {
           );
           await _pump(tester, 100);
           _expectNoFlutterErrors(tester, 'typed answer');
-          await _tap(tester, find.text('Send answer'), 'send typed answer');
+          await _tap(tester, find.text('Send'), 'send typed answer');
           await _keyboard(tester, phone, visible: false);
           if (phone.pinsActions) {
             expect(
@@ -386,7 +386,7 @@ void main() {
               reason: '${phone.name}: the next step stays in view under long feedback',
             );
           }
-          await _tap(tester, find.text('Ask the coach'), 'open coach panel');
+          await _tap(tester, find.text('Ask'), 'open coach panel');
           await _keyboard(tester, phone);
           final coachField = find.byKey(const ValueKey('ask-field'));
           await tester.enterText(

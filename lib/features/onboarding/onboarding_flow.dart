@@ -11,8 +11,12 @@ import '../../coach/contracts.dart';
 import '../../design/assistant_avatar.dart';
 import '../../design/assistant_picker.dart';
 import '../../design/components.dart';
+import '../../design/glass.dart';
 import '../../design/hologram.dart';
 import '../../design/icons.dart';
+import '../../design/metal.dart';
+import '../../design/practice_chrome.dart';
+import '../../design/robot_stage.dart';
 import '../../design/tokens.dart';
 
 /// First run as a conversation. You pick how your coach looks, then it introduces itself out loud
@@ -167,7 +171,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
         // A spoken answer is a sentence; keep the role itself as the job title.
         await _save(_profile.copyWith(targetRole: text.length > 40 ? jobTitleFrom(text) : text));
         setState(() => _step = _Step.about);
-        await _say('Great. Now tell me a bit about you: studies, work, strengths.');
+        await _say('Great. Now tell me about you: school, work, strengths.');
       case _Step.about:
         await _save(_profile.copyWith(about: text));
         await _wrapUp();
@@ -179,7 +183,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
   Future<void> _skipAbout() async {
     _operation++;
     unawaited(_services.voice.stop());
-    setState(() => _lines.add(const _Line('Skip for now', mine: true)));
+    setState(() => _lines.add(const _Line('Not now', mine: true)));
     await _wrapUp();
   }
 
@@ -231,8 +235,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
       setState(() {
         _prefersTyping = true;
         _note = access == MicAccess.blocked
-            ? 'The microphone is off, so type your answer.'
-            : 'Allow the microphone, or type your answer.';
+            ? 'The mic is off. Type your answer.'
+            : 'Allow the mic, or type your answer.';
       });
       return;
     }
@@ -250,7 +254,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
     if (!started) {
       setState(() {
         _prefersTyping = true;
-        _note = "The microphone didn't start, so type your answer.";
+        _note = "The mic didn't start. Type your answer.";
       });
       return;
     }
@@ -284,7 +288,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
     setState(() {
       _transcribing = false;
       if (heard.isEmpty) {
-        _note = "I couldn't hear that. Try again, or type your answer.";
+        _note = "I couldn't hear that. Try again, or type it.";
       } else {
         _field.text = heard;
         _field.selection = TextSelection.collapsed(offset: heard.length);
@@ -296,79 +300,68 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
   // Layout
   // -------------------------------------------------------------------------
 
+  bool get _still => MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<AssistantLook>(
       valueListenable: _services.assistant,
-      builder: (context, look, _) => Scaffold(
-        backgroundColor: PrepColors.bg,
-        resizeToAvoidBottomInset: true,
-        body: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _TopBar(
-                steps: _steps.length,
-                done: _step == _Step.done ? _steps.length : _steps.indexOf(_step),
-                onSkip: _skipAll,
-              ),
-              Expanded(child: _step == _Step.pick ? _pickView(look) : _chatView(look)),
-            ],
+      builder: (context, look, _) => AmbientBackdrop(
+        child: Scaffold(
+          backgroundColor: const Color(0x00000000),
+          resizeToAvoidBottomInset: true,
+          body: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _TopBar(
+                  steps: _steps.length,
+                  done: _step == _Step.done ? _steps.length : _steps.indexOf(_step),
+                  onSkip: _skipAll,
+                ),
+                Expanded(child: _step == _Step.pick ? _pickView(look) : _chatView(look)),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  /// The coach on its own lit stage, about half the screen, with the four coaches as discs under
+  /// it and Continue. Small screens and large text scroll instead of squeezing the stage.
   Widget _pickView(AssistantLook look) {
     return LayoutBuilder(
       builder: (context, box) {
         final width = math.max(0.0, box.maxWidth - Space.gutter * 2);
         final header = [
-          Text('Choose your coach', style: PrepType.display),
+          Semantics(header: true, child: Text('Choose your coach', style: PrepType.display)),
           const SizedBox(height: Space.xs),
-          Text('Same voice, different look. Change it any time.', style: PrepType.body),
+          Text('Change it any time', style: PrepType.meta),
         ];
-        Widget coach(double size) => Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AssistantAvatar(look: look, size: size, mood: AssistantMood.happy),
-                Text(look.name, style: PrepType.titleL, textAlign: TextAlign.center),
-                Text(look.colour, style: PrepType.caption, textAlign: TextAlign.center),
-              ],
-            );
         final footer = [
-          AssistantPicker(selected: look.kind, onSelected: _services.assistant.choose),
+          AssistantPicker(selected: look.kind, onSelected: _services.assistant.choose, showNames: false),
           const SizedBox(height: Space.xl),
           PrimaryButton('Continue', key: const ValueKey('onboarding-continue'), onPressed: _begin),
         ];
-        const padding = EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, Space.xxl);
-
-        // When everything fits, the coach fills the middle and the picker and Continue sit at the
-        // bottom, with no empty band under the button. Small screens and large text scroll instead.
+        const padding = EdgeInsets.fromLTRB(Space.gutter, Space.s, Space.gutter, Space.xl);
         final room = box.maxHeight - _pickChromeHeight(context, width);
-        if (room >= 140) {
+        if (room >= 260) {
           return Padding(
             padding: padding,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 ...header,
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, area) {
-                      final scale = MediaQuery.textScalerOf(context).scale(1);
-                      final size = math.min(area.maxWidth, area.maxHeight - Space.l * 2 - 48 * scale).clamp(72.0, 420.0);
-                      return Center(child: coach(size));
-                    },
-                  ),
-                ),
+                const SizedBox(height: Space.xl),
+                Expanded(child: _stage(look)),
+                const SizedBox(height: Space.xl),
                 ...footer,
               ],
             ),
           );
         }
-        final size = math.min(width, box.maxHeight * 0.48).clamp(72.0, 420.0);
+        final stage = (box.maxHeight * 0.8).clamp(220.0, 360.0);
         return SingleChildScrollView(
           padding: padding,
           child: Column(
@@ -376,8 +369,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
             children: [
               ...header,
               const SizedBox(height: Space.l),
-              Center(child: coach(size)),
-              const SizedBox(height: Space.l),
+              SizedBox(height: stage, child: _stage(look)),
+              const SizedBox(height: Space.xl),
               ...footer,
             ],
           ),
@@ -386,65 +379,128 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
     );
   }
 
-  /// Roughly how tall the picker screen is without the coach: titles, the picker rows, Continue and
-  /// the padding, at the current text size. Used only to choose between the fixed and scrolling layouts.
+  /// Everything on the picker but the stage, at the current width and text size, so the stage can
+  /// take the rest.
   double _pickChromeHeight(BuildContext context, double width) {
-    final scale = MediaQuery.textScalerOf(context).scale(1);
-    final count = AssistantLook.all.length;
-    final columns = ((width + Space.s) / (56 * scale + Space.s)).floor().clamp(1, count);
-    final rows = (count / columns).ceil();
-    final tile = (width - Space.s * (columns - 1)) / columns;
-    final picker = rows * (tile + 16 * scale + Space.s * 2 + Space.xs) + (rows - 1) * Space.s;
-    final titleLines = width < 340 * scale ? 2 : 1;
-    final bodyLines = width < 380 * scale ? 2 : 1;
-    final text = 36 * scale * titleLines + Space.xs + 23 * scale * bodyLines;
-    return Space.l + Space.xxl + text + picker + Space.xl + 56 * scale;
+    final scaler = MediaQuery.textScalerOf(context);
+    double lines(String text, TextStyle style) {
+      final painter = TextPainter(text: TextSpan(text: text, style: style), textDirection: TextDirection.ltr, textScaler: scaler)
+        ..layout(maxWidth: width);
+      final height = painter.height;
+      painter.dispose();
+      return height;
+    }
+
+    final perRow = ((width + Space.s) / (AssistantPicker.disc + Space.s)).floor().clamp(1, AssistantLook.all.length);
+    final rows = (AssistantLook.all.length / perRow).ceil();
+    final picker = rows * AssistantPicker.disc + (rows - 1) * Space.m;
+    final button = math.max(56.0, lines('Continue', PrepType.button) + Space.m * 2);
+    return Space.s +
+        lines('Choose your coach', PrepType.display) +
+        Space.xs +
+        lines('Change it any time', PrepType.meta) +
+        Space.xl * 3 +
+        picker +
+        button +
+        Space.xl;
   }
 
-  Widget _chatView(AssistantLook look) {
-    final media = MediaQuery.of(context);
-    final keyboard = media.viewInsets.bottom > 0;
-    final h = media.size.height;
-    // The coach is big while the conversation is short and gives way as it grows, so the screen is
-    // never a small robot over a large empty gap.
-    final n = _lines.length;
-    final target = keyboard
-        ? h * 0.13
-        : n <= 2
-        ? math.min(media.size.width * 0.7, h * 0.34)
-        : (n <= 4 ? h * 0.25 : h * 0.19);
-    return LayoutBuilder(
-      builder: (context, box) => SingleChildScrollView(
-        controller: _scroll,
-        padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-        // The whole conversation can scroll when the keyboard or larger text leaves less room.
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: box.maxHeight),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween(end: math.min(target, box.maxHeight * (keyboard ? 0.18 : 0.4))),
-                duration: Motion.enter,
-                curve: Motion.standard,
-                builder: (context, size, _) => SizedBox(
-                  height: size,
-                  child: Center(
-                    child: AssistantAvatar(look: look, size: size, mood: _mood, level: _level),
+  /// The hero: the chosen robot on its dial and pedestal inside one big metal card, its name under
+  /// it like a plate. Changing coach crossfades.
+  Widget _stage(AssistantLook look) {
+    return MetalCard(
+      hero: true,
+      radius: Radii.sheet,
+      padding: const EdgeInsets.fromLTRB(Space.l, Space.l, Space.l, Space.xl),
+      child: Column(
+        children: [
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final robot = math.max(0.0, math.min(box.maxHeight, box.maxWidth));
+                final ratio = MediaQuery.devicePixelRatioOf(context);
+                for (final other in AssistantLook.all) {
+                  warmAssistant(other, robot, ratio);
+                }
+                return Center(
+                  child: ExcludeSemantics(
+                    child: AnimatedSwitcher(
+                      duration: _still ? Duration.zero : Motion.fade,
+                      child: RobotStage(key: ValueKey(look.kind), look: look, robotSize: robot, mood: AssistantMood.happy),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: Space.l),
-              for (final line in _lines) _Bubble(line: line, name: look.name),
-              Padding(
-                padding: const EdgeInsets.only(top: Space.s, bottom: Space.l),
-                child: _composer(),
-              ),
-            ],
+                );
+              },
+            ),
           ),
-        ),
+          const SizedBox(height: Space.s),
+          MergeSemantics(
+            child: Column(
+              children: [
+                Text(look.name, style: PrepType.titleL, textAlign: TextAlign.center),
+                Text(look.colour, style: PrepType.meta, textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  /// The conversation: the robot big on its lit floor while the talk is short, giving way as it
+  /// grows or when the keyboard opens; bubbles under it; the answer dock at the bottom.
+  Widget _chatView(AssistantLook look) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        // The body's own MediaQuery has the keyboard removed (the Scaffold already made room), so
+        // ask the screen's.
+        final keyboard = MediaQuery.viewInsetsOf(this.context).bottom > 0;
+        final h = box.maxHeight;
+        final n = _lines.length;
+        var size = keyboard ? h * 0.2 : (n <= 2 ? h * 0.46 : (n <= 4 ? h * 0.34 : h * 0.24));
+        size = math.min(size, box.maxWidth * 0.9);
+        // Too little room for a robot that reads as one: the words get the space.
+        if (size < 64) size = 0;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(end: size),
+              duration: _still ? Duration.zero : Motion.enter,
+              curve: Motion.standard,
+              // Never taller than the room (the keyboard can take it mid-animation).
+              builder: (context, t, _) {
+                final s = math.min(t, h);
+                return SizedBox(
+                  height: s,
+                  child: s < 1 ? null : Center(child: RobotStage(look: look, robotSize: s, mood: _mood, level: _level)),
+                );
+              },
+            ),
+            Expanded(
+              child: CustomScrollView(
+                controller: _scroll,
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(Space.gutter, Space.s, Space.gutter, 0),
+                    sliver: SliverList.list(children: [for (final line in _lines) _Bubble(line: line, name: look.name)]),
+                  ),
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(Space.gutter, Space.s, Space.gutter, Space.l),
+                        child: _composer(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -462,19 +518,23 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
       case _Step.about:
         final hint = switch (_step) {
           _Step.name => 'Your name',
-          _Step.job => 'For example, junior data analyst',
-          _ => 'Studies, work, strengths',
+          _Step.job => 'For example, barista',
+          _ => 'School, work, strengths',
         };
         final skip = _step == _Step.about && !_recording && !_transcribing
-            ? QuietButton('Skip for now', key: const ValueKey('onboarding-skip-about'), onPressed: _skipAbout)
+            ? QuietButton('Not now', key: const ValueKey('onboarding-skip-about'), onPressed: _skipAbout)
             : null;
         return Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (_note != null)
               Padding(
-                padding: const EdgeInsets.only(bottom: Space.s, left: Space.xs),
-                child: Text(_note!, style: PrepType.meta.copyWith(color: PrepColors.danger)),
+                padding: const EdgeInsets.only(bottom: Space.m),
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(_note!, textAlign: TextAlign.center, style: PrepType.meta.copyWith(color: PrepColors.warning)),
+                ),
               ),
             if (_textMode) ...[
               if (skip != null) Align(alignment: Alignment.centerRight, child: skip),
@@ -510,7 +570,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> with WidgetsBindingObse
   }
 }
 
-/// Voice first: one big mic to answer out loud, with typing as the quieter alternative.
+/// Voice first: one big accent mic to answer out loud, with typing as the quieter way in.
 class _VoiceBar extends StatelessWidget {
   const _VoiceBar({
     required this.recording,
@@ -536,49 +596,89 @@ class _VoiceBar extends StatelessWidget {
         ? (heard.trim().isEmpty ? 'Listening. Tap to stop.' : heard.trim())
         : 'Tap to answer';
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          caption,
-          style: PrepType.bodyL.copyWith(color: recording ? PrepColors.text : PrepColors.text2),
-          textAlign: TextAlign.center,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            caption,
+            style: PrepType.bodyL.copyWith(color: recording ? PrepColors.text : PrepColors.text2),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         const SizedBox(height: Space.m),
-        Row(
-          children: [
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: QuietButton(
-                  'Type instead',
-                  key: const ValueKey('onboarding-type'),
-                  icon: PrepIcons.keyboard,
-                  onPressed: busy || recording ? null : onType,
-                ),
-              ),
-            ),
-            _RoundButton(
+        Builder(
+          // The dock spans the screen between the gutters (no LayoutBuilder: the sliver around it asks
+          // for its intrinsic height).
+          builder: (context) {
+            final width = MediaQuery.sizeOf(context).width - Space.gutter * 2;
+            const disc = 80.0;
+            final type = QuietButton(
+              'Type instead',
+              key: const ValueKey('onboarding-type'),
+              icon: PrepIcons.keyboard,
+              onPressed: busy || recording ? null : onType,
+            );
+            final mic = MetalDisc(
+              recording ? PrepIcons.stop : PrepIcons.mic,
               key: const ValueKey('onboarding-mic'),
-              icon: recording ? PrepIcons.stop : PrepIcons.mic,
               label: recording ? 'Stop recording' : 'Answer by voice',
-              fill: recording ? PrepColors.recording : PrepColors.ink,
-              ink: PrepColors.bg,
-              size: 76,
-              iconSize: 32,
+              size: disc,
+              filled: !busy && !recording,
+              fill: recording ? PrepColors.recording : null,
               onPressed: busy ? null : onMic,
-            ),
-            Expanded(
-              child: Align(alignment: Alignment.centerRight, child: trailing ?? const SizedBox.shrink()),
-            ),
-          ],
+            );
+            final side = (width - disc) / 2 - Space.s;
+            // Large text or a narrow phone: the mic alone on its line, the quiet actions under it.
+            if (!_fitsBeside(context, 'Type instead', side) || (trailing != null && !_fitsBeside(context, 'Not now', side, icon: false))) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  mic,
+                  const SizedBox(height: Space.s),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: Space.s,
+                    runSpacing: Space.xs,
+                    children: [type, ?trailing],
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: Align(alignment: Alignment.centerLeft, child: type)),
+                const SizedBox(width: Space.s),
+                mic,
+                const SizedBox(width: Space.s),
+                Expanded(
+                  child: Align(alignment: Alignment.centerRight, child: trailing ?? const SizedBox.shrink()),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
   }
 }
 
-/// A thin progress bar in the assistant's colour and a way out.
+/// Whether [label] fits on one line in [width] beside the mic, with its icon and padding.
+bool _fitsBeside(BuildContext context, String label, double width, {bool icon = true}) {
+  final painter = TextPainter(
+    text: TextSpan(text: label, style: PrepType.label),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  )..layout();
+  final needed = painter.width + Space.m * 2 + (icon ? 18 + Space.s : 0);
+  painter.dispose();
+  return needed <= width;
+}
+
+/// The step track and a way out.
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.steps, required this.done, required this.onSkip});
 
@@ -588,31 +688,13 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final step = math.min(done + 1, steps);
     return Padding(
       padding: const EdgeInsets.fromLTRB(Space.gutter, Space.m, Space.s, Space.xs),
       child: Row(
         children: [
           Expanded(
-            child: Semantics(
-              label: 'Step ${math.min(done + 1, steps)} of $steps',
-              child: Row(
-                children: [
-                  for (var i = 0; i < steps; i++) ...[
-                    if (i > 0) const SizedBox(width: Space.xs),
-                    Expanded(
-                      child: AnimatedContainer(
-                        duration: Motion.enter,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: i <= done ? PrepColors.accent : PrepColors.line,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+            child: ProgressTrack(value: step / steps, label: 'Step $step of $steps', segments: steps),
           ),
           const SizedBox(width: Space.s),
           QuietButton('Skip', onPressed: onSkip),
@@ -622,7 +704,7 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// One line of the conversation: the coach on the left, you on the right.
+/// One line of the conversation: the coach on metal at the left, you in the accent at the right.
 class _Bubble extends StatelessWidget {
   const _Bubble({required this.line, required this.name});
 
@@ -632,32 +714,23 @@ class _Bubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mine = line.mine;
-    const r = Radius.circular(20);
-    const tip = Radius.circular(6);
+    final text = Text(line.text, style: PrepType.bodyL.copyWith(color: mine ? PrepColors.onAccent : PrepColors.text));
+    const padding = EdgeInsets.symmetric(horizontal: 18, vertical: Space.m);
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.8),
+        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.82),
         child: Padding(
           padding: const EdgeInsets.only(bottom: Space.m),
           child: Semantics(
             label: mine ? 'You: ${line.text}' : '$name: ${line.text}',
             excludeSemantics: true,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: mine ? PrepColors.accent : PrepColors.surface1,
-                borderRadius: BorderRadius.only(
-                  topLeft: mine ? r : tip,
-                  topRight: mine ? tip : r,
-                  bottomLeft: r,
-                  bottomRight: r,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.m),
-                child: Text(line.text, style: PrepType.bodyL.copyWith(color: mine ? PrepColors.bg : PrepColors.text)),
-              ),
-            ),
+            child: mine
+                ? DecoratedBox(
+                    decoration: BoxDecoration(color: PrepColors.accent, borderRadius: BorderRadius.circular(Radii.card)),
+                    child: Padding(padding: padding, child: text),
+                  )
+                : MetalCard(padding: padding, child: text),
           ),
         ),
       ),
@@ -665,7 +738,8 @@ class _Bubble extends StatelessWidget {
   }
 }
 
-/// The answer bar: type, or tap the mic and talk; the words land in the field to check, then send.
+/// The typing dock: a metal field, the mic to talk instead, and send. Spoken words land in the
+/// field to check before sending.
 class _Composer extends StatelessWidget {
   const _Composer({
     required this.controller,
@@ -690,19 +764,15 @@ class _Composer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final canSend = controller.text.trim().isNotEmpty && !recording && !busy;
-    return Container(
+    return MetalCard(
+      radius: Radii.sheet,
       padding: const EdgeInsets.fromLTRB(Space.l, Space.xs, Space.xs, Space.xs),
-      decoration: BoxDecoration(
-        color: PrepColors.surface1,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: recording ? PrepColors.recording : PrepColors.lineStrong),
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: Space.s),
+              padding: const EdgeInsets.symmetric(vertical: 14),
               child: TextField(
                 key: const ValueKey('onboarding-field'),
                 controller: controller,
@@ -728,72 +798,24 @@ class _Composer extends StatelessWidget {
             ),
           ),
           const SizedBox(width: Space.xs),
-          _RoundButton(
+          MetalDisc(
+            recording ? PrepIcons.stop : PrepIcons.mic,
             key: const ValueKey('onboarding-mic'),
-            icon: recording ? PrepIcons.stop : PrepIcons.mic,
             label: recording ? 'Stop recording' : 'Answer by voice',
-            fill: recording ? PrepColors.recording : PrepColors.surface2,
-            ink: recording ? PrepColors.bg : PrepColors.text,
-            size: 52,
-            iconSize: 24,
+            size: 48,
+            fill: recording ? PrepColors.recording : null,
             onPressed: busy ? null : onMic,
           ),
-          const SizedBox(width: Space.xs),
-          _RoundButton(
+          const SizedBox(width: Space.s),
+          MetalDisc(
+            PrepIcons.arrowUpRight,
             key: const ValueKey('onboarding-send'),
-            icon: PrepIcons.arrowUpRight,
             label: 'Send',
-            fill: canSend ? PrepColors.accent : PrepColors.surface2,
-            ink: canSend ? PrepColors.bg : PrepColors.text3,
+            size: 48,
+            filled: canSend,
             onPressed: canSend ? onSend : null,
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _RoundButton extends StatelessWidget {
-  const _RoundButton({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.fill,
-    required this.ink,
-    required this.onPressed,
-    this.size = 48,
-    this.iconSize = 20,
-  });
-
-  final PrepIcons icon;
-  final String label;
-  final Color fill;
-  final Color ink;
-  final VoidCallback? onPressed;
-  final double size;
-  final double iconSize;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      enabled: onPressed != null,
-      label: label,
-      excludeSemantics: true,
-      onTap: onPressed,
-      child: Material(
-        color: fill,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onPressed,
-          child: SizedBox.square(
-            dimension: size,
-            child: Center(
-              child: PrepIcon(icon, color: ink, size: iconSize),
-            ),
-          ),
-        ),
       ),
     );
   }

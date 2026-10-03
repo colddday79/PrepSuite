@@ -1,35 +1,89 @@
 import 'package:flutter/material.dart';
 
 import '../../design/components.dart';
+import '../../design/glass.dart';
 import '../../design/icons.dart';
 import '../../design/tokens.dart';
 
-/// The pieces a drill exercise is built from: answer boxes, word tiles, the gap in a sentence, the
-/// numbered slots of an ordering exercise, and the small marks that say right or not quite.
+/// The pieces a drill exercise is built from: metal answer tiles, word tiles, the gap in a
+/// sentence, the numbered slots of an ordering exercise, and the small marks that say right or not
+/// quite.
 ///
-/// Colour never carries meaning alone: a checked box always has an icon and a few words as well.
+/// Colour never carries meaning alone: a checked tile always has an icon and a few words as well.
 
-/// How a box looks. Before checking it is [idle] or [selected]; after, the right answer is
+/// How a tile looks. Before checking it is [idle] or [selected]; after, the right answer is
 /// [correct], a wrong pick is [wrong], and the rest step back as [muted].
 enum BoxTone { idle, selected, correct, wrong, muted }
 
+/// The paint of one tone: the metal gradient, a status wash laid over it, an inner ring and the
+/// text colour.
 @immutable
-class _Paint {
-  const _Paint(this.fill, this.edge, this.width, this.ink);
+class _TileLook {
+  const _TileLook({required this.top, required this.bottom, required this.wash, required this.ring, required this.ink});
 
-  final Color fill;
-  final Color edge;
-  final double width;
+  final Color top;
+  final Color bottom;
+  final Color wash;
+  final Color ring;
   final Color ink;
+
+  static _TileLook lerp(_TileLook a, _TileLook b, double t) => _TileLook(
+    top: Color.lerp(a.top, b.top, t)!,
+    bottom: Color.lerp(a.bottom, b.bottom, t)!,
+    wash: Color.lerp(a.wash, b.wash, t)!,
+    ring: Color.lerp(a.ring, b.ring, t)!,
+    ink: Color.lerp(a.ink, b.ink, t)!,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is _TileLook &&
+      other.top == top &&
+      other.bottom == bottom &&
+      other.wash == wash &&
+      other.ring == ring &&
+      other.ink == ink;
+
+  @override
+  int get hashCode => Object.hash(top, bottom, wash, ring, ink);
 }
 
-_Paint _paintFor(BoxTone tone) => switch (tone) {
-  BoxTone.idle => _Paint(PrepColors.surface1, PrepColors.line, 1, PrepColors.text),
-  BoxTone.selected => _Paint(PrepColors.accentTint, PrepColors.accent, 2, PrepColors.text),
-  BoxTone.correct => _Paint(PrepColors.successTint, PrepColors.success, 2, PrepColors.text),
-  BoxTone.wrong => _Paint(PrepColors.warningTint, PrepColors.warning, 2, PrepColors.text),
-  BoxTone.muted => _Paint(PrepColors.surface1, PrepColors.line, 1, PrepColors.text2),
+class _LookTween extends Tween<_TileLook> {
+  _LookTween({super.end});
+
+  @override
+  _TileLook lerp(double t) => _TileLook.lerp(begin!, end!, t);
+}
+
+const _clear = Color(0x00000000);
+
+/// The status colour of a checked tone, or null before checking.
+Color? _statusOf(BoxTone tone) => switch (tone) {
+  BoxTone.correct => PrepColors.success,
+  BoxTone.wrong => PrepColors.warning,
+  _ => null,
 };
+
+_TileLook _lookFor(BoxTone tone) {
+  final status = _statusOf(tone);
+  if (tone == BoxTone.selected) {
+    // Picked: the raised metal of a disc, with a thin accent ring.
+    return _TileLook(
+      top: PrepColors.surface2,
+      bottom: Color.lerp(PrepColors.surface2, PrepColors.metalBottom, 0.4)!,
+      wash: _clear,
+      ring: PrepColors.accentDeep,
+      ink: PrepColors.text,
+    );
+  }
+  return _TileLook(
+    top: PrepColors.metalTop,
+    bottom: PrepColors.metalBottom,
+    wash: status == null ? _clear : status.withValues(alpha: 0.14),
+    ring: status == null ? _clear : status.withValues(alpha: 0.4),
+    ink: tone == BoxTone.muted ? PrepColors.text2 : PrepColors.text,
+  );
+}
 
 PrepIcons? _markFor(BoxTone tone) => switch (tone) {
   BoxTone.correct => PrepIcons.check,
@@ -39,10 +93,10 @@ PrepIcons? _markFor(BoxTone tone) => switch (tone) {
 
 bool _still(BuildContext context) => MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
-/// The fill and edge of a box, easing between tones. The edge is drawn inside the shape, so a
-/// thicker selected edge never moves the text.
-class _Surface extends StatelessWidget {
-  const _Surface({required this.tone, required this.radius, required this.child});
+/// Satin metal under a tile, easing between tones. The ring is drawn inside the shape, so a picked
+/// tile never moves its text.
+class _Tile extends StatelessWidget {
+  const _Tile({required this.tone, required this.radius, required this.child});
 
   final BoxTone tone;
   final double radius;
@@ -50,32 +104,53 @@ class _Surface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paint = _paintFor(tone);
-    return TweenAnimationBuilder<Decoration>(
-      tween: DecorationTween(
-        end: ShapeDecoration(
-          color: paint.fill,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(radius),
-            side: BorderSide(color: paint.edge, width: paint.width),
-          ),
-        ),
-      ),
+    return TweenAnimationBuilder<_TileLook>(
+      tween: _LookTween(end: _lookFor(tone)),
       duration: _still(context) ? Duration.zero : Motion.fade,
       curve: Motion.standard,
-      builder: (context, decoration, child) => DecoratedBox(decoration: decoration, child: child),
+      builder: (context, look, child) => CustomPaint(painter: _TilePainter(look, radius), child: child),
       child: child,
     );
   }
 }
 
+class _TilePainter extends CustomPainter {
+  _TilePainter(this.look, this.radius);
+
+  final _TileLook look;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Smoked glass like every card (lib/design/glass.dart), then the status wash and the ring.
+    final rrect = RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius));
+    paintGlass(canvas, rrect, top: look.top, bottom: look.bottom);
+    if (look.wash.a > 0) canvas.drawRRect(rrect, Paint()..color = look.wash);
+    if (look.ring.a > 0) {
+      canvas.drawRRect(
+        rrect.deflate(0.75),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..color = look.ring,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TilePainter old) => old.look != look || old.radius != radius;
+}
+
 /// A small filled disc with a dark hairline icon: check for right, a cross for not quite.
 class StatusMark extends StatelessWidget {
-  const StatusMark(this.icon, {super.key, required this.color, this.size = 24});
+  const StatusMark(this.icon, {super.key, required this.color, this.size = 24, this.ink});
 
   final PrepIcons icon;
   final Color color;
   final double size;
+
+  /// The icon colour; the canvas by default (dark on a bright status colour).
+  final Color? ink;
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +158,7 @@ class StatusMark extends StatelessWidget {
       dimension: size,
       child: DecoratedBox(
         decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        child: Center(child: PrepIcon(icon, color: PrepColors.bg, size: size * 0.72)),
+        child: Center(child: PrepIcon(icon, color: ink ?? PrepColors.bg, size: size * 0.7)),
       ),
     );
   }
@@ -111,12 +186,14 @@ class AnswerBox extends StatelessWidget {
   final String? note;
   final String? leading;
 
-  static const _shape = RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(Radii.control)));
+  static const double _radius = Radii.card;
+  static const _shape = RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(_radius)));
 
   @override
   Widget build(BuildContext context) {
-    final paint = _paintFor(tone);
     final mark = _markFor(tone);
+    final status = _statusOf(tone);
+    final ink = tone == BoxTone.muted ? PrepColors.text2 : PrepColors.text;
     return Semantics(
       container: true,
       button: true,
@@ -126,44 +203,46 @@ class AnswerBox extends StatelessWidget {
       excludeSemantics: true,
       onTap: onTap,
       child: FocusRing(
-        child: _Surface(
+        radius: _radius,
+        child: _Tile(
           tone: tone,
-          radius: Radii.control,
+          radius: _radius,
           child: Material(
             type: MaterialType.transparency,
+            shape: _shape,
+            clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: onTap,
-              customBorder: _shape,
               focusColor: Colors.transparent,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 56, minWidth: double.infinity),
+                constraints: const BoxConstraints(minHeight: 60, minWidth: double.infinity),
                 child: Padding(
-                  padding: const EdgeInsets.all(Space.l),
+                  padding: const EdgeInsets.all(18),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (leading != null) ...[
                         SizedBox(
-                          width: Space.l,
+                          width: Space.xl,
                           child: Text(leading!, style: PrepType.bodyLMedium.copyWith(color: PrepColors.text3)),
                         ),
-                        const SizedBox(width: Space.m),
+                        const SizedBox(width: Space.s),
                       ],
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(text, style: PrepType.bodyL.copyWith(color: paint.ink)),
+                            Text(text, style: PrepType.bodyL.copyWith(color: ink)),
                             if (note != null) ...[
-                              const SizedBox(height: Space.xs),
-                              Text(note!, style: PrepType.label.copyWith(color: paint.edge)),
+                              const SizedBox(height: Space.s),
+                              Text(note!, style: PrepType.label.copyWith(color: status ?? PrepColors.text2)),
                             ],
                           ],
                         ),
                       ),
-                      if (mark != null) ...[
+                      if (mark != null && status != null) ...[
                         const SizedBox(width: Space.m),
-                        StatusMark(mark, color: paint.edge),
+                        StatusMark(mark, color: status),
                       ],
                     ],
                   ),
@@ -197,7 +276,7 @@ class WordTile extends StatelessWidget {
 
   static const double _radius = 24;
   static const _shape = RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(_radius)));
-  static const _padding = EdgeInsets.symmetric(horizontal: Space.l, vertical: Space.m);
+  static const _padding = EdgeInsets.symmetric(horizontal: 18, vertical: Space.m);
 
   @override
   Widget build(BuildContext context) {
@@ -206,19 +285,22 @@ class WordTile extends StatelessWidget {
         child: DecoratedBox(
           decoration: ShapeDecoration(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(_radius)),
-              side: BorderSide(color: PrepColors.line),
+              borderRadius: const BorderRadius.all(Radius.circular(_radius)),
+              side: BorderSide(color: PrepColors.lineStrong),
             ),
           ),
-          child: Padding(
-            padding: _padding,
-            child: Text(text, style: PrepType.bodyL.copyWith(color: Colors.transparent)),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: _padding,
+              child: Text(text, style: PrepType.bodyL.copyWith(color: Colors.transparent)),
+            ),
           ),
         ),
       );
     }
-    final paint = _paintFor(tone);
     final mark = _markFor(tone);
+    final status = _statusOf(tone);
     return Semantics(
       container: true,
       button: true,
@@ -229,14 +311,15 @@ class WordTile extends StatelessWidget {
       onTap: onTap,
       child: FocusRing(
         radius: _radius,
-        child: _Surface(
+        child: _Tile(
           tone: tone,
           radius: _radius,
           child: Material(
             type: MaterialType.transparency,
+            shape: _shape,
+            clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: onTap,
-              customBorder: _shape,
               focusColor: Colors.transparent,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
@@ -245,10 +328,15 @@ class WordTile extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Flexible(child: Text(text, style: PrepType.bodyL.copyWith(color: paint.ink))),
-                      if (mark != null) ...[
+                      Flexible(
+                        child: Text(
+                          text,
+                          style: PrepType.bodyL.copyWith(color: tone == BoxTone.muted ? PrepColors.text2 : PrepColors.text),
+                        ),
+                      ),
+                      if (mark != null && status != null) ...[
                         const SizedBox(width: Space.s),
-                        StatusMark(mark, color: paint.edge, size: 20),
+                        StatusMark(mark, color: status, size: 20),
                       ],
                     ],
                   ),
@@ -277,14 +365,17 @@ class BlankGap extends StatelessWidget {
       return Semantics(
         label: 'Blank',
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: Space.xxs, vertical: Space.xs),
+          padding: const EdgeInsets.symmetric(horizontal: Space.xxs, vertical: Space.xs),
           child: SizedBox(
             width: 88,
             height: 40,
             child: DecoratedBox(
               decoration: ShapeDecoration(
-                color: PrepColors.surface2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(Radii.chip))),
+                color: PrepColors.metalBottom.withValues(alpha: 0.6),
+                shape: RoundedRectangleBorder(
+                  borderRadius: const BorderRadius.all(Radius.circular(Radii.chip)),
+                  side: BorderSide(color: PrepColors.lineStrong, width: 1.5),
+                ),
               ),
             ),
           ),
@@ -328,16 +419,16 @@ class OrderSlot extends StatelessWidget {
         label: 'Step $number, empty',
         excludeSemantics: true,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 56, minWidth: double.infinity),
+          constraints: const BoxConstraints(minHeight: 60, minWidth: double.infinity),
           child: DecoratedBox(
             decoration: ShapeDecoration(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(Radii.control)),
+                borderRadius: const BorderRadius.all(Radius.circular(Radii.card)),
                 side: BorderSide(color: PrepColors.lineStrong),
               ),
             ),
             child: Padding(
-              padding: const EdgeInsets.all(Space.l),
+              padding: const EdgeInsets.all(18),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text('$number', style: PrepType.bodyLMedium.copyWith(color: PrepColors.text3)),
@@ -363,13 +454,16 @@ class OrderSlot extends StatelessWidget {
   }
 }
 
-/// A quoted line with a small label above it: what the interviewer asks, the line to rewrite, or
-/// one way to say it. A hairline rule on the left marks it as a quote.
+/// A line someone says, set apart on a flat inset: what the interviewer asks, the line to rewrite,
+/// or one way to say it. Flat (no rim, no shadow) so it never reads as a tile to tap.
 class QuoteBlock extends StatelessWidget {
-  const QuoteBlock({super.key, required this.label, required this.text});
+  const QuoteBlock({super.key, required this.label, required this.text, this.strong = false});
 
   final String label;
   final String text;
+
+  /// The model answer reads in full white; everything else in the quieter grey.
+  final bool strong;
 
   @override
   Widget build(BuildContext context) {
@@ -379,16 +473,18 @@ class QuoteBlock extends StatelessWidget {
       excludeSemantics: true,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: PrepColors.lineStrong, width: 2)),
+          // Translucent, so the room's light shows through; flat, so it never reads as a tile.
+          color: PrepColors.metalBottom.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(Radii.control),
         ),
         child: Padding(
-          padding: const EdgeInsets.only(left: Space.l, top: Space.xxs, bottom: Space.xxs),
+          padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.l, Space.l),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: PrepType.meta),
+              Text(label, style: PrepType.meta.copyWith(color: PrepColors.text3)),
               const SizedBox(height: Space.xs),
-              Text(text, style: PrepType.bodyLMedium),
+              Text(text, style: PrepType.bodyLMedium.copyWith(color: strong ? PrepColors.text : PrepColors.text2)),
             ],
           ),
         ),
@@ -397,7 +493,7 @@ class QuoteBlock extends StatelessWidget {
   }
 }
 
-/// A 4 dp progress line for the skill path. Decorative: the words beside it say the same.
+/// A 4 dp progress line for the skill path. Decorative: the numbers beside it say the same.
 class ThinTrack extends StatelessWidget {
   const ThinTrack({super.key, required this.value});
 
@@ -413,11 +509,13 @@ class ThinTrack extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              ColoredBox(color: PrepColors.surface2),
+              ColoredBox(color: PrepColors.line),
               FractionallySizedBox(
                 alignment: Alignment.centerLeft,
                 widthFactor: value.clamp(0.0, 1.0),
-                child: ColoredBox(color: PrepColors.accent),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: PrepColors.accent, borderRadius: BorderRadius.circular(2)),
+                ),
               ),
             ],
           ),
@@ -427,8 +525,8 @@ class ThinTrack extends StatelessWidget {
   }
 }
 
-/// Eases a new exercise in: a short fade and a small slide from the right. Nothing moves when
-/// the system asks for less motion.
+/// Eases a new exercise in: a short fade and a small slide from the right (Material's shared
+/// axis). Nothing moves when the system asks for less motion.
 class EnterFade extends StatelessWidget {
   const EnterFade({super.key, required this.child});
 

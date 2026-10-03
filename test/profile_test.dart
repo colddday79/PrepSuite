@@ -14,6 +14,7 @@ import 'package:prepsuite/design/assistant_avatar.dart';
 import 'package:prepsuite/design/components.dart';
 import 'package:prepsuite/design/hologram.dart';
 import 'package:prepsuite/design/icons.dart';
+import 'package:prepsuite/design/tokens.dart';
 import 'package:prepsuite/features/profile/practice_history.dart';
 import 'package:prepsuite/features/profile/profile_format.dart';
 import 'package:prepsuite/features/profile/profile_screen.dart';
@@ -140,12 +141,13 @@ void main() {
 
     test('dates are written out in full, with the year only when it differs', () {
       final now = DateTime(2026, 9, 25);
-      expect(shortDate(DateTime(2026, 9, 30), now), 'Wed 30 Sep');
-      expect(shortDate(DateTime(2027, 1, 1), now), 'Fri 1 Jan 2027');
-      expect(spokenDate(DateTime(2026, 9, 30), now), 'Wednesday 30 September');
-      expect(interviewDateLine(Profile(interviewDate: DateTime(2026, 9, 30)), now), 'Wed 30 Sep · in 5 days');
-      expect(interviewDateLine(Profile(interviewDate: DateTime(2026, 9, 26)), now), 'Sat 26 Sep · tomorrow');
-      expect(interviewDateLine(Profile(interviewDate: DateTime(2026, 9, 22)), now), 'Tue 22 Sep · 3 days ago');
+      expect(shortDate(DateTime(2026, 9, 30), now), 'Wed, Sep 30');
+      expect(shortDate(DateTime(2027, 1, 1), now), 'Fri, Jan 1, 2027');
+      expect(spokenDate(DateTime(2026, 9, 30), now), 'Wednesday, September 30');
+      expect(interviewDateLine(Profile(interviewDate: DateTime(2026, 9, 30)), now), 'Wed, Sep 30 · in 5 days');
+      expect(interviewDateLine(Profile(interviewDate: DateTime(2026, 9, 26)), now), 'Sat, Sep 26 · tomorrow');
+      expect(interviewDateLine(Profile(interviewDate: DateTime(2026, 9, 22)), now), 'Tue, Sep 22 · 3 days ago');
+      expect(spokenInterviewDate(Profile(interviewDate: DateTime(2026, 9, 30)), now), 'Wednesday, September 30, in 5 days');
       expect(interviewDateLine(const Profile(), now), isNull);
     });
   });
@@ -404,6 +406,23 @@ void main() {
       await _tap(tester, find.byKey(const ValueKey('assistant-sol')));
       await _settle(tester, 300);
       expect(services.assistant.value.kind, AssistantKind.sol);
+    });
+
+    testWidgets('appearance: a swatch per theme, and choosing one calls the theme store', (tester) async {
+      final services = _services();
+      await _openProfile(tester, services);
+      for (final theme in PrepThemes.all) {
+        expect(find.byKey(ValueKey('theme-${theme.id}')), findsOneWidget);
+      }
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('theme-ember'))),
+        isSemantics(label: 'Ember theme', isChecked: true, isInMutuallyExclusiveGroup: true, hasTapAction: true),
+      );
+      await _tap(tester, find.byKey(const ValueKey('theme-signal')));
+      await _settle(tester, 300);
+      expect(services.theme.value, PrepThemes.signal);
+      expect(tester.getSemantics(find.byKey(const ValueKey('theme-signal'))), isSemantics(isChecked: true));
+      expect(tester.getSemantics(find.byKey(const ValueKey('theme-ember'))), isSemantics(isChecked: false));
     });
 
     testWidgets('see the introduction again resets onboarding', (tester) async {

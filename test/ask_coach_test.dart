@@ -213,12 +213,12 @@ Future<void> _typeAnswer(WidgetTester tester) async {
   }
   await tester.enterText(find.byKey(const ValueKey('answer-field')), _typedAnswer);
   await tester.pump();
-  await _tap(tester, find.text('Send answer'));
+  await _tap(tester, find.text('Send'));
   await _settle(tester, 400);
 }
 
 Future<void> _askByTyping(WidgetTester tester, String question) async {
-  await _tap(tester, find.text('Ask the coach'));
+  await _tap(tester, find.text('Ask'));
   await _settle(tester, 400);
   if (find.byKey(const ValueKey('ask-field')).evaluate().isEmpty) {
     await _tap(tester, find.text('Type instead'));
@@ -309,7 +309,7 @@ void main() {
     expect(find.text(_lengthReply), findsOneWidget);
     expect(find.text('Sample answer'), findsOneWidget);
     expect(rig.voice.spoken.last, _lengthReply);
-    expect(find.text('Next question'), findsOneWidget);
+    expect(find.text('Next'), findsOneWidget);
 
     final call = rig.coach.asks.single;
     expect(call.job, 'Barista at a busy cafe');
@@ -323,14 +323,14 @@ void main() {
     expect(find.byKey(const ValueKey('ask-field')), findsOneWidget);
     await _tap(tester, find.text('Close'));
     expect(find.byKey(const ValueKey('ask-field')), findsNothing);
-    expect(find.text('Ask the coach'), findsOneWidget);
+    expect(find.text('Ask'), findsOneWidget);
   });
 
   testWidgets('asking by voice records up to 15 seconds, at large text on a small phone', (tester) async {
     final rig = _Rig();
     await _open(tester, rig, textScale: 1.3);
     await _typeAnswer(tester);
-    await _tap(tester, find.text('Ask the coach'));
+    await _tap(tester, find.text('Ask'));
     await _settle(tester, 400);
 
     await _tap(tester, _record());
@@ -377,12 +377,12 @@ void main() {
     expect(find.text('The coach is thinking'), findsOneWidget);
     expect(rig.voice.speaking, isTrue); // still reading the feedback
     final before = rig.voice.events.length;
-    await _tap(tester, find.text('Next question'));
+    await _tap(tester, find.text('Next'));
     expect(rig.voice.events.skip(before).first, 'stop');
 
     await _settle(tester, 800);
     expect(rig.coach.asks, hasLength(1));
-    expect(find.text('2 of 2'), findsOneWidget);
+    expect(find.text('2/2'), findsOneWidget);
     expect(rig.voice.spoken.last, 'Why do you want this job?');
     expect(rig.voice.spoken.where((line) => line.startsWith('For this one')), isEmpty);
   });
@@ -391,7 +391,7 @@ void main() {
     final rig = _Rig();
     await _open(tester, rig);
     await _typeAnswer(tester);
-    await _tap(tester, find.text('Ask the coach'));
+    await _tap(tester, find.text('Ask'));
     await _settle(tester, 400);
     await _tap(tester, _record());
     await _settle(tester, 600);

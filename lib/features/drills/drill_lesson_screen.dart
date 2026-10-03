@@ -8,8 +8,11 @@ import 'package:flutter/services.dart';
 import '../../app/assistant.dart';
 import '../../design/assistant_avatar.dart';
 import '../../design/components.dart';
+import '../../design/glass.dart';
 import '../../design/icons.dart';
+import '../../design/metal.dart';
 import '../../design/practice_chrome.dart';
+import '../../design/robot_stage.dart';
 import '../../design/tokens.dart';
 import 'drill_content.dart';
 import 'drill_parts.dart';
@@ -38,12 +41,13 @@ Future<void> openDrillLesson(
   );
 }
 
-/// One lesson of the skill path: a short run of exercises answered by tapping boxes (and one
-/// written rewrite), each checked straight away with a one-sentence reason. A miss comes back once
-/// at the end; the score counts first tries. The finished lesson is saved to [progress].
+/// One lesson of the skill path: a short run of exercises answered by tapping metal tiles (and
+/// one written rewrite), each checked straight away. The bottom bar becomes a result card with one
+/// reason. A miss comes back once at the end; the score counts first tries. The finished lesson is
+/// saved to [progress].
 ///
-/// [onPracticeAloud], when set, adds "Practice it out loud" to the finish screen. The lesson route
-/// is closed first, then the callback runs.
+/// [onPracticeAloud], when set, adds "Practice aloud" to the finish screen. The lesson route is
+/// closed first, then the callback runs.
 class DrillLessonScreen extends StatefulWidget {
   const DrillLessonScreen({
     super.key,
@@ -70,16 +74,19 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
   final _text = TextEditingController();
   final _scroll = ScrollController();
 
-  /// On the right answer's box after a miss, and on the model rewrite, so either can be scrolled
-  /// into view.
+  /// On the right answer after a miss, and on the model rewrite, so either can be scrolled into
+  /// view.
   final _revealKey = GlobalKey();
+
+  /// The robot beside the prompt.
+  static const double _robot = 96;
 
   int _index = 0;
 
   /// Exercises finished for good: right, or a second try either way.
   int _resolved = 0;
 
-  /// The chosen box (choice, odd one out) or bank tile (fill in the blank).
+  /// The chosen tile (choice, odd one out) or bank word (fill in the blank).
   int? _pick;
 
   /// For ordering: which part sits in each step, as an index into the right order.
@@ -152,7 +159,7 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
       }
     });
     if (right && exercise.scored) HapticFeedback.selectionClick();
-    // Bring the marked answer (or the model rewrite) into view once the feedback bar has grown.
+    // Bring the marked answer (or the model rewrite) into view once the result card has grown.
     if (!right || exercise is RewriteExercise) {
       final index = _index;
       void reveal() {
@@ -224,7 +231,7 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
       barrierColor: PrepColors.scrim,
       builder: (context) => AlertDialog(
         title: const Text('Leave this lesson?'),
-        content: const Text("Your progress in it won't be saved."),
+        content: const Text("Progress here won't be saved."),
         actions: [
           QuietButton('Keep going', onPressed: () => Navigator.of(context).pop(false)),
           QuietButton('Leave', color: PrepColors.danger, onPressed: () => Navigator.of(context).pop(true)),
@@ -278,14 +285,16 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _close();
       },
-      child: Scaffold(
-        backgroundColor: PrepColors.bg,
-        body: SafeArea(bottom: false, child: _done ? _finished(avail) : _lessonView(avail)),
+      child: AmbientBackdrop(
+        child: Scaffold(
+          backgroundColor: const Color(0x00000000),
+          body: SafeArea(bottom: false, child: _done ? _finished(avail) : _lessonView(avail)),
+        ),
       ),
     );
   }
 
-  // The lesson: top bar, the exercise (scrolls), and the bar that is Check, then the feedback.
+  // The lesson: top bar, the exercise (scrolls), and the bar that is Check, then the result card.
 
   Widget _lessonView(double avail) {
     final total = _lesson.exercises.length;
@@ -295,6 +304,9 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
       closeLabel: 'Close lesson',
       onClose: _close,
       caption: avail < 420 ? null : widget.skill.title,
+      segments: total,
+      count: '$_resolved/$total',
+      metalClose: true,
     );
     final body = Center(
       child: ConstrainedBox(
@@ -302,7 +314,7 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
         child: _exercise(_current),
       ),
     );
-    const inset = EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, Space.xxl);
+    const inset = EdgeInsets.fromLTRB(Space.gutter, Space.m, Space.gutter, Space.xxl);
     final bar = _bar(_current, avail);
     if (avail < 300) {
       // Very short windows (landscape with large text): everything scrolls together.
@@ -322,37 +334,76 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
     );
   }
 
+  /// What to do and the question, with the robot in the top-right corner watching. When the line
+  /// beside the robot would be too narrow (small phones, large text), the question drops under it
+  /// at full width.
+  Widget _head(DrillExercise exercise) {
+    final robot = ExcludeSemantics(
+      // The result card says the same in words.
+      child: AssistantAvatar(look: widget.look, size: _robot, mood: _mood),
+    );
+    final instruction = Text(
+      _isRetry ? 'Second try · ${exercise.instruction}' : exercise.instruction,
+      style: PrepType.meta,
+    );
+    return LayoutBuilder(
+      builder: (context, box) {
+        final scale = MediaQuery.textScalerOf(context).scale(1);
+        final beside = box.maxWidth - _robot - Space.m;
+        final roomy = beside >= 240 * math.min(scale, 1.6);
+        final style = scale > 1.3 || box.maxWidth < 340 ? PrepType.questionM : PrepType.question;
+        final prompt = Semantics(header: true, child: Text(exercise.prompt, style: style));
+        if (roomy) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: EnterFade(
+                  key: ValueKey('head-$_index'),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: Space.s),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [instruction, const SizedBox(height: Space.s), prompt],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: Space.m),
+              robot,
+            ],
+          );
+        }
+        return EnterFade(
+          key: ValueKey('head-$_index'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Padding(padding: const EdgeInsets.only(bottom: Space.m), child: instruction),
+                  ),
+                  const SizedBox(width: Space.m),
+                  robot,
+                ],
+              ),
+              const SizedBox(height: Space.s),
+              prompt,
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _exercise(DrillExercise exercise) {
     final asked = exercise.asked;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: EnterFade(
-                key: ValueKey('head-$_index'),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _isRetry ? 'Second try · ${exercise.instruction}' : exercise.instruction,
-                      style: PrepType.meta,
-                    ),
-                    const SizedBox(height: Space.s),
-                    Semantics(header: true, child: Text(exercise.prompt, style: PrepType.questionM)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: Space.m),
-            // Beside the prompt, never over it. The feedback says the same in words.
-            ExcludeSemantics(
-              child: AssistantAvatar(look: widget.look, size: 72, mood: _mood, hud: false),
-            ),
-          ],
-        ),
+        _head(exercise),
         EnterFade(
           key: ValueKey('answers-$_index'),
           child: KeyedSubtree(
@@ -362,12 +413,12 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
               children: [
                 if (asked != null) ...[
                   const SizedBox(height: Space.l),
-                  QuoteBlock(label: 'They ask', text: '"$asked"'),
+                  QuoteBlock(label: 'They ask', text: '“$asked”'),
                 ],
                 const SizedBox(height: Space.xxl),
                 switch (exercise) {
-                  ChoiceExercise e => _options(e.options, e.answer, 'Best answer', Space.m),
-                  OddOneOutExercise e => _options(e.sentences, e.answer, "Doesn't belong", Space.s),
+                  ChoiceExercise e => _options(e.options, e.answer, 'Best answer'),
+                  OddOneOutExercise e => _options(e.sentences, e.answer, "Doesn't belong"),
                   FillBlankExercise e => _fillBlank(e),
                   OrderExercise e => _order(e),
                   RewriteExercise e => _rewrite(e),
@@ -380,12 +431,12 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
     );
   }
 
-  Widget _options(List<String> options, int answer, String rightNote, double gap) {
+  Widget _options(List<String> options, int answer, String rightNote) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final (i, text) in options.indexed) ...[
-          if (i > 0) SizedBox(height: gap),
+          if (i > 0) const SizedBox(height: Space.m),
           Builder(
             builder: (context) {
               final BoxTone tone;
@@ -420,12 +471,13 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
   Widget _fillBlank(FillBlankExercise e) {
     final pick = _pick;
     final gapTone = !_checked ? BoxTone.selected : (_right ? BoxTone.correct : BoxTone.wrong);
+    final scale = MediaQuery.textScalerOf(context).scale(1);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text.rich(
           TextSpan(
-            style: PrepType.questionM,
+            style: (scale > 1.3 ? PrepType.titleL : PrepType.questionM).copyWith(color: PrepColors.text2),
             children: [
               if (e.before.isNotEmpty) TextSpan(text: e.before),
               WidgetSpan(
@@ -447,13 +499,20 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
           runSpacing: Space.s,
           children: [
             for (final (i, word) in e.bank.indexed)
-              WordTile(
-                key: ValueKey('drill-tile-$i'),
-                text: word,
-                tone: BoxTone.idle,
-                ghost: i == pick,
-                onTap: _checked ? null : () => _choose(i),
-                semanticLabel: word,
+              Builder(
+                builder: (context) {
+                  // After a miss the right word lights up in the bank, so the answer is on screen.
+                  final answer = _checked && !_right && i == e.answerIndex;
+                  final tile = WordTile(
+                    key: ValueKey('drill-tile-$i'),
+                    text: word,
+                    tone: !_checked ? BoxTone.idle : (answer ? BoxTone.correct : BoxTone.muted),
+                    ghost: i == pick,
+                    onTap: _checked ? null : () => _choose(i),
+                    semanticLabel: answer ? '$word, the answer' : word,
+                  );
+                  return answer ? KeyedSubtree(key: _revealKey, child: tile) : tile;
+                },
               ),
           ],
         ),
@@ -528,7 +587,7 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
             fieldKey: const ValueKey('drill-rewrite-field'),
             controller: _text,
             label: 'Your version',
-            hint: 'Write it in your own words',
+            hint: 'Write it here',
             minLines: 3,
             maxLines: 6,
             keyboardType: TextInputType.multiline,
@@ -537,79 +596,94 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
           Text(
             count < RewriteExercise.minWords
                 ? 'At least ${RewriteExercise.minWords} words ($count so far)'
-                : '$count words. Check when you\'re ready.',
+                : '$count words',
             style: PrepType.meta,
           ),
         ] else ...[
           QuoteBlock(label: 'Yours', text: _text.text.trim()),
-          const SizedBox(height: Space.xl),
+          const SizedBox(height: Space.m),
           EnterFade(
             key: _revealKey,
-            child: QuoteBlock(label: 'One way to say it', text: e.model),
+            child: QuoteBlock(label: 'One way to say it', text: e.model, strong: true),
           ),
         ],
       ],
     );
   }
 
+  /// The bottom of the lesson: Check, then (the one authored moment) a result card sliding up in
+  /// its place, tinted for right or not quite, with the reason and Continue.
   Widget _bar(DrillExercise exercise, double avail) {
     final duration = _still ? Duration.zero : Motion.enter;
-    final Color color;
-    if (!_checked) {
-      color = PrepColors.bg;
-    } else if (exercise is RewriteExercise) {
-      color = PrepColors.surface1;
-    } else {
-      color = _right ? PrepColors.successTint : PrepColors.warningTint;
-    }
-    final Widget content;
-    if (!_checked) {
-      content = PrimaryButton('Check', key: const ValueKey('drill-check'), onPressed: _canCheck ? _check : null);
-    } else {
-      content = Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: math.max(96, avail * 0.36)),
-            child: SingleChildScrollView(child: _feedback(exercise)),
-          ),
-          const SizedBox(height: Space.l),
-          PrimaryButton('Continue', key: const ValueKey('drill-continue'), onPressed: _continue),
-        ],
-      );
-    }
-    return TweenAnimationBuilder<Color?>(
-      tween: ColorTween(end: color),
+    final Widget content = !_checked
+        ? BottomActionBar(
+            color: const Color(0x00000000),
+            children: [
+              PrimaryButton('Check', key: const ValueKey('drill-check'), onPressed: _canCheck ? _check : null),
+            ],
+          )
+        : SafeArea(
+            top: false,
+            minimum: const EdgeInsets.only(bottom: Space.m),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(Space.m, Space.s, Space.m, 0),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 600),
+                  child: _result(exercise, avail),
+                ),
+              ),
+            ),
+          );
+    return AnimatedSize(
       duration: duration,
       curve: Motion.standard,
-      builder: (context, tint, child) => BottomActionBar(color: tint ?? color, children: [child!]),
-      child: AnimatedSize(
+      alignment: Alignment.bottomCenter,
+      child: AnimatedSwitcher(
         duration: duration,
-        curve: Motion.standard,
-        alignment: Alignment.bottomCenter,
-        child: AnimatedSwitcher(
-          duration: duration,
-          switchInCurve: Motion.decelerate,
-          switchOutCurve: Motion.standard,
-          layoutBuilder: (current, previous) => Stack(
-            alignment: Alignment.bottomCenter,
-            children: [...previous, ?current],
-          ),
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween(begin: const Offset(0, 0.06), end: Offset.zero).animate(animation),
-              child: child,
-            ),
-          ),
-          child: KeyedSubtree(key: ValueKey('bar-$_index-$_checked'), child: content),
+        switchInCurve: Motion.decelerate,
+        switchOutCurve: Motion.standard,
+        layoutBuilder: (current, previous) => Stack(
+          alignment: Alignment.bottomCenter,
+          children: [...previous, ?current],
         ),
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0, 0.25), end: Offset.zero).animate(animation),
+            child: child,
+          ),
+        ),
+        child: KeyedSubtree(key: ValueKey('bar-$_index-$_checked'), child: content),
       ),
     );
   }
 
-  Widget _feedback(DrillExercise exercise) {
+  Widget _result(DrillExercise exercise, double avail) {
+    final rewrite = exercise is RewriteExercise;
+    final status = rewrite ? null : (_right ? PrepColors.success : PrepColors.warning);
+    return MetalCard(
+      hero: true,
+      radius: Radii.sheet,
+      tint: status,
+      padding: const EdgeInsets.fromLTRB(Space.xl, Space.xl, Space.xl, Space.l),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: math.max(96, avail * 0.32)),
+            child: SingleChildScrollView(child: _feedback(exercise, status)),
+          ),
+          const SizedBox(height: Space.l),
+          PrimaryButton('Continue', key: const ValueKey('drill-continue'), onPressed: _continue),
+        ],
+      ),
+    );
+  }
+
+  Widget _feedback(DrillExercise exercise, Color? status) {
+    final reason = PrepType.bodyL.copyWith(color: PrepColors.text2);
     if (exercise is RewriteExercise) {
       return Semantics(
         container: true,
@@ -617,9 +691,13 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _FeedbackTitle(icon: PrepIcons.edit, color: PrepColors.text2, ink: PrepColors.text, title: 'Compare yours'),
-            const SizedBox(height: Space.s),
-            Text(rewriteTip(exercise, _text.text), style: PrepType.body),
+            _ResultTitle(
+              mark: StatusMark(PrepIcons.edit, color: PrepColors.surface2, ink: PrepColors.text, size: 32),
+              title: 'Compare yours',
+              color: PrepColors.text,
+            ),
+            const SizedBox(height: Space.m),
+            Text(rewriteTip(exercise, _text.text), style: reason),
           ],
         ),
       );
@@ -631,93 +709,102 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
       OrderExercise e => e.why,
       RewriteExercise _ => '',
     };
-    final (String, String)? answer = _right
-        ? null
-        : switch (exercise) {
-            ChoiceExercise _ => ('', 'The best answer is marked above.'),
-            OddOneOutExercise _ => ('', "The sentence that doesn't belong is marked above."),
-            FillBlankExercise e => ('Answer: ', e.answer),
-            OrderExercise _ => ('', 'The notes above show where each part goes.'),
-            RewriteExercise _ => null,
-          };
-    final accent = _right ? PrepColors.success : PrepColors.warning;
+    // A missed blank leads with the word, so the answer is in words as well as in the bank.
+    final answer = !_right && exercise is FillBlankExercise ? exercise.answer : null;
+    final color = status ?? PrepColors.text;
     return Semantics(
       container: true,
       liveRegion: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _FeedbackTitle(
-            icon: _right ? PrepIcons.check : PrepIcons.close,
-            color: accent,
-            ink: accent,
+          _ResultTitle(
+            mark: StatusMark(_right ? PrepIcons.check : PrepIcons.close, color: color, size: 32),
             title: _right ? 'Nice.' : 'Not quite.',
+            color: color,
           ),
-          const SizedBox(height: Space.s),
-          if (answer != null) ...[
-            Text.rich(
-              TextSpan(
-                children: [
-                  if (answer.$1.isNotEmpty) TextSpan(text: answer.$1, style: PrepType.bodyLMedium),
-                  TextSpan(text: answer.$2),
-                ],
-              ),
-              style: PrepType.bodyL,
+          const SizedBox(height: Space.m),
+          Text.rich(
+            TextSpan(
+              children: [
+                if (answer != null)
+                  TextSpan(text: 'Answer: $answer. ', style: PrepType.bodyLMedium.copyWith(color: PrepColors.text)),
+                TextSpan(text: why),
+              ],
             ),
-            const SizedBox(height: Space.xs),
-          ],
-          Text(why, style: PrepType.body),
+            style: reason,
+          ),
           if (!_right && !_isRetry) ...[
-            const SizedBox(height: Space.s),
-            Text("You'll see this one again at the end.", style: PrepType.meta),
+            const SizedBox(height: Space.m),
+            Row(
+              children: [
+                PrepIcon(PrepIcons.replay, color: PrepColors.text2, size: 16),
+                const SizedBox(width: Space.s),
+                Expanded(child: Text('Comes back at the end', style: PrepType.meta)),
+              ],
+            ),
           ],
         ],
       ),
     );
   }
 
-  // The finish: the robot pleased, the first-try count, one line about the effort, and the idea
-  // to keep. No streaks, points or confetti.
+  // The finish: the robot pleased on its lit floor, the first-try count as a number, one line
+  // about the effort, and the idea to keep. No streaks, points or confetti.
 
   Widget _finished(double avail) {
     final total = _lesson.scoredCount;
     final missed = _missed.length;
     final correct = total - missed;
+    final robot = (avail * 0.36).clamp(120.0, 300.0);
     return Column(
       children: [
         Expanded(
           child: SingleChildScrollView(
             controller: _scroll,
-            padding: const EdgeInsets.fromLTRB(Space.gutter, Space.x3, Space.gutter, Space.xxl),
+            padding: const EdgeInsets.fromLTRB(Space.gutter, Space.xl, Space.gutter, Space.xxl),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 560),
                 child: EnterFade(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      ExcludeSemantics(
-                        child: AssistantAvatar(
-                          look: widget.look,
-                          size: avail < 560 ? 112 : 168,
-                          mood: AssistantMood.happy,
-                          hud: false,
+                      Center(
+                        child: ExcludeSemantics(
+                          // The dial's arc is the first-try share: a real measure, not decoration.
+                          child: RobotStage(
+                            look: widget.look,
+                            robotSize: robot,
+                            mood: AssistantMood.happy,
+                            progress: total == 0 ? null : correct / total,
+                          ),
                         ),
                       ),
                       const SizedBox(height: Space.l),
                       Semantics(
                         header: true,
                         liveRegion: true,
-                        child: Text('Lesson complete', style: PrepType.headline, textAlign: TextAlign.center),
+                        child: Text('Lesson complete', style: PrepType.display, textAlign: TextAlign.center),
                       ),
-                      const SizedBox(height: Space.s),
-                      Text(
-                        '$correct of $total right first time',
-                        key: const ValueKey('drill-score'),
-                        style: PrepType.bodyLMedium.copyWith(color: PrepColors.text2),
-                        textAlign: TextAlign.center,
+                      const SizedBox(height: Space.l),
+                      MergeSemantics(
+                        child: Column(
+                          children: [
+                            Text(
+                              '$correct/$total',
+                              key: const ValueKey('drill-score'),
+                              semanticsLabel: '$correct of $total',
+                              style: PrepType.numeral,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: Space.xs),
+                            Text('right first time', style: PrepType.meta, textAlign: TextAlign.center),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: Space.m),
-                      Text(_encouragement(missed, total), style: PrepType.body, textAlign: TextAlign.center),
+                      Text(_encouragement(missed, total), style: PrepType.bodyL.copyWith(color: PrepColors.text2), textAlign: TextAlign.center),
                       const SizedBox(height: Space.x3),
                       _Takeaway(text: _lesson.takeaway),
                     ],
@@ -728,12 +815,13 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
           ),
         ),
         BottomActionBar(
+          color: const Color(0x00000000),
           children: [
             PrimaryButton('Done', key: const ValueKey('drill-done'), onPressed: () => Navigator.of(context).pop()),
             if (widget.onPracticeAloud != null) ...[
               const SizedBox(height: Space.xs),
               QuietButton(
-                'Practice it out loud',
+                'Practice aloud',
                 key: const ValueKey('drill-aloud'),
                 icon: PrepIcons.mic,
                 onPressed: _practiceAloud,
@@ -746,28 +834,28 @@ class _DrillLessonScreenState extends State<DrillLessonScreen> {
   }
 
   static String _encouragement(int missed, int total) {
-    if (total == 0) return 'You worked through every exercise.';
-    if (missed == 0) return 'Every answer was right the first time. Steady work.';
-    if (missed == 1) return 'You came back to the one you missed and finished it. That second look helps it stick.';
-    return 'You came back to the $missed you missed and finished them. That second look helps it stick.';
+    if (total == 0) return 'Every exercise done.';
+    if (missed == 0) return 'Steady work.';
+    if (missed == 1) return 'You fixed the one you missed.';
+    return 'You fixed the $missed you missed.';
   }
 }
 
-class _FeedbackTitle extends StatelessWidget {
-  const _FeedbackTitle({required this.icon, required this.color, required this.ink, required this.title});
+/// The result card's first line: a status mark and "Nice." or "Not quite.".
+class _ResultTitle extends StatelessWidget {
+  const _ResultTitle({required this.mark, required this.title, required this.color});
 
-  final PrepIcons icon;
-  final Color color;
-  final Color ink;
+  final Widget mark;
   final String title;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        StatusMark(icon, color: color, size: 28),
+        mark,
         const SizedBox(width: Space.m),
-        Expanded(child: Text(title, style: PrepType.titleL.copyWith(color: ink))),
+        Expanded(child: Text(title, style: PrepType.titleL.copyWith(color: color))),
       ],
     );
   }
@@ -781,30 +869,26 @@ class _Takeaway extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(color: PrepColors.surface1, borderRadius: BorderRadius.circular(Radii.card)),
-      child: Padding(
-        padding: const EdgeInsets.all(Space.xl),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.only(top: 1),
-              child: PrepIcon(PrepIcons.target, color: PrepColors.text2, size: 20),
+    return MetalCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: PrepIcon(PrepIcons.target, color: PrepColors.text2, size: 20),
+          ),
+          const SizedBox(width: Space.m),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Remember', style: PrepType.label.copyWith(color: PrepColors.text2)),
+                const SizedBox(height: Space.xs),
+                Text(text, style: PrepType.bodyLMedium),
+              ],
             ),
-            const SizedBox(width: Space.m),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Remember', style: PrepType.label.copyWith(color: PrepColors.text2)),
-                  const SizedBox(height: Space.xxs),
-                  Text(text, style: PrepType.bodyLMedium),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

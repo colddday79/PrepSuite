@@ -185,6 +185,9 @@ Future<void> _leave(WidgetTester tester, Finder finder) async {
 
 Future<void> _continue(WidgetTester tester) => _tap(tester, find.byKey(const ValueKey('drill-continue')));
 
+/// The lesson's close control, whatever it is drawn as: found by what screen readers hear.
+Finder _closeLesson() => find.byWidgetPredicate((w) => w is Semantics && w.properties.label == 'Close lesson');
+
 PrimaryButton _checkButton(WidgetTester tester) => tester.widget<PrimaryButton>(find.byKey(const ValueKey('drill-check')));
 
 // ---------------------------------------------------------------------------------------------
@@ -451,7 +454,7 @@ void main() {
       expect(find.text('Not quite.'), findsOneWidget);
       expect(find.text('Your pick'), findsOneWidget);
       expect(find.text('Best answer'), findsOneWidget);
-      expect(find.text("You'll see this one again at the end."), findsOneWidget);
+      expect(find.text('Comes back at the end'), findsOneWidget);
       expect(haptics, isEmpty);
       await _continue(tester);
 
@@ -482,7 +485,8 @@ void main() {
       await _continue(tester);
 
       expect(find.text('Lesson complete'), findsOneWidget);
-      expect(find.text('${lesson.scoredCount - 1} of ${lesson.scoredCount} right first time'), findsOneWidget);
+      expect(find.text('${lesson.scoredCount - 1}/${lesson.scoredCount}'), findsOneWidget);
+      expect(find.text('right first time'), findsOneWidget);
       expect(find.textContaining('one you missed'), findsOneWidget);
       expect(find.text(lesson.takeaway), findsOneWidget);
       expect(progress.isDone(lesson.id), isTrue);
@@ -507,7 +511,8 @@ void main() {
         await _answer(tester, _current(tester), right: true);
         await _continue(tester);
       }
-      expect(find.text('${lesson.scoredCount} of ${lesson.scoredCount} right first time'), findsOneWidget);
+      expect(find.text('${lesson.scoredCount}/${lesson.scoredCount}'), findsOneWidget);
+      expect(find.text('right first time'), findsOneWidget);
       await _leave(tester, find.byKey(const ValueKey('drill-aloud')));
       expect(aloud, 1);
       expect(find.byType(DrillLessonScreen), findsNothing);
@@ -520,17 +525,17 @@ void main() {
       await _tap(tester, find.byKey(const ValueKey('open-lesson')));
 
       // Nothing answered yet: close leaves straight away.
-      await _leave(tester, find.byType(IconAction));
+      await _leave(tester, _closeLesson());
       expect(find.byType(DrillLessonScreen), findsNothing);
 
       await _tap(tester, find.byKey(const ValueKey('open-lesson')));
       await _tap(tester, find.byKey(const ValueKey('drill-option-0')));
-      await _tap(tester, find.byType(IconAction));
+      await _tap(tester, _closeLesson());
       expect(find.text('Leave this lesson?'), findsOneWidget);
       await _tap(tester, find.text('Keep going'));
       expect(find.byType(DrillLessonScreen), findsOneWidget);
 
-      await _tap(tester, find.byType(IconAction));
+      await _tap(tester, _closeLesson());
       await _leave(tester, find.text('Leave'));
       expect(find.byType(DrillLessonScreen), findsNothing);
       expect(progress.doneTotal, 0);
@@ -627,8 +632,8 @@ void main() {
       for (final skill in drillCurriculum) {
         expect(find.text(skill.title), findsOneWidget);
       }
-      expect(find.text('1 of 2 lessons'), findsOneWidget);
-      expect(find.text('0 of 2 lessons'), findsNWidgets(3));
+      expect(find.text('1/2'), findsOneWidget);
+      expect(find.text('0/2'), findsNWidgets(3));
       // "Up next" sits on the first unfinished lesson only.
       final upNext = find.descendant(of: find.byKey(const ValueKey('skill-lesson-intro-2')), matching: find.textContaining('Up next'));
       expect(upNext, findsOneWidget);
@@ -659,9 +664,9 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Up next'), findsOneWidget);
       expect(find.text('Your opening'), findsOneWidget);
-      expect(find.text('0 of 8 lessons'), findsOneWidget);
+      expect(find.text('Introducing yourself'), findsOneWidget);
+      expect(find.text('0/8'), findsOneWidget);
       await _tap(tester, find.byKey(const ValueKey('next-lesson-card')));
       expect(opened, ['intro-1']);
 
@@ -669,8 +674,9 @@ void main() {
         await progress.complete(lesson.id, 1, 1);
       }
       await tester.pump();
-      expect(find.text('All 8 lessons done'), findsOneWidget);
-      expect(find.text('Practice again from the start'), findsOneWidget);
+      expect(find.text('All lessons done'), findsOneWidget);
+      expect(find.text('Start again'), findsOneWidget);
+      expect(find.text('8/8'), findsOneWidget);
       await _tap(tester, find.byKey(const ValueKey('next-lesson-card')));
       expect(opened, ['intro-1', 'intro-1']);
     });

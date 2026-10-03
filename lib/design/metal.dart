@@ -4,12 +4,14 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import 'components.dart';
+import 'glass.dart';
 import 'icons.dart';
 import 'tokens.dart';
 
-/// The app's one material: satin metal. A same-hue vertical gradient, a 1 px light rim along the
-/// top edge, a 1 px dark edge along the bottom, and (on hero cards only) a soft offset shadow and a
-/// faint sheen. No blur, no coloured borders, no glows.
+/// The app's one material: smoked glass over satin metal. A translucent same-hue gradient that lets
+/// the lit room ([AmbientBackdrop]) through, a sheen, a bright specular top edge, an inner line for
+/// the glass's thickness, a dark bottom edge, and on hero cards a soft offset shadow. No coloured
+/// borders and no glows.
 class MetalCard extends StatelessWidget {
   const MetalCard({
     super.key,
@@ -85,42 +87,9 @@ class _MetalPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
-    canvas.drawRRect(
-      rrect,
-      Paint()..shader = ui.Gradient.linear(rect.topCenter, rect.bottomCenter, [_top, _bottom]),
-    );
-    if (tint != null) canvas.drawRRect(rrect, Paint()..color = tint!.withValues(alpha: 0.14));
-    if (hero) {
-      // A faint brushed sheen from the top-left corner: what reads as metal rather than plastic.
-      canvas.save();
-      canvas.clipRRect(rrect);
-      canvas.drawRect(
-        rect,
-        Paint()
-          ..shader = ui.Gradient.linear(
-            rect.topLeft,
-            Offset(size.width * 0.6, size.height * 0.5),
-            [const Color(0x0DFFFFFF), const Color(0x00FFFFFF)],
-          ),
-      );
-      canvas.restore();
-    }
-    // Rims: light along the top, dark along the bottom, fading out down the sides.
-    final inner = rrect.deflate(0.5);
-    canvas.drawRRect(
-      inner,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..shader = ui.Gradient.linear(rect.topCenter, rect.bottomCenter, [
-          _rim,
-          _rim.withValues(alpha: 0),
-          const Color(0x00000000),
-          PrepColors.rimDark,
-        ], const [0, 0.35, 0.65, 1]),
-    );
+    // Smoked glass over metal: see lib/design/glass.dart.
+    final rrect = RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius));
+    paintGlass(canvas, rrect, top: _top, bottom: _bottom, hero: hero, tint: tint);
   }
 
   @override
@@ -203,6 +172,7 @@ class ArcGauge extends StatelessWidget {
     this.stroke,
     this.semanticLabel,
     this.color,
+    this.tickColor,
   });
 
   final double value;
@@ -212,6 +182,9 @@ class ArcGauge extends StatelessWidget {
   final double? stroke;
   final String? semanticLabel;
   final Color? color;
+
+  /// The passed ticks; defaults to the accent as text ([PrepColors.accentDeep]).
+  final Color? tickColor;
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +200,7 @@ class ArcGauge extends StatelessWidget {
           stroke: stroke ?? math.max(3, size * 0.05),
           track: PrepColors.line,
           fill: color ?? PrepColors.accent,
-          tick: PrepColors.accentDeep,
+          tick: tickColor ?? PrepColors.accentDeep,
         ),
         child: child,
       ),
@@ -290,7 +263,12 @@ class _ArcPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ArcPainter old) =>
-      old.value != value || old.ticks != ticks || old.fill != fill || old.track != track || old.stroke != stroke;
+      old.value != value ||
+      old.ticks != ticks ||
+      old.fill != fill ||
+      old.track != track ||
+      old.tick != tick ||
+      old.stroke != stroke;
 }
 
 /// One tab in [FloatingTabBar].
@@ -302,9 +280,10 @@ class TabItem {
   final String label;
 }
 
-/// The tab bar: a raised metal pill floating above the bottom edge, icons only (labels for screen
-/// readers and as tooltips), the current tab an accent circle. The one place with a backdrop blur,
-/// over real scrolling content.
+/// The tab bar: a raised glass pill floating above the bottom edge. The current tab is an accent
+/// pill with its icon and name; the others are icons only (their names are tooltips and what screen
+/// readers say). Names drop out together when the widest would not fit (narrow phone, large text).
+/// The one place with a backdrop blur, over real scrolling content.
 class FloatingTabBar extends StatelessWidget {
   const FloatingTabBar({super.key, required this.items, required this.index, required this.onSelect});
 
@@ -312,29 +291,61 @@ class FloatingTabBar extends StatelessWidget {
   final int index;
   final ValueChanged<int> onSelect;
 
+  static const double _inset = Space.s;
+  static const double _disc = 52;
+  static const double _pillPad = 14;
+  static const double _icon = 22;
+
+  static TextStyle get _labelStyle => PrepType.label.copyWith(color: PrepColors.onAccent);
+
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final scaler = MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.3);
     return Padding(
-      padding: EdgeInsets.fromLTRB(Space.l + 8, 0, Space.l + 8, bottom + Space.m),
+      padding: EdgeInsets.fromLTRB(Space.l, 0, Space.l, bottom + Space.m),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(36),
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: PrepColors.surface2.withValues(alpha: 0.88),
-              borderRadius: BorderRadius.circular(36),
-              border: Border.all(color: PrepColors.rimLight),
-            ),
+          child: CustomPaint(
+            painter: _GlassBarPainter(top: PrepColors.surface2, bottom: PrepColors.metalTop),
             child: SizedBox(
               height: 68,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  for (final (i, item) in items.indexed)
-                    _Tab(item: item, selected: i == index, position: i, total: items.length, onTap: () => onSelect(i)),
-                ],
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  var widest = 0.0;
+                  for (final item in items) {
+                    final painter = TextPainter(
+                      text: TextSpan(text: item.label, style: _labelStyle),
+                      textDirection: TextDirection.ltr,
+                      textScaler: scaler,
+                      maxLines: 1,
+                    )..layout();
+                    if (painter.width > widest) widest = painter.width;
+                    painter.dispose();
+                  }
+                  final room = box.maxWidth - 2 * _inset - (items.length - 1) * _disc;
+                  final named = 2 * _pillPad + _icon + Space.s + widest <= room;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: _inset),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        for (final (i, item) in items.indexed)
+                          _Tab(
+                            item: item,
+                            selected: i == index,
+                            named: named,
+                            scaler: scaler,
+                            position: i,
+                            total: items.length,
+                            onTap: () => onSelect(i),
+                          ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -344,17 +355,50 @@ class FloatingTabBar extends StatelessWidget {
   }
 }
 
+/// The tab bar's pane: translucent raised metal over the live blur, with the glass's specular top
+/// edge.
+class _GlassBarPainter extends CustomPainter {
+  const _GlassBarPainter({required this.top, required this.bottom});
+
+  final Color top;
+  final Color bottom;
+
+  @override
+  void paint(Canvas canvas, Size size) => paintGlass(
+    canvas,
+    RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(size.height / 2)),
+    top: top,
+    bottom: bottom,
+  );
+
+  @override
+  bool shouldRepaint(_GlassBarPainter old) => old.top != top || old.bottom != bottom;
+}
+
 class _Tab extends StatelessWidget {
-  const _Tab({required this.item, required this.selected, required this.position, required this.total, required this.onTap});
+  const _Tab({
+    required this.item,
+    required this.selected,
+    required this.named,
+    required this.scaler,
+    required this.position,
+    required this.total,
+    required this.onTap,
+  });
 
   final TabItem item;
   final bool selected;
+  final bool named;
+  final TextScaler scaler;
   final int position;
   final int total;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final duration = still ? Duration.zero : Motion.fade;
+    final showName = selected && named;
     return Semantics(
       container: true,
       button: true,
@@ -366,19 +410,44 @@ class _Tab extends StatelessWidget {
         message: item.label,
         excludeFromSemantics: true,
         child: FocusRing(
-          radius: 26,
-          child: InkWell(
-            key: item.key,
-            onTap: onTap,
-            customBorder: const CircleBorder(),
-            child: AnimatedContainer(
-              duration: Motion.fade,
-              curve: Motion.standard,
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(color: selected ? PrepColors.accent : null, shape: BoxShape.circle),
-              child: Center(
-                child: PrepIcon(item.icon, color: selected ? PrepColors.onAccent : PrepColors.text2, size: 22),
+          radius: FloatingTabBar._disc / 2,
+          child: Material(
+            type: MaterialType.transparency,
+            shape: const StadiumBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: item.key,
+              onTap: onTap,
+              customBorder: const StadiumBorder(),
+              child: AnimatedContainer(
+                duration: duration,
+                curve: Motion.standard,
+                height: FloatingTabBar._disc,
+                constraints: const BoxConstraints(minWidth: FloatingTabBar._disc),
+                padding: EdgeInsets.symmetric(horizontal: showName ? FloatingTabBar._pillPad : 0),
+                decoration: ShapeDecoration(
+                  color: selected ? PrepColors.accent : PrepColors.accent.withValues(alpha: 0),
+                  shape: const StadiumBorder(),
+                ),
+                child: AnimatedSize(
+                  duration: duration,
+                  curve: Motion.standard,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      PrepIcon(
+                        item.icon,
+                        color: selected ? PrepColors.onAccent : PrepColors.text2,
+                        size: FloatingTabBar._icon,
+                      ),
+                      if (showName) ...[
+                        const SizedBox(width: Space.s),
+                        Text(item.label, style: FloatingTabBar._labelStyle, textScaler: scaler, maxLines: 1),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -390,3 +459,172 @@ class _Tab extends StatelessWidget {
 
 /// How much room the floating tab bar takes at the bottom, so lists can pad under it.
 double floatingTabBarInset(BuildContext context) => 68 + Space.m + MediaQuery.paddingOf(context).bottom + Space.l;
+
+/// A tappable metal card. The metal is painted beneath the ink, so the press tint shows on top of
+/// it (a [MetalCard] with [MetalCard.onTap] keeps its ink under the paint). [semanticLabel] is
+/// all a screen reader hears; [tapHint] says what a tap does.
+class MetalTile extends StatelessWidget {
+  const MetalTile({
+    super.key,
+    required this.child,
+    required this.onTap,
+    required this.semanticLabel,
+    this.tapHint,
+    this.padding = const EdgeInsets.all(Space.xl),
+    this.radius = Radii.card,
+    this.hero = false,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final String semanticLabel;
+  final String? tapHint;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+  final bool hero;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
+    return Semantics(
+      container: true,
+      button: onTap != null,
+      label: semanticLabel,
+      onTap: onTap,
+      onTapHint: onTap == null ? null : tapHint,
+      excludeSemantics: true,
+      child: FocusRing(
+        radius: radius,
+        child: MetalCard(
+          hero: hero,
+          radius: radius,
+          padding: EdgeInsets.zero,
+          child: Material(
+            type: MaterialType.transparency,
+            shape: shape,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              customBorder: shape,
+              focusColor: Colors.transparent,
+              child: Padding(padding: padding, child: child),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Two or three short choices on one recessed track; the chosen one is a raised metal chip that
+/// slides across. Tapping any segment, the chosen one too, calls [onSelect], so a caller can clear
+/// an optional answer. Screen readers hear checked or unchecked options in one group. [keys] go
+/// on each segment's tap target; [selectedHint] says what tapping the chosen one does.
+class MetalSegments extends StatelessWidget {
+  const MetalSegments({
+    super.key,
+    required this.labels,
+    required this.selected,
+    required this.onSelect,
+    this.keys,
+    this.selectedHint,
+  });
+
+  final List<String> labels;
+  final int? selected;
+  final ValueChanged<int> onSelect;
+  final List<Key>? keys;
+  final String? selectedHint;
+
+  static const double _inset = Space.xs;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final count = labels.length;
+    final chosen = selected;
+    final chip = BorderRadius.circular(Radii.control);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: PrepColors.metalBottom.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(Radii.control + _inset),
+        border: Border.all(color: PrepColors.line),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(_inset),
+        child: IntrinsicHeight(
+          child: Stack(
+            children: [
+              if (chosen != null)
+                Positioned.fill(
+                  child: AnimatedAlign(
+                    alignment: Alignment(count < 2 ? 0 : -1 + 2 * chosen / (count - 1), 0),
+                    duration: reduce ? Duration.zero : Motion.fade,
+                    curve: Motion.standard,
+                    child: FractionallySizedBox(
+                      widthFactor: 1 / count,
+                      heightFactor: 1,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: PrepColors.surface2.withValues(alpha: 0.9),
+                          borderRadius: chip,
+                          border: Border.all(color: PrepColors.rimLight),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < count; i++)
+                    Expanded(
+                      child: Semantics(
+                        container: true,
+                        button: true,
+                        inMutuallyExclusiveGroup: true,
+                        checked: i == chosen,
+                        label: labels[i],
+                        onTap: () => onSelect(i),
+                        onTapHint: i == chosen ? selectedHint : null,
+                        excludeSemantics: true,
+                        child: FocusRing(
+                          radius: Radii.control,
+                          gap: -2,
+                          child: Material(
+                            type: MaterialType.transparency,
+                            borderRadius: chip,
+                            clipBehavior: Clip.antiAlias,
+                            child: InkWell(
+                              key: keys?[i],
+                              onTap: () => onSelect(i),
+                              focusColor: Colors.transparent,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(minHeight: 48),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: Space.s, vertical: Space.s),
+                                  child: Center(
+                                    child: Text(
+                                      labels[i],
+                                      textAlign: TextAlign.center,
+                                      style: PrepType.label.copyWith(
+                                        color: i == chosen ? PrepColors.text : PrepColors.text2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

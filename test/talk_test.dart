@@ -199,7 +199,7 @@ void main() {
     await _tap(tester, find.text('Send'));
     await _settle(tester, 500);
 
-    expect(find.text('“How long should my answer be?”'), findsOneWidget);
+    expect(find.text('How long should my answer be?'), findsOneWidget);
     expect(find.text(_lengthReply), findsOneWidget);
     expect(find.text('Sample answer'), findsOneWidget);
     expect(rig.coach.asks.single.job, 'Barista at a busy cafe');
@@ -221,7 +221,7 @@ void main() {
     await _settle(tester, 500);
 
     expect(rig.coach.asks.single.userQuestion, 'Is thirty seconds long enough to answer?');
-    expect(find.text('“Is thirty seconds long enough to answer?”'), findsOneWidget);
+    expect(find.text('Is thirty seconds long enough to answer?'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -235,7 +235,7 @@ void main() {
     await _settle(tester, 500);
 
     expect(rig.coach.asks.single.userQuestion, 'How do I calm my nerves?');
-    expect(find.text('“How do I calm my nerves?”'), findsOneWidget);
+    expect(find.text('How do I calm my nerves?'), findsOneWidget);
     expect(find.text('What should I ask them?'), findsNothing); // chips gone once the talk starts
   });
 

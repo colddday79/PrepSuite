@@ -4,10 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:prepsuite/app/app.dart';
 import 'package:prepsuite/app/profile.dart';
 import 'package:prepsuite/app/services.dart';
+import 'package:prepsuite/app/session.dart';
 import 'package:prepsuite/coach/coach_api.dart';
 import 'package:prepsuite/coach/fakes.dart';
 import 'package:prepsuite/design/assistant_avatar.dart';
 import 'package:prepsuite/design/hologram.dart';
+import 'package:prepsuite/features/drills/skill_path.dart';
 import 'package:prepsuite/features/home/home_screen.dart';
 import 'package:prepsuite/features/intake/intake_screen.dart';
 import 'package:prepsuite/features/practice/practice_screen.dart';
@@ -84,7 +86,7 @@ void main() {
 
   testWidgets('Quick question on the Practice tab opens the intake for one question', (tester) async {
     await _boot(tester);
-    await tester.tap(find.text('Practice').last);
+    await tester.tap(find.byKey(const ValueKey('tab-practice')));
     await _settle(tester, 400);
     await tester.ensureVisible(find.byKey(const ValueKey('mode-quick')));
     await tester.tap(find.byKey(const ValueKey('mode-quick')));
@@ -92,14 +94,74 @@ void main() {
     expect(tester.widget<IntakeScreen>(find.byType(IntakeScreen)).questionCount, 1);
   });
 
-  testWidgets('the bottom bar switches tabs', (tester) async {
+  testWidgets('the bottom bar switches tabs and marks the current one', (tester) async {
     await _boot(tester);
-    await tester.tap(find.text('Practice').last);
+    expect(tester.getSemantics(find.byKey(const ValueKey('tab-home'))), isSemantics(label: 'Home, tab 1 of 4', isSelected: true));
+    await tester.tap(find.byKey(const ValueKey('tab-practice')));
     await _settle(tester, 400);
     expect(find.byType(PracticeScreen), findsOneWidget);
-    await tester.tap(find.text('Profile').last);
+    expect(tester.getSemantics(find.byKey(const ValueKey('tab-practice'))), isSemantics(isSelected: true, hasTapAction: true));
+    await tester.tap(find.byKey(const ValueKey('tab-profile')));
     await _settle(tester, 400);
     expect(find.byType(ProfileScreen), findsOneWidget);
+  });
+
+  testWidgets('the avatar opens Profile', (tester) async {
+    await _boot(tester, services: _services(profile: const Profile(name: 'Alex')));
+    await tester.tap(find.byKey(const ValueKey('home-profile')));
+    await _settle(tester, 400);
+    expect(find.byType(ProfileScreen), findsOneWidget);
+  });
+
+  testWidgets('this week counts the saved practices, and the last one opens from its tile', (tester) async {
+    final services = _services();
+    final session = PracticeSession(
+      job: 'Barista at a busy cafe',
+      set: const QuestionSet(
+        jobTitle: 'Barista',
+        mock: true,
+        questions: [
+          CoachQuestion(id: 'q1', text: 'Tell me about yourself.', focus: ''),
+          CoachQuestion(id: 'q2', text: 'Why this job?', focus: ''),
+          CoachQuestion(id: 'q3', text: 'A hard moment?', focus: ''),
+        ],
+      ),
+    );
+    const feedback = AnswerFeedback(
+      headline: 'Good start.',
+      problem: 'No result.',
+      evidence: 'I made coffee.',
+      fix: 'Say how it ended.',
+      delivery: '',
+      strength: 'Clear.',
+      mock: true,
+    );
+    for (var i = 0; i < 2; i++) {
+      session.answers[i] = const AnswerRecord(transcript: 'I made coffee.', metrics: null, feedback: feedback, typed: true);
+    }
+    await services.sessions.finished(session);
+    await _boot(tester, services: services);
+    expect(find.bySemanticsLabel(RegExp(r'^This week: 1 session, 2 answers, 1 day\.')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('recent-card'), skipOffstage: false));
+    await _settle(tester, 300);
+    expect(find.text('2/3'), findsOneWidget);
+    expect(find.byKey(const ValueKey('recent-card')), findsOneWidget);
+    expect(find.byKey(const ValueKey('next-skill')), findsOneWidget);
+  });
+
+  testWidgets('Practice opens on Speak, and Skills shows the skill path', (tester) async {
+    await _boot(tester);
+    await tester.tap(find.byKey(const ValueKey('tab-practice')));
+    await _settle(tester, 400);
+    expect(find.byKey(const ValueKey('mode-mock')), findsOneWidget);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('practice-speak'))),
+      isSemantics(label: 'Speak', isChecked: true, isInMutuallyExclusiveGroup: true, hasTapAction: true),
+    );
+    await tester.tap(find.byKey(const ValueKey('practice-skills')));
+    await _settle(tester, 400);
+    expect(find.byType(SkillPath), findsOneWidget);
+    expect(find.byKey(const ValueKey('mode-mock')), findsNothing);
   });
 
   testWidgets('no overflow with large text or on a small phone', (tester) async {

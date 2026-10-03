@@ -1,22 +1,24 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../app/assistant.dart';
 import '../../app/profile.dart';
 import '../../app/services.dart';
 import '../../coach/coach_api.dart';
-import '../../design/assistant_avatar.dart';
 import '../../design/assistant_picker.dart';
 import '../../design/components.dart';
 import '../../design/icons.dart';
+import '../../design/metal.dart';
 import '../../design/tokens.dart';
 import '../consent/consent_sheet.dart';
 import 'about_me_card.dart';
+import 'initial_disc.dart';
 import 'profile_format.dart';
 
-/// The Profile tab: the chosen assistant and the person's name, the "About me" card at its
-/// centre, their details, their assistant, and account-level settings. Everything here is
-/// optional and saved at once; it stays on this phone. This is a tab body (the app shell owns
-/// navigation), so there is no back button and it keeps its own top [SafeArea].
+/// The Profile tab: who the person is (name, job, "About me", interview date, experience), their
+/// coach, the app's look, and settings. Everything is optional, saved at once and kept on this
+/// phone. A tab body: no back button, its own top [SafeArea].
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -113,92 +115,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final services = AppScope.of(context);
     _health ??= services.coach.health();
+    // Transparent: the shell's lit room shows through behind the glass.
     return Scaffold(
-      backgroundColor: PrepColors.bg,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
-        child: ValueListenableBuilder<Profile>(
-          valueListenable: services.profile,
-          builder: (context, profile, _) {
+        bottom: false,
+        child: ListenableBuilder(
+          listenable: Listenable.merge([services.profile, services.theme]),
+          builder: (context, _) {
+            final profile = services.profile.value;
             final now = DateTime.now();
             return SingleChildScrollView(
-              padding: EdgeInsets.only(bottom: Space.xxl + MediaQuery.paddingOf(context).bottom),
+              padding: EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, floatingTabBarInset(context)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: Space.l),
                   _Header(profile: profile, onEdit: () => _editNameJob(services)),
                   const SizedBox(height: Space.xxl),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-                    child: AboutMeCard(
-                      about: profile.about,
-                      onEdit: () => showEditAboutSheet(context),
-                      onSayIt: () => showSayItSheet(context),
-                    ),
+                  AboutMeCard(
+                    about: profile.about,
+                    onEdit: () => showEditAboutSheet(context),
+                    onSayIt: () => showSayItSheet(context),
                   ),
                   const _SectionHeader('Details'),
-                  LinkRow(icon: PrepIcons.user, title: 'Name', meta: profile.name, onTap: () => _editNameJob(services)),
-                  const Hairline(indent: Space.gutter + 24 + Space.l),
-                  LinkRow(
-                    icon: PrepIcons.target,
-                    title: "Job you're preparing for",
-                    meta: profile.targetRole,
-                    onTap: () => _editNameJob(services),
+                  _Group(
+                    children: [
+                      LinkRow(icon: PrepIcons.user, title: 'Name', meta: profile.name, onTap: () => _editNameJob(services)),
+                      LinkRow(
+                        icon: PrepIcons.target,
+                        title: "Job you're preparing for",
+                        meta: profile.targetRole,
+                        onTap: () => _editNameJob(services),
+                      ),
+                      _DateRow(
+                        text: interviewDateLine(profile, now),
+                        spoken: spokenInterviewDate(profile, now),
+                        onPick: () => _pickDate(services),
+                        onClear: () => services.profile.save(profile.copyWith(clearInterviewDate: true)),
+                      ),
+                    ],
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // The control says "Interview date" itself, so the label isn't read twice.
-                        ExcludeSemantics(child: Text('Interview date', style: _labelStyle)),
-                        const SizedBox(height: Space.s),
-                        _DateField(
-                          text: interviewDateLine(profile, now),
-                          spoken: spokenInterviewDate(profile, now),
-                          onPick: () => _pickDate(services),
-                          onClear: () => services.profile.save(profile.copyWith(clearInterviewDate: true)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(Space.gutter, Space.xl, Space.gutter, Space.xs),
+                    padding: const EdgeInsets.fromLTRB(Space.xs, Space.xl, Space.xs, Space.s),
                     child: Text('Experience', style: _labelStyle),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-                    child: _ExperienceControl(
-                      selected: profile.experience,
-                      onSelected: (level) => _chooseExperience(services, level),
-                    ),
+                  MetalSegments(
+                    labels: [for (final level in ExperienceLevel.values) level.label],
+                    selected: profile.experience?.index,
+                    keys: [for (final level in ExperienceLevel.values) ValueKey('experience-${level.name}')],
+                    selectedHint: 'clear your answer',
+                    onSelect: (i) => _chooseExperience(services, ExperienceLevel.values[i]),
                   ),
-                  const _SectionHeader('Your assistant'),
+                  const _SectionHeader('Your coach'),
                   ValueListenableBuilder<AssistantLook>(
                     valueListenable: services.assistant,
                     builder: (context, look, _) =>
                         AssistantPicker(selected: look.kind, onSelected: (kind) => services.assistant.choose(kind)),
                   ),
+                  const _SectionHeader('Appearance'),
+                  _ThemeSwatches(selected: services.theme.value, onChoose: services.theme.choose),
                   const _SectionHeader('Settings'),
-                  FutureBuilder<CoachHealth>(
-                    future: _health,
-                    builder: (context, snap) =>
-                        LinkRow(icon: PrepIcons.compass, title: 'Coach', meta: _coachStatus(snap), onTap: null),
+                  _Group(
+                    children: [
+                      FutureBuilder<CoachHealth>(
+                        future: _health,
+                        builder: (context, snap) =>
+                            LinkRow(icon: PrepIcons.compass, title: 'Connection', meta: _coachStatus(snap), onTap: null),
+                      ),
+                      LinkRow(
+                        icon: PrepIcons.replay,
+                        title: 'See the introduction again',
+                        onTap: () => services.assistant.resetOnboarding(),
+                      ),
+                      LinkRow(
+                        icon: PrepIcons.shield,
+                        title: 'Privacy',
+                        onTap: () => showConsentSheet(context, infoOnly: true),
+                      ),
+                      _DeleteRow(onTap: () => _deleteEverything(services)),
+                    ],
                   ),
-                  const Hairline(indent: Space.gutter + 24 + Space.l),
-                  LinkRow(
-                    icon: PrepIcons.replay,
-                    title: 'See the introduction again',
-                    onTap: () => services.assistant.resetOnboarding(),
-                  ),
-                  const Hairline(indent: Space.gutter + 24 + Space.l),
-                  LinkRow(
-                    icon: PrepIcons.shield,
-                    title: 'Privacy',
-                    onTap: () => showConsentSheet(context, infoOnly: true),
-                  ),
-                  const Hairline(indent: Space.gutter + 24 + Space.l),
-                  _DeleteRow(onTap: () => _deleteEverything(services)),
                 ],
               ),
             );
@@ -216,9 +212,11 @@ String _coachStatus(AsyncSnapshot<CoachHealth> snap) {
   return health.mock ? 'Sample answers' : 'Connected';
 }
 
-/// Matches PrepTextField's label, for the controls that aren't text fields.
-final _labelStyle = PrepType.label.copyWith(color: PrepColors.text2);
+/// Matches PrepTextField's label, for the controls that aren't text fields. A getter, so it
+/// follows the theme.
+TextStyle get _labelStyle => PrepType.label.copyWith(color: PrepColors.text2);
 
+/// The person's initial, their name large and the job under it, and an edit control.
 class _Header extends StatelessWidget {
   const _Header({required this.profile, required this.onEdit});
 
@@ -227,35 +225,63 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final services = AppScope.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          ValueListenableBuilder<AssistantLook>(
-            valueListenable: services.assistant,
-            builder: (context, look, _) => AssistantAvatar(look: look, size: 72, hud: false, animate: false),
-          ),
-          const SizedBox(width: Space.l),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(profile.name.isEmpty ? 'Your profile' : profile.name, style: PrepType.display),
+    return Row(
+      children: [
+        InitialDisc(name: profile.name, size: 56),
+        const SizedBox(width: Space.l),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  profile.name.isEmpty ? 'Your profile' : profile.name,
+                  style: PrepType.display,
+                  textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.6),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                if (profile.targetRole.isNotEmpty) ...[
-                  const SizedBox(height: Space.xxs),
-                  Text(profile.targetRole, style: PrepType.body),
-                ],
+              ),
+              if (profile.targetRole.isNotEmpty) ...[
+                const SizedBox(height: Space.xxs),
+                Text(profile.targetRole, style: PrepType.meta, maxLines: 2, overflow: TextOverflow.ellipsis),
               ],
-            ),
+            ],
           ),
-          const SizedBox(width: Space.s),
-          IconAction(PrepIcons.edit, label: 'Edit name and job', plain: true, onPressed: onEdit),
-        ],
+        ),
+        const SizedBox(width: Space.m),
+        MetalDisc(PrepIcons.edit, label: 'Edit name and job', size: 48, onPressed: onEdit),
+      ],
+    );
+  }
+}
+
+/// Rows on one metal card, with hairlines between them lined up with the titles. The ink sits
+/// above the metal, so pressing a row shows.
+class _Group extends StatelessWidget {
+  const _Group({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return MetalCard(
+      padding: EdgeInsets.zero,
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(Radii.card),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) const Hairline(indent: Space.gutter + 24 + Space.l),
+              children[i],
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -337,11 +363,12 @@ class _HairlineIcon extends Icon {
   }
 }
 
-/// Looks like the text fields and opens the date picker. A set date can be removed.
-class _DateField extends StatelessWidget {
-  const _DateField({required this.text, required this.spoken, required this.onPick, required this.onClear});
+/// The interview date as a row like the others: it opens the date picker, and a set date has a
+/// remove control beside it.
+class _DateRow extends StatelessWidget {
+  const _DateRow({required this.text, required this.spoken, required this.onPick, required this.onClear});
 
-  /// "Tue 30 Sep · in 5 days", or null when no date is set.
+  /// "Tue, Sep 30 · in 5 days", or null when no date is set.
   final String? text;
   final String? spoken;
   final VoidCallback onPick;
@@ -350,43 +377,44 @@ class _DateField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final value = text;
-    return Stack(
-      alignment: Alignment.centerRight,
+    return Row(
       children: [
-        Semantics(
-          container: true,
-          button: true,
-          label: 'Interview date, ${spoken ?? 'not set'}',
-          onTap: onPick,
-          onTapHint: 'choose a date',
-          excludeSemantics: true,
-          child: FocusRing(
-            child: Material(
-              color: PrepColors.surface1,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(Radii.control),
-                side: BorderSide(color: PrepColors.lineStrong),
-              ),
-              clipBehavior: Clip.antiAlias,
+        Expanded(
+          child: Semantics(
+            container: true,
+            button: true,
+            label: 'Interview date, ${spoken ?? 'not set'}',
+            onTap: onPick,
+            onTapHint: 'choose a date',
+            excludeSemantics: true,
+            child: FocusRing(
+              gap: -Space.xs,
               child: InkWell(
                 key: const ValueKey('profile-date'),
                 onTap: onPick,
                 focusColor: Colors.transparent,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 52),
+                  constraints: const BoxConstraints(minHeight: 64),
                   child: Padding(
-                    // Leaves room on the right for the remove control laid over the field.
-                    padding: EdgeInsets.fromLTRB(Space.l, Space.m, value == null ? Space.l : 48 + Space.xs, Space.m),
+                    padding: EdgeInsets.fromLTRB(Space.gutter, Space.m, value == null ? Space.gutter : Space.xs, Space.m),
                     child: Row(
                       children: [
-                        PrepIcon(PrepIcons.calendar, color: PrepColors.text2, size: 20),
-                        const SizedBox(width: Space.m),
+                        PrepIcon(PrepIcons.calendar, color: PrepColors.text2),
+                        const SizedBox(width: Space.l),
                         Expanded(
-                          child: Text(
-                            value ?? 'Choose a date',
-                            style: PrepType.bodyL.copyWith(color: value == null ? PrepColors.text3 : PrepColors.text),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Interview date', style: PrepType.bodyLMedium),
+                              const SizedBox(height: Space.xxs),
+                              Text(value ?? 'Choose a date', style: PrepType.meta.copyWith(color: PrepColors.text3)),
+                            ],
                           ),
                         ),
+                        if (value == null) ...[
+                          const SizedBox(width: Space.m),
+                          PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
+                        ],
                       ],
                     ),
                   ),
@@ -397,7 +425,7 @@ class _DateField extends StatelessWidget {
         ),
         if (value != null)
           Padding(
-            padding: const EdgeInsets.only(right: Space.xs),
+            padding: const EdgeInsets.only(right: Space.s),
             child: IconAction(PrepIcons.close, label: 'Remove interview date', plain: true, onPressed: onClear),
           ),
       ],
@@ -405,78 +433,103 @@ class _DateField extends StatelessWidget {
   }
 }
 
-/// First job / some experience / changing careers, as one control. Tapping the chosen segment
-/// again clears it: every detail here is optional.
-class _ExperienceControl extends StatelessWidget {
-  const _ExperienceControl({required this.selected, required this.onSelected});
+/// The three themes as small metal swatches, each painted in its own metal with its accent dot.
+/// The chosen one has a ring and a check. A row when they fit, a list with large text.
+class _ThemeSwatches extends StatelessWidget {
+  const _ThemeSwatches({required this.selected, required this.onChoose});
 
-  final ExperienceLevel? selected;
-  final ValueChanged<ExperienceLevel> onSelected;
+  final PrepThemeData selected;
+  final ValueChanged<PrepThemeData> onChoose;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: PrepColors.surface1,
-        borderRadius: BorderRadius.circular(Radii.control),
-        border: Border.all(color: PrepColors.lineStrong),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(Space.xs),
-        child: Row(
+    return LayoutBuilder(
+      builder: (context, box) {
+        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+        final inRow = (box.maxWidth - 2 * Space.m) / 3 >= 92 * scale;
+        final swatches = [
+          for (final theme in PrepThemes.all)
+            _Swatch(theme: theme, selected: theme.id == selected.id, wide: !inRow, onTap: () => onChoose(theme)),
+        ];
+        if (inRow) {
+          return Row(
+            children: [
+              for (var i = 0; i < swatches.length; i++) ...[
+                if (i > 0) const SizedBox(width: Space.m),
+                Expanded(child: swatches[i]),
+              ],
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final level in ExperienceLevel.values)
-              Expanded(
-                child: _Segment(level: level, selected: selected == level, onTap: () => onSelected(level)),
-              ),
+            for (var i = 0; i < swatches.length; i++) ...[
+              if (i > 0) const SizedBox(height: Space.s),
+              swatches[i],
+            ],
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
-class _Segment extends StatelessWidget {
-  const _Segment({required this.level, required this.selected, required this.onTap});
+class _Swatch extends StatelessWidget {
+  const _Swatch({required this.theme, required this.selected, required this.wide, required this.onTap});
 
-  final ExperienceLevel level;
+  final PrepThemeData theme;
   final bool selected;
+  final bool wide;
   final VoidCallback onTap;
+
+  static const double _radius = 18;
+
+  /// Where the painted preview card sits: across the top, or down the left of a wide swatch.
+  static Rect preview(Size size, bool wide) =>
+      wide ? Rect.fromLTWH(8, 8, 64, size.height - 16) : Rect.fromLTWH(8, 8, size.width - 16, 46);
 
   @override
   Widget build(BuildContext context) {
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius));
+    final label = Row(
+      children: [
+        Expanded(child: Text(theme.name, style: PrepType.label.copyWith(color: theme.text))),
+        SizedBox.square(
+          dimension: 18,
+          child: selected ? PrepIcon(PrepIcons.check, color: theme.accentDeep, size: 18) : null,
+        ),
+      ],
+    );
     return Semantics(
+      container: true,
       button: true,
       inMutuallyExclusiveGroup: true,
       checked: selected,
-      label: level.label,
+      label: '${theme.name} theme',
       onTap: onTap,
-      onTapHint: selected ? 'clear your answer' : null,
       excludeSemantics: true,
       child: FocusRing(
-        radius: Radii.chip,
-        gap: -Space.xs,
-        child: Material(
-          color: selected ? PrepColors.surface2 : Colors.transparent,
-          borderRadius: BorderRadius.circular(Radii.chip),
-          animationDuration: Motion.fade,
-          child: InkWell(
-            key: ValueKey('experience-${level.name}'),
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(Radii.chip),
-            focusColor: Colors.transparent,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Space.s, vertical: Space.s),
-                child: Center(
-                  child: Text(
-                    level.label,
-                    textAlign: TextAlign.center,
-                    style: selected
-                        ? PrepType.label.copyWith(color: PrepColors.text)
-                        : PrepType.label.copyWith(color: PrepColors.text2),
-                  ),
+        radius: _radius,
+        child: CustomPaint(
+          painter: _SwatchPainter(theme, wide: wide),
+          foregroundPainter: selected ? _SwatchRing(theme.accentDeep) : null,
+          child: Material(
+            type: MaterialType.transparency,
+            shape: shape,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: ValueKey('theme-${theme.id}'),
+              onTap: onTap,
+              customBorder: shape,
+              focusColor: Colors.transparent,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: wide ? 60 : 100),
+                child: Padding(
+                  padding: wide
+                      ? const EdgeInsets.fromLTRB(84, Space.m, Space.m, Space.m)
+                      : const EdgeInsets.fromLTRB(Space.m, 62, Space.m, Space.m),
+                  child: wide ? Center(child: label) : Align(alignment: Alignment.bottomLeft, child: label),
                 ),
               ),
             ),
@@ -487,6 +540,82 @@ class _Segment extends StatelessWidget {
   }
 }
 
+/// A swatch is a small screen in its theme: the canvas, one metal card with the accent dot and a
+/// tiny accent pill on it.
+class _SwatchPainter extends CustomPainter {
+  const _SwatchPainter(this.theme, {required this.wide});
+
+  final PrepThemeData theme;
+  final bool wide;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final outer = RRect.fromRectAndRadius(rect, const Radius.circular(_Swatch._radius));
+    canvas.drawRRect(outer, Paint()..color = theme.canvas);
+    canvas.drawRRect(
+      outer.deflate(0.5),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = theme.hairline,
+    );
+    final card = _Swatch.preview(size, wide);
+    final metal = RRect.fromRectAndRadius(card, const Radius.circular(12));
+    canvas.drawRRect(
+      metal,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [theme.metalTop, theme.metalBottom],
+        ).createShader(card),
+    );
+    canvas.drawRRect(
+      metal.deflate(0.5),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [theme.rimLight, theme.rimLight.withValues(alpha: 0), const Color(0x00000000), PrepColors.rimDark],
+          stops: const [0, 0.35, 0.65, 1],
+        ).createShader(card),
+    );
+    final accent = Paint()..color = theme.accent;
+    canvas.drawCircle(card.topLeft + const Offset(13, 13), 5, accent);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(card.left + 9, card.bottom - 13, math.min(30, card.width - 18), 6), const Radius.circular(3)),
+      accent,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SwatchPainter old) => old.theme != theme || old.wide != wide;
+}
+
+/// The chosen swatch's ring, 1.5 dp, in its own accent.
+class _SwatchRing extends CustomPainter {
+  const _SwatchRing(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(_Swatch._radius)).deflate(0.75),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SwatchRing old) => old.color != color;
+}
+
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader(this.title);
 
@@ -495,7 +624,7 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(Space.gutter, Space.x4, Space.gutter, Space.s),
+      padding: const EdgeInsets.fromLTRB(Space.xs, Space.x3, Space.xs, Space.m),
       child: Semantics(header: true, child: Text(title, style: PrepType.titleM)),
     );
   }
@@ -528,18 +657,9 @@ class _DeleteRow extends StatelessWidget {
                   const PrepIcon(PrepIcons.trash, color: PrepColors.danger),
                   const SizedBox(width: Space.l),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Delete everything on this phone',
-                          style: PrepType.bodyLMedium.copyWith(color: PrepColors.danger),
-                        ),
-                        Text(
-                          'Your details, saved practice and history.',
-                          style: PrepType.meta.copyWith(color: PrepColors.text3),
-                        ),
-                      ],
+                    child: Text(
+                      'Delete everything on this phone',
+                      style: PrepType.bodyLMedium.copyWith(color: PrepColors.danger),
                     ),
                   ),
                 ],

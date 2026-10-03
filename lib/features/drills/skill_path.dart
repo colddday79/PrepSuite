@@ -4,18 +4,17 @@ import 'package:flutter/material.dart';
 
 import '../../design/components.dart';
 import '../../design/icons.dart';
+import '../../design/metal.dart';
 import '../../design/tokens.dart';
 import 'drill_content.dart';
-import 'drill_parts.dart';
 import 'drill_progress.dart';
 
 /// Opens a lesson from the skill path or the Home card.
 typedef OpenDrillLesson = void Function(DrillSkill skill, DrillLesson lesson);
 
-/// The four skills as a calm list for the Practice tab: each skill a card with its title, one
-/// line about it, how many lessons are done and a thin track, then its lessons as rows. Every
-/// lesson is open; the first unfinished one is marked "Up next". Not scrollable itself: it sits in
-/// the tab's own list.
+/// The four skills for the Practice tab: each a metal card with a small gauge of lessons done and
+/// its title, then its lessons as rows (a check when done, an accent dot on the next one, an empty
+/// ring otherwise). Every lesson is open. Not scrollable itself: it sits in the tab's own list.
 class SkillPath extends StatefulWidget {
   const SkillPath({super.key, required this.progress, required this.onOpenLesson});
 
@@ -69,54 +68,52 @@ class _SkillCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final done = progress.doneCount(skill);
     final total = skill.lessons.length;
-    return Material(
+    return MetalCard(
       key: ValueKey('skill-${skill.id}'),
-      color: PrepColors.surface1,
-      borderRadius: BorderRadius.circular(Radii.card),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Semantics(
-            container: true,
-            header: true,
-            label: '${skill.title}. ${skill.summary} $done of $total lessons done.',
-            excludeSemantics: true,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(Space.xl, Space.xl, Space.xl, Space.l),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      padding: EdgeInsets.zero,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(Radii.card),
+        // The rows' ink lands on this layer, above the metal.
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(
+                container: true,
+                header: true,
+                label: '${skill.title}. $done of $total lessons done.',
+                excludeSemantics: true,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(Space.l, Space.l, Space.xl, Space.m),
+                  child: Row(
                     children: [
-                      Expanded(child: Text(skill.title, style: PrepType.titleM)),
-                      const SizedBox(width: Space.m),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 3),
-                        child: Text('$done of $total lessons', style: PrepType.meta),
+                      ArcGauge(
+                        value: total == 0 ? 0 : done / total,
+                        size: 56,
+                        stroke: 4,
+                        child: Text('$done/$total', style: PrepType.label),
                       ),
+                      const SizedBox(width: Space.l),
+                      Expanded(child: Text(skill.title, style: PrepType.titleM)),
                     ],
                   ),
-                  const SizedBox(height: Space.xs),
-                  Text(skill.summary, style: PrepType.body),
-                  const SizedBox(height: Space.l),
-                  ThinTrack(value: total == 0 ? 0 : done / total),
-                ],
+                ),
               ),
-            ),
+              for (final (i, lesson) in skill.lessons.indexed) ...[
+                Hairline(indent: i == 0 ? 0 : _textInset),
+                _LessonRow(
+                  lesson: lesson,
+                  state: progress.isDone(lesson.id)
+                      ? _LessonState.done
+                      : (lesson == next ? _LessonState.next : _LessonState.open),
+                  onTap: () => onOpenLesson(skill, lesson),
+                ),
+              ],
+              const SizedBox(height: Space.xs),
+            ],
           ),
-          for (final (i, lesson) in skill.lessons.indexed) ...[
-            Hairline(indent: i == 0 ? 0 : _textInset),
-            _LessonRow(
-              lesson: lesson,
-              state: progress.isDone(lesson.id)
-                  ? _LessonState.done
-                  : (lesson == next ? _LessonState.next : _LessonState.open),
-              onTap: () => onOpenLesson(skill, lesson),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
@@ -133,17 +130,21 @@ class _LessonRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final count = '${lesson.exercises.length} exercises';
+    final minutes = '${lesson.minutes} min';
     final (String? lead, String rest) = switch (state) {
-      _LessonState.done => ('Done', ' · $count'),
-      _LessonState.next => ('Up next', ' · $count · about ${lesson.minutes} min'),
-      _LessonState.open => (null, '$count · about ${lesson.minutes} min'),
+      _LessonState.done => ('Done', ''),
+      _LessonState.next => ('Up next', ' · $minutes'),
+      _LessonState.open => (null, minutes),
     };
-    final leadColor = state == _LessonState.next ? PrepColors.accent : PrepColors.text2;
+    final spoken = switch (state) {
+      _LessonState.done => 'Done',
+      _LessonState.next => 'Up next, about ${lesson.minutes} minutes',
+      _LessonState.open => 'About ${lesson.minutes} minutes',
+    };
     return Semantics(
       container: true,
       button: true,
-      label: '${lesson.title}. ${lead ?? ''}${lead == null ? rest : rest.replaceAll(' · ', ', ')}',
+      label: '${lesson.title}. $spoken, ${lesson.exercises.length} exercises',
       excludeSemantics: true,
       onTap: onTap,
       child: FocusRing(
@@ -171,8 +172,13 @@ class _LessonRow extends StatelessWidget {
                           TextSpan(
                             children: [
                               if (lead != null)
-                                TextSpan(text: lead, style: PrepType.meta.copyWith(color: leadColor)),
-                              TextSpan(text: rest),
+                                TextSpan(
+                                  text: lead,
+                                  style: PrepType.meta.copyWith(
+                                    color: state == _LessonState.next ? PrepColors.accentDeep : PrepColors.text2,
+                                  ),
+                                ),
+                              if (rest.isNotEmpty) TextSpan(text: rest),
                             ],
                           ),
                           style: PrepType.meta.copyWith(color: PrepColors.text3),
@@ -192,7 +198,8 @@ class _LessonRow extends StatelessWidget {
   }
 }
 
-/// A 28 dp ring before each lesson: a check when done, a filled centre when it is next.
+/// A 28 dp mark before each lesson: a check on raised metal when done, an accent dot inside an
+/// accent ring when it is next, a hairline ring otherwise.
 class _Marker extends StatelessWidget {
   const _Marker({required this.state});
 
@@ -206,13 +213,17 @@ class _Marker extends StatelessWidget {
       dimension: size,
       child: switch (state) {
         _LessonState.done => DecoratedBox(
-          decoration: BoxDecoration(color: PrepColors.accentTint, shape: BoxShape.circle),
-          child: Center(child: PrepIcon(PrepIcons.check, color: PrepColors.accent, size: 18)),
+          decoration: BoxDecoration(
+            color: PrepColors.surface2,
+            shape: BoxShape.circle,
+            border: Border.all(color: PrepColors.rimLight),
+          ),
+          child: Center(child: PrepIcon(PrepIcons.check, color: PrepColors.text, size: 16)),
         ),
         _LessonState.next => DecoratedBox(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: PrepColors.accent, width: 2),
+            border: Border.all(color: PrepColors.accentDeep, width: 1.5),
           ),
           child: Center(
             child: SizedBox.square(
@@ -232,8 +243,9 @@ class _Marker extends StatelessWidget {
   }
 }
 
-/// One compact card for Home: the next lesson on the skill path, its skill, and how far along the
-/// path is. When every lesson is done it says so and offers to practice again from the start.
+/// One compact metal card for Home: the next lesson on the skill path, its skill, and a thin line
+/// of how far along the path is. When every lesson is done it offers to start again. Narrow enough
+/// to sit in half a row.
 class NextLessonCard extends StatefulWidget {
   const NextLessonCard({super.key, required this.progress, required this.onOpen});
 
@@ -263,81 +275,80 @@ class _NextLessonCardState extends State<NextLessonCard> {
         final skill = progress.skillOf(lesson);
         final count = progress.lessonCount;
         final done = progress.doneTotal;
-        final label = allDone ? 'Skill practice' : 'Up next';
-        final title = allDone ? 'All $count lessons done' : lesson.title;
-        final meta = allDone ? 'Practice again from the start' : '${skill.title} · about ${lesson.minutes} min';
-        void open() => widget.onOpen(skill, lesson);
-        return Semantics(
-          container: true,
-          button: true,
-          label: allDone
-              ? 'All $count skill lessons done. Practice again from the start'
+        final title = allDone ? 'All lessons done' : lesson.title;
+        final meta = allDone ? 'Start again' : skill.title;
+        final gauge = ArcGauge(
+          value: count == 0 ? 0 : done / count,
+          size: 52,
+          stroke: 4,
+          child: Text('$done/$count', style: PrepType.caption.copyWith(color: PrepColors.text)),
+        );
+        final words = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: PrepType.titleM, maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: Space.xxs),
+            Text(meta, style: PrepType.meta, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ],
+        );
+        return MetalTile(
+          key: const ValueKey('next-lesson-card'),
+          onTap: () => widget.onOpen(skill, lesson),
+          semanticLabel: allDone
+              ? 'All $count skill lessons done. Start again'
               : 'Up next: ${lesson.title}, ${skill.title}. $done of $count lessons done',
-          excludeSemantics: true,
-          onTap: open,
-          child: FocusRing(
-            radius: Radii.card,
-            child: Material(
-              key: const ValueKey('next-lesson-card'),
-              color: PrepColors.surface1,
-              borderRadius: BorderRadius.circular(Radii.card),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(Radii.card),
-                onTap: open,
-                focusColor: Colors.transparent,
-                child: Padding(
-                  padding: const EdgeInsets.all(Space.xl),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(color: PrepColors.accentTint, shape: BoxShape.circle),
-                            child: Center(
-                              child: PrepIcon(
-                                allDone ? PrepIcons.replay : PrepIcons.write,
-                                color: PrepColors.accent,
-                                size: 22,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: Space.l),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(label, style: PrepType.label.copyWith(color: PrepColors.text2)),
-                                const SizedBox(height: Space.xxs),
-                                Text(title, style: PrepType.titleM),
-                                const SizedBox(height: Space.xxs),
-                                Text(meta, style: PrepType.meta),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: Space.m),
-                          PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
-                        ],
-                      ),
-                      const SizedBox(height: Space.l),
-                      Row(
-                        children: [
-                          Expanded(child: ThinTrack(value: count == 0 ? 0 : done / count)),
-                          const SizedBox(width: Space.m),
-                          // Flexible so very large text wraps instead of pushing past the edge.
-                          Flexible(child: Text('$done of $count lessons', style: PrepType.meta, textAlign: TextAlign.end)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          padding: const EdgeInsets.all(Space.l),
+          child: LayoutBuilder(
+            builder: (context, box) {
+              // Half a row on Home: the gauge and the arrow share the top line, the words go under.
+              if (box.maxWidth < 280) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(children: [gauge, const Spacer(), const _ChevronDisc()]),
+                    const SizedBox(height: Space.m),
+                    words,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  gauge,
+                  const SizedBox(width: Space.l),
+                  Expanded(child: words),
+                  const SizedBox(width: Space.m),
+                  const _ChevronDisc(),
+                ],
+              );
+            },
           ),
         );
       },
+    );
+  }
+}
+
+/// A small raised metal disc holding the arrow: where the card goes, drawn like the app's controls.
+/// Decorative; the whole card is the button.
+class _ChevronDisc extends StatelessWidget {
+  const _ChevronDisc();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [PrepColors.surface2, PrepColors.metalBottom],
+        ),
+        border: Border.all(color: PrepColors.rimLight),
+      ),
+      child: SizedBox.square(
+        dimension: 36,
+        child: Center(child: PrepIcon(PrepIcons.chevron, color: PrepColors.text2, size: 18)),
+      ),
     );
   }
 }

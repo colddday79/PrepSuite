@@ -194,7 +194,7 @@ Future<void> _openInterview(WidgetTester tester, _Rig rig) async {
 
 Future<void> _finishTypedPractice(WidgetTester tester, _Rig rig) async {
   await _boot(tester, rig);
-  await _tap(tester, find.text('Practice').last);
+  await _tap(tester, find.byKey(const ValueKey('tab-practice')));
   await _settle(tester, 400);
   await _tap(tester, find.byKey(const ValueKey('mode-typing')));
   await _settle(tester, 600);
@@ -205,9 +205,9 @@ Future<void> _finishTypedPractice(WidgetTester tester, _Rig rig) async {
   for (var i = 1; i <= _sessionLength; i++) {
     await tester.enterText(find.byKey(const ValueKey('answer-field')), 'I handled order $i by checking the ticket, remaking the drink and explaining the fix to the customer.');
     await tester.pump();
-    await _tap(tester, find.text('Send answer'));
+    await _tap(tester, find.text('Send'));
     await _settle(tester, 600);
-    await _tap(tester, find.text(i == _sessionLength ? 'See your notes' : 'Next question'));
+    await _tap(tester, find.text(i == _sessionLength ? 'See your notes' : 'Next'));
     await _settle(tester, 900);
   }
 }
@@ -251,7 +251,7 @@ void main() {
 
     // Interview: three questions, with feedback in order: good, try, voice.
     for (var i = 1; i <= _sessionLength; i++) {
-      expect(find.text('$i of $_sessionLength'), findsOneWidget);
+      expect(find.text('$i/$_sessionLength'), findsOneWidget);
       expect(find.textContaining('Sample questions'), findsOneWidget);
       await _answerOutLoud(tester);
       expect(find.text('Good'), findsOneWidget);
@@ -261,13 +261,13 @@ void main() {
       expect(tester.getTopLeft(find.text('Try')).dy, lessThan(tester.getTopLeft(find.text('Voice')).dy));
       if (i == 1) {
         // Practice it once more: the question comes back ready to record.
-        await _tap(tester, find.text('Practice this'));
+        await _tap(tester, find.text('Again'));
         await _settle(tester, 300);
         expect(find.text('Tap to answer'), findsOneWidget);
         expect(_record(), findsOneWidget);
         await _answerOutLoud(tester);
       }
-      await _tap(tester, find.text(i == _sessionLength ? 'See your notes' : 'Next question'));
+      await _tap(tester, find.text(i == _sessionLength ? 'See your notes' : 'Next'));
       await _settle(tester, 800);
     }
 
@@ -280,6 +280,10 @@ void main() {
     expect(find.text('Tips'), findsOneWidget);
     expect(find.textContaining('Start every answer with the point'), findsOneWidget);
     expect(find.text('Stories to use'), findsOneWidget);
+    // Back closes the sheet, then Done leaves the notes.
+    await tester.binding.handlePopRoute();
+    await _settle(tester, 600);
+    expect(find.text('Tips'), findsNothing);
     await _tap(tester, find.text('Done'));
     await _settle(tester, 800);
 
@@ -312,9 +316,9 @@ void main() {
     await _settle(tester, 300);
     await tester.enterText(find.byKey(const ValueKey('answer-field')), 'I kept the queue moving by taking orders while my coworker made drinks.');
     await tester.pump();
-    await _tap(tester, find.text('Send answer'));
+    await _tap(tester, find.text('Send'));
     await _settle(tester, 600);
-    expect(find.text('Next question'), findsOneWidget);
+    expect(find.text('Next'), findsOneWidget);
     // A typed answer has no voice to judge, so there is no voice block (and no sentence saying so).
     expect(find.text('Voice'), findsNothing);
     expect(find.textContaining('no voice'), findsNothing);
@@ -336,7 +340,7 @@ void main() {
 
     await _tap(tester, find.text('Try again'));
     await _settle(tester, 1200);
-    expect(find.text('1 of $_sessionLength'), findsOneWidget);
+    expect(find.text('1/$_sessionLength'), findsOneWidget);
   });
 
   testWidgets('Not now keeps you on Home; microphone off offers typing', (tester) async {
@@ -378,7 +382,7 @@ void main() {
     await _tap(tester, find.text('Use this'));
     await _settle(tester, 1000);
     expect(rig.coach.jobs, ['Graduate civil engineer designing bridges']);
-    expect(find.text('1 of $_sessionLength'), findsOneWidget);
+    expect(find.text('1/$_sessionLength'), findsOneWidget);
   });
 
   testWidgets('silent job is not sent to the coach and can be re-recorded', (tester) async {
@@ -438,6 +442,9 @@ void main() {
     await _settle(tester, 800);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await _settle(tester, 400);
+    // Back to the app the way Android does it: hidden, then inactive, then resumed.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await _settle(tester, 400);
 
@@ -503,7 +510,7 @@ void main() {
     expect(rig.coach.feedbackCalls.last.transcript, original.transcript);
     expect(rig.coach.feedbackCalls.last.delivery, same(original.delivery));
     expect(rig.speech.startCalls, captures);
-    expect(find.text('Next question'), findsOneWidget);
+    expect(find.text('Next'), findsOneWidget);
   });
 
   testWidgets('wrapup outage keeps every answer for a retry from Home', (tester) async {
@@ -516,7 +523,7 @@ void main() {
 
     await _tap(tester, find.text('Done'));
     await _settle(tester, 700);
-    await _tap(tester, find.text('Home').last);
+    await _tap(tester, find.byKey(const ValueKey('tab-home')));
     await _settle(tester, 400);
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('recent-card')),
@@ -558,7 +565,7 @@ void main() {
     expect(find.text("Voice isn't available."), findsOneWidget);
     expect(find.textContaining('offline speech files are missing'), findsOneWidget);
     expect(find.byKey(const ValueKey('job-field')), findsOneWidget);
-    expect(find.text('Say it instead'), findsNothing);
+    expect(find.bySemanticsLabel('Say it instead'), findsNothing);
 
     await tester.enterText(find.byKey(const ValueKey('job-field')), 'Barista at a busy cafe');
     await tester.pump();

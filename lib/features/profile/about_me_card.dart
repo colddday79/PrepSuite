@@ -7,6 +7,7 @@ import '../../coach/contracts.dart';
 import '../../coach/speech_adapter.dart';
 import '../../design/components.dart';
 import '../../design/icons.dart';
+import '../../design/metal.dart';
 import '../../design/tokens.dart';
 import '../common/coach_widgets.dart';
 
@@ -25,30 +26,30 @@ class AboutMeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final empty = about.trim().isEmpty;
-    return DecoratedBox(
-      decoration: BoxDecoration(color: PrepColors.surface1, borderRadius: BorderRadius.circular(Radii.card)),
-      child: Padding(
-        padding: const EdgeInsets.all(Space.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Semantics(header: true, child: Text('About me', style: PrepType.titleM)),
-            const SizedBox(height: Space.m),
-            Text(
-              empty ? 'Describe yourself in a few sentences.' : about,
-              style: empty ? PrepType.bodyL.copyWith(color: PrepColors.text3) : PrepType.bodyL,
-            ),
-            const SizedBox(height: Space.l),
-            Wrap(
-              spacing: Space.m,
+    return MetalCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Semantics(header: true, child: Text('About me', style: PrepType.titleM)),
+          const SizedBox(height: Space.m),
+          Text(
+            empty ? 'Describe yourself in a few sentences.' : about,
+            style: empty ? PrepType.bodyL.copyWith(color: PrepColors.text3) : PrepType.bodyL,
+          ),
+          const SizedBox(height: Space.m),
+          // The buttons pad their labels by 12; pull them back so the labels line up with the text.
+          Transform.translate(
+            offset: const Offset(-Space.m, 0),
+            child: Wrap(
+              spacing: Space.s,
               runSpacing: Space.xs,
               children: [
                 QuietButton('Edit', icon: PrepIcons.edit, onPressed: onEdit),
                 QuietButton('Say it', icon: PrepIcons.mic, onPressed: onSayIt),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

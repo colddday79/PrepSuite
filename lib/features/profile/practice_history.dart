@@ -3,18 +3,20 @@ import 'package:flutter/material.dart';
 import '../../app/session.dart';
 import '../../design/components.dart';
 import '../../design/icons.dart';
+import '../../design/metal.dart';
 import '../../design/tokens.dart';
 import 'profile_format.dart';
 
-/// Past practices, newest first. The latest one opens its notes while the whole practice is
-/// still saved on the phone; older ones are summaries only.
+/// Past practices, newest first, one metal row each: the job, the date and "2/3" answered. The
+/// latest opens its notes while the whole practice is still saved on the phone; older ones are
+/// summaries only, so they carry no chevron.
 class PracticeHistory extends StatelessWidget {
   const PracticeHistory({super.key, required this.sessions, required this.onOpen, required this.onStart});
 
   final SessionStore sessions;
   final ValueChanged<PracticeSession> onOpen;
 
-  /// Takes the person back to Home to start a practice.
+  /// Takes the person to a practice.
   final VoidCallback onStart;
 
   @override
@@ -23,7 +25,16 @@ class PracticeHistory extends StatelessWidget {
       listenable: sessions,
       builder: (context, _) {
         final records = sessions.history;
-        if (records.isEmpty) return _Empty(onStart: onStart);
+        if (records.isEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('No practices yet', style: PrepType.titleM),
+              const SizedBox(height: Space.l),
+              PrimaryButton('Practice', onPressed: onStart),
+            ],
+          );
+        }
         final now = DateTime.now();
         final last = sessions.last;
         final latestOpens = last != null && records.first.isFor(last);
@@ -31,7 +42,7 @@ class PracticeHistory extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (var i = 0; i < records.length; i++) ...[
-              if (i > 0) const Hairline(indent: Space.gutter),
+              if (i > 0) const SizedBox(height: Space.s + Space.xxs),
               _HistoryRow(
                 key: ValueKey('practice-${records[i].startedAt.microsecondsSinceEpoch}'),
                 record: records[i],
@@ -40,38 +51,9 @@ class PracticeHistory extends StatelessWidget {
                 onOpen: onOpen,
               ),
             ],
-            if (!latestOpens || records.length > 1)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(Space.gutter, Space.s, Space.gutter, 0),
-                child: Text(
-                  'Only your latest practice keeps its notes.',
-                  style: PrepType.meta.copyWith(color: PrepColors.text3),
-                ),
-              ),
           ],
         );
       },
-    );
-  }
-}
-
-class _Empty extends StatelessWidget {
-  const _Empty({required this.onStart});
-
-  final VoidCallback onStart;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Space.gutter),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('No practices yet.', style: PrepType.body),
-          const SizedBox(height: Space.l),
-          PrimaryButton('Start practicing', onPressed: onStart),
-        ],
-      ),
     );
   }
 }
@@ -89,51 +71,44 @@ class _HistoryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = full;
-    final answered = '${record.answered} of ${record.total} answered';
     final notes = session != null
         ? (session.wrapup != null ? 'Notes ready' : 'Notes not written yet')
-        : (record.hasNotes ? 'Notes written' : 'No notes');
+        : (record.hasNotes ? 'Notes not kept' : 'No notes');
     final onTap = session == null ? null : () => onOpen(session);
-    return Semantics(
-      container: true,
-      button: onTap != null,
-      label: '${record.jobTitle}. ${spokenDate(record.startedAt, now)}. $answered. $notes.',
+    return MetalTile(
+      semanticLabel:
+          '${record.jobTitle}. ${spokenDate(record.startedAt, now)}. ${record.answered} of ${record.total} answered. $notes.',
+      tapHint: 'open your notes',
       onTap: onTap,
-      onTapHint: onTap == null ? null : 'open your notes',
-      excludeSemantics: true,
-      child: FocusRing(
-        gap: -Space.xs,
-        child: InkWell(
-          onTap: onTap,
-          focusColor: Colors.transparent,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 64),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Space.gutter, vertical: Space.m),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(record.jobTitle, style: PrepType.bodyLMedium),
-                        const SizedBox(height: Space.xxs),
-                        Text(
-                          '${shortDate(record.startedAt, now)} · $answered · $notes',
-                          style: PrepType.meta.copyWith(color: PrepColors.text3),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (onTap != null) ...[
-                    const SizedBox(width: Space.m),
-                    PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
-                  ],
-                ],
-              ),
+      padding: const EdgeInsets.fromLTRB(Space.xl, Space.l, Space.l, Space.l),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(record.jobTitle, style: PrepType.titleM, maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: Space.xxs),
+                Text(shortDate(record.startedAt, now), style: PrepType.meta),
+              ],
             ),
           ),
-        ),
+          const SizedBox(width: Space.m),
+          Text(
+            '${record.answered}/${record.total}',
+            style: PrepType.timer,
+            textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.6),
+          ),
+          SizedBox(
+            width: 30,
+            child: onTap == null
+                ? null
+                : Align(
+                    alignment: Alignment.centerRight,
+                    child: PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
+                  ),
+          ),
+        ],
       ),
     );
   }

@@ -4,7 +4,7 @@ import '../../coach/coach_api.dart';
 import '../../coach/contracts.dart';
 import '../../design/components.dart';
 import '../../design/icons.dart';
-import '../../design/tokens.dart';
+import '../../design/metal.dart';
 
 /// What Norman reads out on the interview screen besides the question itself.
 enum Spoken { feedback, reply, notes }
@@ -61,9 +61,9 @@ class ReadAloud extends ChangeNotifier {
   }
 }
 
-/// A quiet control to hear a piece of text read aloud, or stop it. It sits right by the text.
-/// [iconOnly] draws just a small round speaker (a stop square while it plays); the words are then
-/// for screen readers only.
+/// A quiet control to hear a piece of text read aloud, or stop it. [iconOnly] draws it as a metal
+/// speaker disc (a stop square and an accent ring while it plays); the words are then for screen
+/// readers only.
 class ReadAloudButton extends StatelessWidget {
   const ReadAloudButton({
     super.key,
@@ -92,43 +92,12 @@ class ReadAloudButton extends StatelessWidget {
       onTap: onPressed,
       excludeSemantics: true,
       child: iconOnly
-          ? FocusRing(
-              radius: 24,
-              child: Material(
-                type: MaterialType.transparency,
-                shape: const CircleBorder(),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: onPressed,
-                  customBorder: const CircleBorder(),
-                  focusColor: Colors.transparent,
-                  child: SizedBox.square(
-                    dimension: 48,
-                    child: Center(
-                      child: DecoratedBox(
-                        decoration: ShapeDecoration(
-                          color: PrepColors.surface1,
-                          shape: CircleBorder(
-                            side: BorderSide(
-                              color: !enabled ? PrepColors.line : (speaking ? PrepColors.accent : PrepColors.text3),
-                            ),
-                          ),
-                        ),
-                        child: SizedBox.square(
-                          dimension: 40,
-                          child: Center(
-                            child: PrepIcon(
-                              speaking ? PrepIcons.stop : PrepIcons.speaker,
-                              color: !enabled ? PrepColors.text3 : (speaking ? PrepColors.accent : PrepColors.text2),
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+          ? MetalDisc(
+              speaking ? PrepIcons.stop : PrepIcons.speaker,
+              label: speaking ? stopLabel : label,
+              onPressed: onPressed,
+              active: speaking,
+              size: 48,
             )
           : QuietButton(speaking ? 'Stop' : label, icon: speaking ? PrepIcons.stop : PrepIcons.speaker, onPressed: onPressed),
     );

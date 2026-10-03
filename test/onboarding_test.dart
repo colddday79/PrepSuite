@@ -167,7 +167,7 @@ void main() {
     await _start(tester);
     await _answer(tester, 'Sam');
     await _answer(tester, 'Barista');
-    await _tap(tester, find.text('Skip for now'));
+    await _tap(tester, find.text('Not now'));
     await _settle(tester, 1500);
     expect(rig.profile.value.about, '');
     await _tap(tester, find.byKey(const ValueKey('onboarding-done')));

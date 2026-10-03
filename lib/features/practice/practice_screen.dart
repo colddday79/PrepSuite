@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../app/assistant.dart';
 import '../../app/services.dart';
 import '../../design/components.dart';
 import '../../design/icons.dart';
+import '../../design/metal.dart';
+import '../../design/robot_stage.dart';
 import '../../design/tokens.dart';
 import '../drills/drill_content.dart';
 import '../drills/drill_lesson_screen.dart';
@@ -13,9 +16,10 @@ import '../shell/shell_scope.dart';
 import '../talk/talk_screen.dart';
 import '../wrapup/wrapup_screen.dart';
 
-/// The body of the Practice tab: the ways to practise out loud as one plain list, then the skill
-/// drills. The bottom navigation bar and the tab's own [Scaffold] belong to the app shell; this
-/// widget only needs its own top [SafeArea].
+enum _Segment { speak, skills }
+
+/// The Practice tab: Speak (the mock interview on a metal stage, then the other ways to practice)
+/// or Skills (the drill path). The shell owns the tab bar; this keeps its own top [SafeArea].
 class PracticeScreen extends StatefulWidget {
   const PracticeScreen({super.key});
 
@@ -26,9 +30,10 @@ class PracticeScreen extends StatefulWidget {
 class _PracticeScreenState extends State<PracticeScreen> {
   // Guards a rapid double tap from pushing two intakes at once.
   bool _busy = false;
+  _Segment _segment = _Segment.speak;
 
-  /// Mock interview, Quick question and typing all land here: they ask for consent
-  /// once, then open the intake with whichever parameters name the mode.
+  /// Mock interview, Quick and Type all land here: they ask for consent once, then open the
+  /// intake with whichever parameters name the mode.
   Future<void> _openIntake({bool preferTyping = false, int questionCount = 3}) async {
     if (_busy) return;
     _busy = true;
@@ -78,104 +83,276 @@ class _PracticeScreenState extends State<PracticeScreen> {
   @override
   Widget build(BuildContext context) {
     final services = AppScope.of(context);
-    return ColoredBox(
-      color: PrepColors.bg,
-      child: SafeArea(
-        bottom: false,
-        child: ListenableBuilder(
-          listenable: services.assistant,
-          builder: (context, _) {
-            final look = services.assistant.value;
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, Space.x4),
-              children: [
-                Semantics(header: true, child: Text('Practice', style: PrepType.display)),
-                const SizedBox(height: Space.xxl),
-                const _SectionTitle('Out loud'),
-                const SizedBox(height: Space.m),
-                _Group(
-                  children: [
-                    LinkRow(
-                      key: const ValueKey('mode-mock'),
-                      icon: PrepIcons.mic,
-                      title: 'Mock interview',
-                      meta: '3 questions · about 6 minutes',
-                      onTap: () => _openIntake(),
-                    ),
-                    LinkRow(
-                      key: const ValueKey('mode-quick'),
-                      icon: PrepIcons.clock,
-                      title: 'Quick question',
-                      meta: '1 question · about 2 minutes',
-                      onTap: () => _openIntake(questionCount: 1),
-                    ),
-                    LinkRow(
-                      key: const ValueKey('mode-typing'),
-                      icon: PrepIcons.keyboard,
-                      title: 'Type your answers',
-                      meta: 'When you can\'t talk right now',
-                      onTap: () => _openIntake(preferTyping: true),
-                    ),
-                    LinkRow(
-                      key: const ValueKey('mode-talk'),
-                      icon: PrepIcons.chat,
-                      title: 'Ask ${look.name}',
-                      meta: 'Questions about interviews',
-                      onTap: _openTalk,
-                    ),
-                    LinkRow(
-                      key: const ValueKey('mode-notes'),
-                      icon: PrepIcons.write,
-                      title: 'Your notes',
-                      meta: 'Read before you go in',
-                      onTap: _openNotes,
-                    ),
-                  ],
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    // Transparent: the shell's lit room shows through behind the glass.
+    return SafeArea(
+      bottom: false,
+      child: ListenableBuilder(
+        listenable: services.assistant,
+        builder: (context, _) {
+          final look = services.assistant.value;
+          return ListView(
+            padding: EdgeInsets.fromLTRB(Space.gutter, Space.l, Space.gutter, floatingTabBarInset(context)),
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  'Practice',
+                  style: PrepType.display,
+                  textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.6),
                 ),
-                const SizedBox(height: Space.x3),
-                const _SectionTitle('Skills'),
-                const SizedBox(height: Space.m),
-                SkillPath(progress: services.drills, onOpenLesson: _openLesson),
-              ],
-            );
-          },
-        ),
+              ),
+              const SizedBox(height: Space.xl),
+              MetalSegments(
+                labels: const ['Speak', 'Skills'],
+                selected: _segment.index,
+                keys: const [ValueKey('practice-speak'), ValueKey('practice-skills')],
+                onSelect: (i) => setState(() => _segment = _Segment.values[i]),
+              ),
+              const SizedBox(height: Space.xxl),
+              AnimatedSwitcher(
+                duration: reduce ? Duration.zero : Motion.fade,
+                switchInCurve: Motion.standard,
+                switchOutCurve: Motion.standard,
+                layoutBuilder: (current, previous) => Stack(
+                  alignment: Alignment.topCenter,
+                  children: [...previous, ?current],
+                ),
+                child: switch (_segment) {
+                  _Segment.speak => _SpeakModes(
+                    key: const ValueKey('speak'),
+                    look: look,
+                    onMock: () => _openIntake(),
+                    onQuick: () => _openIntake(questionCount: 1),
+                    onType: () => _openIntake(preferTyping: true),
+                    onTalk: _openTalk,
+                    onNotes: _openNotes,
+                  ),
+                  _Segment.skills => SkillPath(
+                    key: const ValueKey('skills'),
+                    progress: services.drills,
+                    onOpenLesson: _openLesson,
+                  ),
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
+/// The mock interview as the hero, then the other spoken and typed ways in, as one metal list.
+class _SpeakModes extends StatelessWidget {
+  const _SpeakModes({
+    super.key,
+    required this.look,
+    required this.onMock,
+    required this.onQuick,
+    required this.onType,
+    required this.onTalk,
+    required this.onNotes,
+  });
 
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Semantics(header: true, child: Text(text, style: PrepType.titleM));
-}
-
-/// Rows on one plain card, separated by hairlines.
-class _Group extends StatelessWidget {
-  const _Group({required this.children});
-
-  final List<Widget> children;
+  final AssistantLook look;
+  final VoidCallback onMock;
+  final VoidCallback onQuick;
+  final VoidCallback onType;
+  final VoidCallback onTalk;
+  final VoidCallback onNotes;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: PrepColors.surface1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Radii.card),
-        side: BorderSide(color: PrepColors.line),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _MockCard(look: look, onTap: onMock),
+        const SizedBox(height: Space.m),
+        MetalCard(
+          padding: EdgeInsets.zero,
+          child: Material(
+            type: MaterialType.transparency,
+            borderRadius: BorderRadius.circular(Radii.card),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                _ModeRow(
+                  key: const ValueKey('mode-quick'),
+                  icon: PrepIcons.clock,
+                  title: 'Quick',
+                  meta: '1 question',
+                  spoken: 'Quick practice, 1 question',
+                  onTap: onQuick,
+                ),
+                const Hairline(indent: _ModeRow.textInset),
+                _ModeRow(
+                  key: const ValueKey('mode-typing'),
+                  icon: PrepIcons.keyboard,
+                  title: 'Type',
+                  meta: '3 questions',
+                  spoken: 'Type your answers, 3 questions',
+                  onTap: onType,
+                ),
+                const Hairline(indent: _ModeRow.textInset),
+                _ModeRow(
+                  key: const ValueKey('mode-talk'),
+                  icon: PrepIcons.chat,
+                  title: 'Ask ${look.name}',
+                  spoken: 'Ask ${look.name} about interviews',
+                  onTap: onTalk,
+                ),
+                const Hairline(indent: _ModeRow.textInset),
+                _ModeRow(
+                  key: const ValueKey('mode-notes'),
+                  icon: PrepIcons.write,
+                  title: 'Notes',
+                  spoken: 'Your notes',
+                  onTap: onNotes,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The main way to practice: its name, a big "3" for the questions and the time, a play disc, and
+/// the coach standing on its pedestal at the right.
+class _MockCard extends StatelessWidget {
+  const _MockCard({required this.look, required this.onTap});
+
+  final AssistantLook look;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final big = MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.6);
+    return MetalTile(
+      key: const ValueKey('mode-mock'),
+      hero: true,
+      radius: Radii.sheet,
+      semanticLabel: 'Mock interview, 3 questions, about 6 minutes',
+      onTap: onTap,
+      padding: const EdgeInsets.fromLTRB(Space.xxl, Space.xxl, Space.m, Space.l),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) Divider(height: 1, thickness: 1, indent: Space.gutter + 24 + Space.l, color: PrepColors.line),
-            children[i],
-          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Mock interview', style: PrepType.titleL),
+                const SizedBox(height: Space.s),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.end,
+                  spacing: Space.m,
+                  runSpacing: Space.xs,
+                  children: [
+                    Text('3', style: PrepType.numeral, textScaler: big),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Space.s),
+                      child: Text('questions · 6 min', style: PrepType.meta),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: Space.m),
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(color: PrepColors.accent, shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: Padding(
+                    // The triangle's weight sits left of its box; nudge it to look centred.
+                    padding: const EdgeInsets.only(left: 2),
+                    child: PrepIcon(PrepIcons.play, color: PrepColors.onAccent, size: 22),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: Space.s),
+          RobotStage(look: look, robotSize: 124, dial: false),
         ],
+      ),
+    );
+  }
+}
+
+/// One way to practice: its icon on a raised metal disc, a one or two word title, an optional count,
+/// a chevron.
+class _ModeRow extends StatelessWidget {
+  const _ModeRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.spoken,
+    required this.onTap,
+    this.meta,
+  });
+
+  /// Where the titles start, so the hairlines between rows line up with them.
+  static const double textInset = Space.l + 40 + Space.l;
+
+  final PrepIcons icon;
+  final String title;
+  final String? meta;
+  final String spoken;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = this.meta;
+    return Semantics(
+      container: true,
+      button: true,
+      label: spoken,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: FocusRing(
+        radius: Radii.control,
+        gap: -Space.xs,
+        child: InkWell(
+          onTap: onTap,
+          focusColor: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 64),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.xl, Space.m),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: PrepColors.surface2,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: PrepColors.rimLight),
+                    ),
+                    alignment: Alignment.center,
+                    child: PrepIcon(icon, color: PrepColors.text, size: 20),
+                  ),
+                  const SizedBox(width: Space.l),
+                  Expanded(child: Text(title, style: PrepType.titleM)),
+                  if (meta != null) ...[
+                    const SizedBox(width: Space.m),
+                    // Fills its share and sits at the end of it, so every chevron lines up.
+                    Flexible(
+                      child: Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: Text(meta, style: PrepType.meta, textAlign: TextAlign.end),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(width: Space.s),
+                  PrepIcon(PrepIcons.chevron, color: PrepColors.text3, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

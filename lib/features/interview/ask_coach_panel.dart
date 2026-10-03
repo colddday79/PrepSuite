@@ -8,6 +8,7 @@ import '../../coach/contracts.dart';
 import '../../coach/speech_adapter.dart';
 import '../../design/components.dart';
 import '../../design/icons.dart';
+import '../../design/metal.dart';
 import '../../design/tokens.dart';
 import '../common/coach_widgets.dart';
 import 'read_aloud.dart';
@@ -276,8 +277,8 @@ class AskCoachController extends ChangeNotifier {
   }
 }
 
-/// A card under the feedback: their question in their words, then the coach's answer. Every
-/// action here is quiet; "Next question" stays the one primary action on the screen.
+/// A metal card under the feedback: their question in their words, then the coach's answer.
+/// Every action here is quiet; "Next" stays the one primary action on the screen.
 class AskCoachPanel extends StatelessWidget {
   const AskCoachPanel({super.key, required this.controller, required this.voice});
 
@@ -288,19 +289,19 @@ class AskCoachPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: Listenable.merge([controller, voice]),
-      builder: (context, _) => CoachCard(
+      builder: (context, _) => MetalCard(
         padding: const EdgeInsets.fromLTRB(Space.xl, Space.s, Space.s, Space.xl),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                PrepIcon(PrepIcons.chat, color: PrepColors.text2, size: 20),
+                PrepIcon(PrepIcons.chat, color: PrepColors.text2, size: 18),
                 const SizedBox(width: Space.s),
                 Expanded(
                   child: Semantics(
                     header: true,
-                    child: Text('Ask the coach', style: PrepType.label.copyWith(color: PrepColors.text)),
+                    child: Text('Ask the coach', style: PrepType.label.copyWith(color: PrepColors.text2)),
                   ),
                 ),
                 QuietButton('Close', onPressed: controller.close),
@@ -330,17 +331,16 @@ class AskCoachPanel extends StatelessWidget {
           Center(
             child: RecordButton(
               recording: recording,
-              countdown: true,
               progress: c.progress,
               onPressed: c.record,
               semanticLabel: recording ? 'Stop recording' : 'Start recording your question',
             ),
           ),
-          const SizedBox(height: Space.m),
+          const SizedBox(height: Space.s),
           Center(
             child: recording
-                ? RecordClock(progress: c.progress, limit: askMaxRecording, style: PrepType.meta)
-                : Text('Tap to ask', style: PrepType.meta),
+                ? RecordClock(progress: c.progress, limit: askMaxRecording, style: PrepType.label.copyWith(color: PrepColors.text2))
+                : Text('Tap to ask', style: PrepType.label.copyWith(color: PrepColors.text2)),
           ),
           const SizedBox(height: Space.s),
           if (recording)
@@ -361,15 +361,11 @@ class AskCoachPanel extends StatelessWidget {
         return const [SizedBox(height: Space.s), LoadingLine('Writing it down')];
       case AskStage.unheard:
         return [
-          const ProblemNote(
-            title: "We couldn't hear your question.",
-            body: 'Speak up, or type it.',
-          ),
+          const ProblemNote(title: "We couldn't hear your question.", body: 'Speak up, or type it.'),
           const SizedBox(height: Space.l),
           Center(
             child: RecordButton(
               recording: false,
-              countdown: true,
               progress: c.progress,
               onPressed: c.record,
               semanticLabel: 'Start recording your question',
@@ -403,13 +399,15 @@ class AskCoachPanel extends StatelessWidget {
           c.sendTyped();
         }
         return [
-          PrepTextField(
+          const SizedBox(height: Space.xs),
+          MetalField(
             fieldKey: const ValueKey('ask-field'),
             controller: c.typed,
             hint: 'How long should my answer be?',
             minLines: 2,
             maxLines: 5,
             autofocus: true,
+            inset: true,
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => send(),
           ),
@@ -427,6 +425,7 @@ class AskCoachPanel extends StatelessWidget {
         ];
       case AskStage.thinking:
         return [
+          const SizedBox(height: Space.xs),
           _Asked(c.asked),
           const SizedBox(height: Space.l),
           const LoadingLine('The coach is thinking'),
@@ -434,10 +433,11 @@ class AskCoachPanel extends StatelessWidget {
       case AskStage.answered:
         final reply = c.reply!;
         return [
+          const SizedBox(height: Space.xs),
           _Asked(c.asked),
           const SizedBox(height: Space.m),
           if (reply.mock) ...[
-            Text('Sample answer', style: PrepType.label.copyWith(color: PrepColors.accent)),
+            Text('Sample answer', style: PrepType.caption),
             const SizedBox(height: Space.xs),
           ],
           Semantics(liveRegion: true, child: Text(stripQuotes(reply.answer), style: PrepType.bodyL)),
@@ -455,6 +455,7 @@ class AskCoachPanel extends StatelessWidget {
         ];
       case AskStage.error:
         return [
+          const SizedBox(height: Space.xs),
           _Asked(c.asked),
           const SizedBox(height: Space.m),
           ProblemNote(title: "Couldn't get an answer.", body: c.error?.userMessage ?? 'Something went wrong. Try again.'),
@@ -468,7 +469,7 @@ class AskCoachPanel extends StatelessWidget {
   }
 }
 
-/// Their question, in their words, as a quiet quote.
+/// Their question, in their words, on a raised well.
 class _Asked extends StatelessWidget {
   const _Asked(this.text);
 
@@ -479,7 +480,13 @@ class _Asked extends StatelessWidget {
     return Semantics(
       label: 'You asked: $text',
       excludeSemantics: true,
-      child: Text('“$text”', style: PrepType.quote.copyWith(color: PrepColors.text2)),
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: PrepColors.surface2, borderRadius: BorderRadius.circular(Radii.control)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(Space.l, Space.m, Space.l, Space.m),
+          child: Text('“$text”', style: PrepType.quote.copyWith(color: PrepColors.text2)),
+        ),
+      ),
     );
   }
 }

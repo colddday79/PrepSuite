@@ -35,9 +35,10 @@ enum _Phase {
   feedback,
 }
 
-/// Step two: one question at a time. The coach asks; the person answers out loud (up to two
-/// minutes, then checks the transcript) or types; the feedback comes back as at most three short
-/// blocks: good, try, and voice. Few words on screen; the next step is always in the bottom bar.
+/// Step two: one question at a time. The coach, big on its lit floor, asks; the person answers
+/// out loud on the record dial (up to two minutes, then checks the transcript) or types; the
+/// feedback comes back as at most three short metal cards: good, try, and voice. Few words on
+/// screen; the next step is always in the dock.
 class InterviewScreen extends StatefulWidget {
   const InterviewScreen({super.key, required this.session});
 
@@ -437,7 +438,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       _Phase.speaking => AssistantMood.speaking,
       _Phase.recording => AssistantMood.listening,
       _Phase.transcribing || _Phase.checking => AssistantMood.thinking,
-      _Phase.feedback => AssistantMood.happy,
+      _Phase.review || _Phase.feedback => AssistantMood.happy,
       _ => AssistantMood.idle,
     };
   }
@@ -464,6 +465,19 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
 
   bool get _voiceAvailable => !_services.speechSetup.state.value.isFailed;
 
+  /// The phases where the question is the page and the coach is the hero.
+  bool get _asking => switch (_phase) {
+        _Phase.speaking ||
+        _Phase.ready ||
+        _Phase.preparing ||
+        _Phase.recording ||
+        _Phase.transcribing ||
+        _Phase.unheard ||
+        _Phase.micOff =>
+          true,
+        _ => false,
+      };
+
   @override
   Widget build(BuildContext context) {
     final total = _session.questions.length;
@@ -480,24 +494,25 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
         onClose: _close,
         progress: done / total,
         progressLabel: 'Question ${_index + 1} of $total',
-        caption: '${_index + 1} of $total',
-        actions: feedback ? _feedbackActions() : _answerActions(),
-        children: feedback ? _feedbackContent() : _answerContent(),
+        segments: total,
+        count: '${_index + 1}/$total',
+        dock: feedback ? _feedbackDock() : _answerDock(),
+        builder: (context, room) => feedback ? _feedbackContent(context) : _answerContent(context, room),
       ),
     );
   }
 
-  List<Widget> _feedbackContent() {
+  List<Widget> _feedbackContent(BuildContext context) {
     final feedback = _feedback!;
     final canHear = _asker.voiceAvailable && spokenFeedback(feedback).isNotEmpty;
     return [
-      CoachLine(mood: _mood, status: _status, level: _level, size: 64),
-      const SizedBox(height: Space.xl),
-      FeedbackView(
-        feedback: feedback,
-        typed: _wasTyped,
-        metrics: _wasTyped ? null : _metrics,
-        listen: canHear
+      CoachStage(
+        mood: _mood,
+        status: _status,
+        level: _level,
+        size: compactCoachSize(context),
+        dial: false,
+        side: canHear
             ? ReadAloudButton(
                 key: const ValueKey('hear-feedback'),
                 iconOnly: true,
@@ -509,6 +524,8 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
               )
             : null,
       ),
+      const SizedBox(height: Space.l),
+      FeedbackView(feedback: feedback, typed: _wasTyped, metrics: _wasTyped ? null : _metrics),
       if (_asker.isOpen) ...[
         const SizedBox(height: Space.m),
         AskCoachPanel(key: _panelKey, controller: _asker, voice: _read),
@@ -516,32 +533,72 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     ];
   }
 
-  List<Widget> _feedbackActions() {
-    return [
-      PrimaryButton(_isLast ? 'See your notes' : 'Next question', onPressed: _next),
-      QuietRow([
-        QuietButton('Practice this', icon: PrepIcons.replay, onPressed: _tryAgain),
-        if (!_asker.isOpen) QuietButton('Ask the coach', icon: PrepIcons.chat, onPressed: _openAsk),
-      ]),
-    ];
+  Widget _feedbackDock() {
+    return PillDock(
+      label: _isLast ? 'See your notes' : 'Next',
+      onPressed: _next,
+      leading: DockAction(
+        icon: PrepIcons.replay,
+        label: 'Again',
+        semanticLabel: 'Practice this question again',
+        onPressed: _tryAgain,
+      ),
+      trailing: DockAction(
+        icon: PrepIcons.chat,
+        label: 'Ask',
+        semanticLabel: 'Ask the coach',
+        onPressed: _asker.isOpen ? null : _openAsk,
+      ),
+      trailingVisible: !_asker.isOpen,
+    );
   }
 
-  List<Widget> _answerContent() {
-    // Once there is text to read or edit, the question steps down a size to make room for it.
-    final compact = switch (_phase) {
-      _Phase.typing || _Phase.review || _Phase.checking || _Phase.error => true,
-      _ => false,
-    };
+  List<Widget> _answerContent(BuildContext context, PageRoom room) {
+    final hero = _asking;
+    final review = _phase == _Phase.review;
+    final mock = _session.set.mock;
+    // Long questions (or large text) step down a size so the question stays within three lines.
+    final threeLines = MediaQuery.textScalerOf(context).scale(PrepType.question.fontSize! * PrepType.question.height!) * 3 + 1;
+    final style = hero && measureText(context, _current.text, PrepType.question, room.width) <= threeLines
+        ? PrepType.question
+        : PrepType.questionM;
+    final double size;
+    var leadIn = 0.0;
+    if (hero) {
+      final caption = mock ? Space.s + measureText(context, 'Sample questions', PrepType.caption, room.width) : 0.0;
+      // Room for the words being heard (up to three lines), so the coach keeps its size meanwhile.
+      final heard = Space.l + measureText(context, 'a\nb\nc', PrepType.bodyL, room.width);
+      final words = Space.l + measureText(context, _current.text, style, room.width) + caption + heard;
+      size = heroCoachSize(context, room, words);
+      leadIn = heroLeadIn(room, words, size);
+    } else {
+      size = compactCoachSize(context);
+    }
     final phase = _phaseContent();
     return [
-      CoachLine(mood: _mood, status: _status, level: _level),
-      const SizedBox(height: Space.xl),
-      RevealText(controller: _question, style: compact ? PrepType.questionM : PrepType.question),
-      if (_session.set.mock) ...[
-        const SizedBox(height: Space.s),
-        Text('Sample questions', style: PrepType.caption),
+      SizedBox(height: leadIn),
+      CoachStage(
+        mood: _mood,
+        status: _status,
+        level: _level,
+        size: size,
+        dial: hero,
+        progress: hero ? _index / _session.questions.length : null,
+      ),
+      const SizedBox(height: Space.l),
+      if (review)
+        Semantics(
+          header: true,
+          child: Text('Check your words', style: PrepType.titleL, textAlign: TextAlign.center),
+        )
+      else ...[
+        RevealText(controller: _question, style: style, textAlign: TextAlign.center),
+        if (mock) ...[
+          const SizedBox(height: Space.s),
+          Text('Sample questions', style: PrepType.caption, textAlign: TextAlign.center),
+        ],
       ],
-      if (phase.isNotEmpty) ...[const SizedBox(height: Space.xxl), ...phase],
+      if (phase.isNotEmpty) ...[SizedBox(height: hero ? Space.l : Space.xl), ...phase],
     ];
   }
 
@@ -556,28 +613,25 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       case _Phase.transcribing:
         // Nothing until the first words arrive; the dock under the page says what is happening.
         final live = _phase == _Phase.recording || _phase == _Phase.transcribing;
-        return [if (live && _partial.trim().isNotEmpty) TranscriptCard(text: _tail(_partial))];
+        return [if (live && _partial.trim().isNotEmpty) LiveWords(_tail(_partial, 140))];
       case _Phase.review:
         return [
-          PrepTextField(
+          MetalField(
             fieldKey: const ValueKey('answer-review-field'),
             controller: _typed,
-            label: 'Check your words',
-            hint: '',
             minLines: 4,
             maxLines: 10,
             onChanged: (_) => setState(() {}),
           ),
         ];
       case _Phase.unheard:
-        return const [ProblemNote(title: "We couldn't hear your answer.", body: 'Speak up, or type it.')];
+        return const [ProblemNote(title: "We couldn't hear your answer.", body: 'Speak up, or type it.', centered: true)];
       case _Phase.typing:
         return [
-          PrepTextField(
+          MetalField(
             fieldKey: const ValueKey('answer-field'),
             controller: _typed,
-            label: 'Your answer',
-            hint: '',
+            hint: 'Your answer',
             minLines: 5,
             maxLines: 12,
             autofocus: true,
@@ -587,6 +641,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       case _Phase.micOff:
         return [
           ProblemNote(
+            centered: true,
             title: _micFailed ? "The microphone didn't start." : 'The microphone is off.',
             body: _micFailed
                 ? _speechError ?? 'Try again, or type it.'
@@ -600,6 +655,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       case _Phase.error:
         return [
           ProblemNote(
+            centered: true,
             title: "Couldn't check your answer.",
             body: _error?.userMessage ?? 'Something went wrong. Try again.',
           ),
@@ -607,7 +663,7 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     }
   }
 
-  List<Widget> _answerActions() {
+  Widget _answerDock() {
     switch (_phase) {
       case _Phase.speaking:
       case _Phase.ready:
@@ -615,48 +671,53 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
       case _Phase.recording:
       case _Phase.transcribing:
       case _Phase.unheard:
-        return [_dock()];
+        return _recordDock();
       case _Phase.review:
-        return [
-          PrimaryButton('Get feedback', onPressed: _typed.text.trim().isEmpty ? null : _confirmTranscript),
-          QuietRow([QuietButton('Record again', icon: PrepIcons.replay, onPressed: _record)]),
-        ];
+        return PillDock(
+          label: 'Get feedback',
+          onPressed: _typed.text.trim().isEmpty ? null : _confirmTranscript,
+          leading: DockAction(icon: PrepIcons.replay, label: 'Retake', semanticLabel: 'Record again', onPressed: _record),
+        );
       case _Phase.typing:
-        return [
-          PrimaryButton('Send answer', onPressed: _typed.text.trim().isEmpty ? null : _sendTyped),
-          if (_voiceAvailable)
-            QuietRow([QuietButton('Answer out loud instead', icon: PrepIcons.mic, onPressed: _record)]),
-        ];
+        return PillDock(
+          label: 'Send',
+          onPressed: _typed.text.trim().isEmpty ? null : _sendTyped,
+          leading: _voiceAvailable
+              ? DockAction(icon: PrepIcons.mic, label: 'Speak', semanticLabel: 'Answer out loud instead', onPressed: _record)
+              : null,
+        );
       case _Phase.micOff:
-        return [
-          PrimaryButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead),
-          QuietRow([
-            QuietButton(
-              _micBlocked ? 'Open settings' : 'Try again',
-              onPressed: _micBlocked ? _services.mic.openSettings : _record,
-            ),
-          ]),
-        ];
+        return PillDock(
+          label: 'Type instead',
+          icon: PrepIcons.keyboard,
+          onPressed: _typeInstead,
+          leading: DockAction(
+            icon: _micBlocked ? PrepIcons.sliders : PrepIcons.replay,
+            label: _micBlocked ? 'Open settings' : 'Try again',
+            onPressed: _micBlocked ? _services.mic.openSettings : _record,
+          ),
+        );
       case _Phase.checking:
         // The action just taken, in progress: it holds its place and cannot be sent twice.
-        return [PrimaryButton('Checking your answer', busy: true, onPressed: () {})];
+        return PillDock(label: 'Checking', busy: true, onPressed: () {});
       case _Phase.error:
-        return [
-          PrimaryButton('Try again', onPressed: _check),
-          QuietRow([QuietButton('Answer again', icon: PrepIcons.replay, onPressed: _tryAgain)]),
-        ];
+        return PillDock(
+          label: 'Try again',
+          onPressed: _check,
+          leading: DockAction(icon: PrepIcons.replay, label: 'Answer again', onPressed: _tryAgain),
+        );
       case _Phase.feedback:
-        return const [];
+        return const SizedBox.shrink();
     }
   }
 
-  /// The record button with "Type" and "Repeat" beside it, and one line under it. Ready, recording
+  /// The record dial with "Type" and "Repeat" beside it, and one line under it. Ready, recording
   /// and the short waits around them share this layout, so nothing moves under a finger.
-  Widget _dock() {
+  Widget _recordDock() {
     final recording = _phase == _Phase.recording;
     final busy = _phase == _Phase.preparing || _phase == _Phase.transcribing;
     final Widget status = switch (_phase) {
-      _Phase.recording => RecordClock(progress: _progress, limit: _maxAnswer),
+      _Phase.recording => RecordClock(progress: _progress, limit: _maxAnswer, big: true),
       _Phase.preparing => const Text('Getting ready'),
       _Phase.transcribing => const Text('Writing it down'),
       _Phase.unheard => const Text('Tap to try again'),
@@ -664,12 +725,14 @@ class _InterviewScreenState extends State<InterviewScreen> with WidgetsBindingOb
     };
     return RecordDock(
       button: RecordButton(
+        dial: true,
         recording: recording,
         progress: _progress,
         onPressed: busy ? null : (recording ? _stop : _record),
         semanticLabel: recording ? 'Stop recording' : 'Start recording your answer',
       ),
       status: Semantics(liveRegion: !recording, child: status),
+      level: recording ? _level : null,
       sidesVisible: !recording && !busy,
       leading: DockAction(
         icon: PrepIcons.keyboard,

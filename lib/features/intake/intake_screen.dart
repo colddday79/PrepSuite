@@ -9,9 +9,9 @@ import '../../coach/coach_api.dart';
 import '../../coach/contracts.dart';
 import '../../coach/speech_adapter.dart';
 import '../../design/assistant_avatar.dart';
-import '../../design/components.dart';
 import '../../design/hologram.dart';
 import '../../design/icons.dart';
+import '../../design/metal.dart';
 import '../../design/tokens.dart';
 import '../common/coach_widgets.dart';
 import '../interview/interview_screen.dart';
@@ -21,8 +21,8 @@ const _maxJobRecording = Duration(seconds: 10);
 
 enum _Phase { settingUp, asking, ready, preparing, recording, transcribing, review, unheard, micOff, loading, error }
 
-/// Step one: the interviewer asks for the job, the person says it (10 seconds at most), checks
-/// what we heard, and the coach writes questions for that role.
+/// Step one: the coach, big on its lit floor, asks for the job; the person says it on the record
+/// dial (10 seconds at most), checks what we heard, and the coach writes questions for that role.
 class IntakeScreen extends StatefulWidget {
   const IntakeScreen({super.key, this.preferTyping = false, this.questionCount = 3});
 
@@ -305,6 +305,7 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
         _Phase.asking => AssistantMood.speaking,
         _Phase.recording => AssistantMood.listening,
         _Phase.settingUp || _Phase.transcribing || _Phase.loading => AssistantMood.thinking,
+        _Phase.review when !_typing => AssistantMood.happy,
         _ => AssistantMood.idle,
       };
 
@@ -323,22 +324,49 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
         _Phase.error => "Couldn't get your questions",
       };
 
+  /// The phases where the question is the page and the coach is the hero.
+  bool get _asking => switch (_phase) {
+        _Phase.review || _Phase.loading || _Phase.error => false,
+        _ => true,
+      };
+
   @override
   Widget build(BuildContext context) {
-    final phase = _phaseContent();
     final count = widget.questionCount;
     return CoachScaffold(
       onClose: () => Navigator.of(context).maybePop(),
       progress: 0,
       progressLabel: 'New practice, $count ${count == 1 ? 'question' : 'questions'}',
-      actions: _actions(),
-      children: [
-        CoachLine(mood: _mood, status: _status, level: _level),
-        const SizedBox(height: Space.xl),
-        RevealText(controller: _question, style: PrepType.question),
-        if (phase.isNotEmpty) ...[const SizedBox(height: Space.xxl), ...phase],
-      ],
+      segments: count,
+      dock: _dock(),
+      builder: _page,
     );
+  }
+
+  List<Widget> _page(BuildContext context, PageRoom room) {
+    final hero = _asking;
+    final checking = _phase == _Phase.review && !_typing;
+    final style = hero ? PrepType.question : PrepType.questionM;
+    final phase = _phaseContent();
+    // Room for the question and for three lines of what is being heard, so the coach keeps its size.
+    final words = Space.l +
+        measureText(context, _jobQuestion, style, room.width) +
+        Space.l +
+        measureText(context, 'a\nb\nc', PrepType.bodyL, room.width);
+    final size = hero ? heroCoachSize(context, room, words) : compactCoachSize(context);
+    return [
+      SizedBox(height: hero ? heroLeadIn(room, words, size) : 0),
+      CoachStage(mood: _mood, status: _status, level: _level, size: size, dial: hero),
+      const SizedBox(height: Space.l),
+      if (checking)
+        Semantics(
+          header: true,
+          child: Text('Check your words', style: PrepType.titleL, textAlign: TextAlign.center),
+        )
+      else
+        RevealText(controller: _question, style: style, textAlign: TextAlign.center),
+      if (phase.isNotEmpty) ...[SizedBox(height: hero ? Space.l : Space.xl), ...phase],
+    ];
   }
 
   List<Widget> _phaseContent() {
@@ -350,15 +378,16 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
       case _Phase.transcribing:
         // Nothing until the first words arrive; the dock under the page says what is happening.
         final live = _phase == _Phase.recording || _phase == _Phase.transcribing;
-        return [if (live && _partial.trim().isNotEmpty) TranscriptCard(text: _partial)];
+        return [if (live && _partial.trim().isNotEmpty) LiveWords(_partial)];
       case _Phase.settingUp:
-        return [_SetupProgress(setup: _services.speechSetup.state.value)];
+        return const [];
       case _Phase.review:
         final voiceNote = _voiceNote;
         final voiceMissing = _services.speechSetup.state.value.missing;
         return [
           if (voiceNote != null && _typing) ...[
             ProblemNote(
+              centered: true,
               title: "Voice isn't available.",
               body: kDebugMode && voiceMissing
                   ? '$voiceNote (Developers: run tools/voice/fetch_models.sh, then rebuild.)'
@@ -366,10 +395,9 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
             ),
             const SizedBox(height: Space.xl),
           ],
-          PrepTextField(
+          MetalField(
             fieldKey: const ValueKey('job-field'),
             controller: _job,
-            label: _typing ? 'Job' : 'Check your words',
             hint: _typing ? 'Barista, City Cafe' : '',
             minLines: 2,
             autofocus: _typing && _job.text.isEmpty,
@@ -377,10 +405,11 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
           ),
         ];
       case _Phase.unheard:
-        return const [ProblemNote(title: "We couldn't hear that.", body: 'Speak up, or type it.')];
+        return const [ProblemNote(title: "We couldn't hear that.", body: 'Speak up, or type it.', centered: true)];
       case _Phase.micOff:
         return [
           ProblemNote(
+            centered: true,
             title: _micFailed ? "The microphone didn't start." : 'The microphone is off.',
             body: _micFailed
                 ? _speechError ?? 'Try again, or type it.'
@@ -390,19 +419,19 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
           ),
         ];
       case _Phase.loading:
-        return [
-          AnswerQuote(_job.text.trim(), semanticPrefix: 'Your job'),
-          const SizedBox(height: Space.xxl),
-          const LoadingLine('Writing your questions'),
-        ];
+        return [AnswerQuote(_job.text.trim(), semanticPrefix: 'Your job')];
       case _Phase.error:
         return [
-          ProblemNote(title: "Couldn't get your questions.", body: _error?.userMessage ?? 'Something went wrong. Try again.'),
+          ProblemNote(
+            centered: true,
+            title: "Couldn't get your questions.",
+            body: _error?.userMessage ?? 'Something went wrong. Try again.',
+          ),
         ];
     }
   }
 
-  List<Widget> _actions() {
+  Widget _dock() {
     switch (_phase) {
       case _Phase.asking:
       case _Phase.ready:
@@ -410,50 +439,69 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
       case _Phase.recording:
       case _Phase.transcribing:
       case _Phase.unheard:
-        return [_dock()];
+        return _recordDock();
       case _Phase.settingUp:
-        return [
-          QuietRow([QuietButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead)]),
-        ];
+        final setup = _services.speechSetup.state.value;
+        return RecordDock(
+          button: _SetupDial(setup: setup),
+          status: Semantics(
+            liveRegion: true,
+            child: Text(setup.copying ? 'Setting up the voice on this phone' : 'Getting the voice ready'),
+          ),
+          leading: DockAction(
+            icon: PrepIcons.keyboard,
+            label: 'Type',
+            semanticLabel: 'Type the job instead',
+            onPressed: _typeInstead,
+          ),
+        );
       case _Phase.review:
         final voiceMissing = _services.speechSetup.state.value.missing;
-        return [
-          PrimaryButton('Use this', onPressed: _job.text.trim().isEmpty ? null : _submit),
-          if (!(_typing && voiceMissing))
-            QuietRow([
-              QuietButton(
-                _typing ? 'Say it instead' : 'Record again',
-                icon: _typing ? PrepIcons.mic : PrepIcons.replay,
-                onPressed: _record,
-              ),
-            ]),
-        ];
+        return PillDock(
+          label: 'Use this',
+          onPressed: _job.text.trim().isEmpty ? null : _submit,
+          leading: _typing && voiceMissing
+              ? null
+              : DockAction(
+                  icon: _typing ? PrepIcons.mic : PrepIcons.replay,
+                  label: _typing ? 'Speak' : 'Retake',
+                  semanticLabel: _typing ? 'Say it instead' : 'Record again',
+                  onPressed: _record,
+                ),
+        );
       case _Phase.micOff:
-        return [
-          PrimaryButton('Type instead', icon: PrepIcons.keyboard, onPressed: _typeInstead),
-          QuietRow([
-            QuietButton(
-              _micBlocked ? 'Open settings' : 'Try again',
-              onPressed: _micBlocked ? _services.mic.openSettings : _record,
-            ),
-          ]),
-        ];
+        return PillDock(
+          label: 'Type instead',
+          icon: PrepIcons.keyboard,
+          onPressed: _typeInstead,
+          leading: DockAction(
+            icon: _micBlocked ? PrepIcons.sliders : PrepIcons.replay,
+            label: _micBlocked ? 'Open settings' : 'Try again',
+            onPressed: _micBlocked ? _services.mic.openSettings : _record,
+          ),
+        );
       case _Phase.loading:
-        return [PrimaryButton('Use this', busy: true, onPressed: () {})];
+        return PillDock(label: 'Writing your questions', busy: true, onPressed: () {});
       case _Phase.error:
-        return [
-          PrimaryButton('Try again', onPressed: _submit),
-          QuietRow([QuietButton('Change the job', onPressed: () => setState(() => _phase = _Phase.review))]),
-        ];
+        return PillDock(
+          label: 'Try again',
+          onPressed: _submit,
+          leading: DockAction(
+            icon: PrepIcons.edit,
+            label: 'Edit',
+            semanticLabel: 'Change the job',
+            onPressed: () => setState(() => _phase = _Phase.review),
+          ),
+        );
     }
   }
 
-  /// The record button with "Type" and "Repeat" beside it, and one line under it.
-  Widget _dock() {
+  /// The record dial with "Type" and "Repeat" beside it, and one line under it.
+  Widget _recordDock() {
     final recording = _phase == _Phase.recording;
     final busy = _phase == _Phase.preparing || _phase == _Phase.transcribing;
     final Widget status = switch (_phase) {
-      _Phase.recording => RecordClock(progress: _progress, limit: _maxJobRecording),
+      _Phase.recording => RecordClock(progress: _progress, limit: _maxJobRecording, big: true),
       _Phase.preparing => const Text('Getting ready'),
       _Phase.transcribing => const Text('Writing it down'),
       _Phase.unheard => const Text('Tap to try again'),
@@ -461,13 +509,14 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
     };
     return RecordDock(
       button: RecordButton(
+        dial: true,
         recording: recording,
-        countdown: true,
         progress: _progress,
         onPressed: busy ? null : (recording ? _stop : _record),
         semanticLabel: recording ? 'Stop recording' : 'Start recording the job',
       ),
       status: Semantics(liveRegion: !recording, child: status),
+      level: recording ? _level : null,
       sidesVisible: !recording && !busy,
       leading: DockAction(
         icon: PrepIcons.keyboard,
@@ -485,9 +534,10 @@ class _IntakeScreenState extends State<IntakeScreen> with WidgetsBindingObserver
   }
 }
 
-/// First-launch set-up of the offline speech files, said plainly with real progress.
-class _SetupProgress extends StatelessWidget {
-  const _SetupProgress({required this.setup});
+/// First-launch set-up of the offline speech files, in the record dial's place: the ring fills
+/// with the real progress, and the dial lights up once the voice is ready.
+class _SetupDial extends StatelessWidget {
+  const _SetupDial({required this.setup});
 
   final SpeechReadiness setup;
 
@@ -495,26 +545,27 @@ class _SetupProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     final percent = (setup.progress * 100).floor();
     return Semantics(
-      liveRegion: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(setup.copying ? 'Setting up the voice on this phone' : 'Getting the voice ready', style: PrepType.bodyLMedium),
-          if (setup.copying) ...[
-            const SizedBox(height: Space.xs),
-            Text('First launch only. $percent%', style: PrepType.meta),
-          ],
-          const SizedBox(height: Space.m),
-          ClipRRect(
-            borderRadius: const BorderRadius.all(Radius.circular(2)),
-            child: LinearProgressIndicator(
-              value: setup.copying ? setup.progress : null,
-              minHeight: 2,
-              color: PrepColors.accent,
-              backgroundColor: PrepColors.line,
+      label: setup.copying ? '$percent percent' : null,
+      excludeSemantics: true,
+      child: ArcGauge(
+        value: setup.copying ? setup.progress : 0,
+        size: RecordButton.dialExtent,
+        ticks: true,
+        stroke: 3,
+        child: DecoratedBox(
+          decoration: ShapeDecoration(color: PrepColors.surface2, shape: CircleBorder(side: BorderSide(color: PrepColors.rimLight))),
+          child: SizedBox.square(
+            dimension: RecordButton.dialDisc,
+            child: Center(
+              child: setup.copying
+                  ? Text(
+                      '$percent%',
+                      style: PrepType.titleL.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                    )
+                  : PrepIcon(PrepIcons.mic, color: PrepColors.text3, size: 34),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
